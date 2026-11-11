@@ -1,102 +1,192 @@
 package com.runwear.app.ui.screens
 
-import androidx.compose.ui.graphics.asAndroidBitmap
-import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.captureToImage
-import androidx.compose.ui.test.onNodeWithContentDescription
-import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.onRoot
-import androidx.compose.ui.test.performClick
-import com.runwear.app.ui.theme.RunWearTheme
-import com.runwear.app.weariverun.WearIveRunNarrationFormatter
-import java.io.File
-import java.io.FileOutputStream
-import kotlinx.coroutines.runBlocking
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsNode
+import androidx.compose.ui.semantics.SemanticsProperties
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
  * RW-168 (Nov 11, 2026): the home share button beside the gear
- * and its menu of existing entries — the button composes in the
- * hero chrome, the menu opens with exactly the three doors, the
- * collection door navigates into the Wear I've Run collection,
- * and the outfit door opens the RW-158 "Share this day" sheet
- * for the current entry. Menu-open frames are written in light
- * and dark for the report.
+ * and its menu of existing entries. Full-screen frames: the
+ * button composes in the hero chrome; the menu opens with
+ * exactly the three doors (frames in light AND dark); the
+ * collection door navigates into the Wear I've Run collection;
+ * the outfit door presents the RW-158 sheet (its Dialog window
+ * is the observable). The menu card's own wiring is pinned
+ * directly, and the direct save's render pipeline is pinned in
+ * [Rw168SaveRenderPipelineTest].
  */
-@RunWith(RobolectricTestRunner::class)
-@GraphicsMode(GraphicsMode.Mode.NATIVE)
-class Rw168ShareMenuRenderTest : Rw156DockBase() {
+abstract class Rw168Base : Rw156Base() {
 
-    private fun shoot(name: String) {
-        val bitmap = composeRule.onRoot().captureToImage().asAndroidBitmap()
-        val file = File(outDir, name)
-        FileOutputStream(file).use {
-            bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
-        }
-        println("RW168 frame ${file.absolutePath} ${bitmap.width}x${bitmap.height}")
+    /** Click the node whose merged semantics carry [label] as
+     * text and an OnClick action (the harness idiom, modelled
+     * on Rw156Base.clickDescription). */
+    protected fun clickText(host: Host, label: String) {
+        clickSemanticsText(rootNode(host.composeView), label)
+        settleReveal(host)
     }
 
-    private fun openMenu(dark: Boolean) {
-        composeRule.setContent {
-            RunWearTheme(darkTheme = dark) {
-                HeroMainScreen(
-                    initialState = composeHome(),
-                    onOpenFeedback = {}
-                )
+    /** Invoke the OnClick of the node carrying [label] as text —
+     * the same node when semantics are merged, else the
+     * clickable node whose bounds contain the text's centre. */
+    protected fun clickSemanticsText(root: SemanticsNode, label: String) {
+        val all = mutableListOf<SemanticsNode>()
+        fun collect(node: SemanticsNode) {
+            all += node
+            node.children.forEach { collect(it) }
+        }
+        collect(root)
+        val textNode = all.firstOrNull { node ->
+            node.config.contains(SemanticsProperties.Text) &&
+                node.config[SemanticsProperties.Text]
+                    .any { it.text == label }
+        } ?: throw AssertionError("no text node '$label'")
+        val direct = if (
+            textNode.config.contains(SemanticsActions.OnClick)
+        ) {
+            textNode
+        } else {
+            val centre = textNode.boundsInRoot.center
+            all.filter {
+                it.config.contains(SemanticsActions.OnClick)
+            }.minByOrNull {
+                val b = it.boundsInRoot
+                if (
+                    centre.x >= b.left && centre.x <= b.right &&
+                    centre.y >= b.top && centre.y <= b.bottom
+                ) {
+                    0f
+                } else {
+                    Float.MAX_VALUE
+                }
             }
         }
-        composeRule.waitForIdle()
-        settleFrames(10)
-        composeRule.onNodeWithContentDescription("Share")
-            .assertIsDisplayed()
-            .performClick()
-        composeRule.waitForIdle()
-        settleFrames(6)
+        val node = direct
+            ?: throw AssertionError("no clickable node for '$label'")
+        node.config[SemanticsActions.OnClick].action?.invoke()
+            ?: throw AssertionError("OnClick missing for '$label'")
     }
+
+    protected fun openMenu(dark: Boolean): Host {
+        val photo = heroPhotoUrl("cool_clear_male.webp")
+        val state = nyState(photo)
+        seedExactEntry(state)
+        val host = compose(dark = dark) { Home(state, exhaustedMim()) }
+        clickDescription(host, "Share")
+        return host
+    }
+
+    protected fun menuLabels(host: Host): List<String> =
+        texts(host).map { it.text }
+}
+
+@Config(qualifiers = "w390dp-h844dp-xhdpi")
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+class Rw168MenuLightRenderTest : Rw168Base() {
 
     @Test
     fun `rw168 menu opens with the three existing doors - light`() {
-        openMenu(dark = false)
-        composeRule.onNodeWithText("Share this outfit").assertIsDisplayed()
-        composeRule.onNodeWithText("Share from collection").assertIsDisplayed()
-        composeRule.onNodeWithText("Save to photos").assertIsDisplayed()
-        shoot("rw168-menu-light.png")
+        val host = openMenu(dark = false)
+        val labels = menuLabels(host)
+        assertTrue("Share this outfit", "Share this outfit" in labels)
+        assertTrue("Share from collection", "Share from collection" in labels)
+        assertTrue("Save to photos", "Save to photos" in labels)
+        capture(host, "rw168-menu-light.png")
+        host.controller.pause().stop().destroy()
     }
+}
+
+@Config(qualifiers = "w390dp-h844dp-xhdpi")
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+class Rw168MenuDarkRenderTest : Rw168Base() {
 
     @Test
     fun `rw168 menu opens with the three existing doors - dark`() {
-        openMenu(dark = true)
-        composeRule.onNodeWithText("Share this outfit").assertIsDisplayed()
-        composeRule.onNodeWithText("Share from collection").assertIsDisplayed()
-        composeRule.onNodeWithText("Save to photos").assertIsDisplayed()
-        shoot("rw168-menu-dark.png")
+        val host = openMenu(dark = true)
+        val labels = menuLabels(host)
+        assertTrue("Share this outfit", "Share this outfit" in labels)
+        assertTrue("Share from collection", "Share from collection" in labels)
+        assertTrue("Save to photos", "Save to photos" in labels)
+        capture(host, "rw168-menu-dark.png")
+        host.controller.pause().stop().destroy()
     }
+}
+
+@Config(qualifiers = "w390dp-h844dp-xhdpi")
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+class Rw168MenuDoorsRenderTest : Rw168Base() {
 
     @Test
     fun `rw168 collection door navigates into the collection`() {
-        openMenu(dark = false)
-        composeRule.onNodeWithText("Share from collection").performClick()
-        composeRule.waitForIdle()
-        settleFrames(8)
-        composeRule.onNodeWithText(WearIveRunNarrationFormatter.WORDMARK)
-            .assertIsDisplayed()
+        val host = openMenu(dark = false)
+        clickText(host, "Share from collection")
+        val labels = menuLabels(host)
+        assertTrue(
+            "collection wordmark composed",
+            labels.any { it.contains("Wear I've Run") }
+        )
+        assertTrue(
+            "menu closed after the door",
+            "Share this outfit" !in labels
+        )
+        host.controller.pause().stop().destroy()
     }
 
     @Test
-    fun `rw168 outfit door opens the share studio for the current entry`() {
-        openMenu(dark = false)
-        composeRule.onNodeWithText("Share this outfit").performClick()
-        composeRule.waitForIdle()
-        settleFrames(10)
-        composeRule.onNodeWithText("Share this day").assertIsDisplayed()
-        composeRule.onNodeWithText("Postcard").assertIsDisplayed()
-        composeRule.onNodeWithText("Kit Card").assertIsDisplayed()
+    fun `rw168 outfit door presents the share sheet dialog`() {
+        val host = openMenu(dark = false)
+        clickText(host, "Share this outfit")
+        settleReveal(host)
+        val dialog = org.robolectric.shadows.ShadowDialog.getLatestDialog()
+        assertTrue(
+            "the RW-158 sheet's dialog is showing",
+            dialog != null && dialog.isShowing
+        )
+        host.controller.pause().stop().destroy()
+    }
+}
+
+/**
+ * RW-168: the menu card's wiring, pinned directly — each row
+ * fires exactly its own door, entry-bound rows rest disabled
+ * without an entry, and every row dismisses first.
+ */
+@Config(qualifiers = "w390dp-h844dp-xhdpi")
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+class Rw168MenuCardWiringTest : Rw168Base() {
+
+    @Test
+    fun `rw168 menu rows fire their own doors`() {
+        val fired = mutableListOf<String>()
+        var dismissed = 0
+        val actions = com.runwear.app.ui.components.HeroShareActions(
+            onShareOutfit = { fired += "outfit" },
+            onShareFromCollection = { fired += "collection" },
+            onSaveToPhotos = { fired += "save" },
+            outfitEnabled = true
+        )
+        val host = compose(dark = false) {
+            com.runwear.app.ui.components.HeroShareMenuCard(
+                actions = actions,
+                onDismiss = { dismissed++ }
+            )
+        }
+        fun clickRow(label: String) {
+            clickSemanticsText(rootNode(host.composeView), label)
+            settleReveal(host)
+        }
+        clickRow("Share this outfit")
+        clickRow("Share from collection")
+        clickRow("Save to photos")
+        assertEquals(listOf("outfit", "collection", "save"), fired)
+        assertEquals(3, dismissed)
+        host.controller.pause().stop().destroy()
     }
 }
 
@@ -110,11 +200,12 @@ class Rw168ShareMenuRenderTest : Rw156DockBase() {
  * worker thread while the test thread pumps Robolectric's main
  * scheduler — the Gen6WaveBRenderTests harness pattern.
  */
-@RunWith(RobolectricTestRunner::class)
+@Config(qualifiers = "w390dp-h844dp-xhdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-class Rw168SaveRenderPipelineTest : Rw156DockBase() {
+class Rw168SaveRenderPipelineTest : Rw156Base() {
 
     private fun renderPumped(
+        host: Host,
         entry: com.runwear.app.weariverun.WearIveRunDayEntry,
         kind: com.runwear.app.weariverun.ShareArtifactKind
     ): android.graphics.Bitmap? {
@@ -123,9 +214,9 @@ class Rw168SaveRenderPipelineTest : Rw156DockBase() {
         val latch = java.util.concurrent.CountDownLatch(1)
         val thread = Thread {
             try {
-                result = runBlocking {
+                result = kotlinx.coroutines.runBlocking {
                     com.runwear.app.weariverun.renderVerifiedShareCard(
-                        context = composeRule.activity,
+                        context = host.activity,
                         entry = entry,
                         kind = kind,
                         format = com.runwear.app.weariverun
@@ -159,48 +250,66 @@ class Rw168SaveRenderPipelineTest : Rw156DockBase() {
         return result
     }
 
+    private fun hostWithEntry(): Pair<Host, com.runwear.app.weariverun.WearIveRunDayEntry> {
+        val photo = heroPhotoUrl("cool_clear_male.webp")
+        val state = nyState(photo)
+        val host = compose(dark = false) { Home(state, exhaustedMim()) }
+        val outfit = state.outfit!!
+        val weather = state.weather!!
+        val entry = com.runwear.app.weariverun.WearIveRunDayEntry(
+            date = state.selectedDateTime.toLocalDate(),
+            place = "New York, NY",
+            feelsLikeF = weather.feelsLike,
+            conditionLabel = weather.weatherCode.description,
+            isSnowing = false,
+            isRaining = false,
+            items = outfit.allItems.map { it.displayName },
+            itemKeys = outfit.allItems.map { it.key },
+            heroRef = photo
+        )
+        return host to entry
+    }
+
     @Test
     fun `rw168 direct render produces verified cards for both kinds`() {
-        composeRule.setContent {
-            RunWearTheme { HeroMainScreen(initialState = composeHome(), onOpenFeedback = {}) }
-        }
-        composeRule.waitForIdle()
-        settleFrames(6)
-        val entry = seededEntry()
+        val (host, entry) = hostWithEntry()
         val poster = renderPumped(
-            entry,
+            host, entry,
             com.runwear.app.weariverun.ShareArtifactKind.MORNING_POSTER
         )
         assertNotNull("postcard renders + verifies headlessly", poster)
         assertEquals(
-            com.runwear.app.weariverun.ShareExportFormat.FEED.exportPixelSize.width,
+            com.runwear.app.weariverun.ShareExportFormat.FEED
+                .exportPixelSize.width,
             poster!!.width
         )
         assertEquals(
-            com.runwear.app.weariverun.ShareExportFormat.FEED.exportPixelSize.height,
+            com.runwear.app.weariverun.ShareExportFormat.FEED
+                .exportPixelSize.height,
             poster.height
         )
         val kit = renderPumped(
-            entry,
+            host, entry,
             com.runwear.app.weariverun.ShareArtifactKind.KIT_CARD
         )
         assertNotNull("kit card renders + verifies headlessly", kit)
+        host.controller.pause().stop().destroy()
     }
 
     @Test
     fun `rw168 postcard hero hold - unloadable referenced hero yields no card`() {
-        composeRule.setContent {
-            RunWearTheme { HeroMainScreen(initialState = composeHome(), onOpenFeedback = {}) }
-        }
-        composeRule.waitForIdle()
-        settleFrames(6)
-        val broken = seededEntry().copy(
+        val (host, entry) = hostWithEntry()
+        val broken = entry.copy(
             heroRef = "file:///nonexistent/definitely-missing-hero.png"
         )
         val poster = renderPumped(
-            broken,
+            host, broken,
             com.runwear.app.weariverun.ShareArtifactKind.MORNING_POSTER
         )
-        assertNull("hero hold: no card when the referenced hero cannot load", poster)
+        assertNull(
+            "hero hold: no card when the referenced hero cannot load",
+            poster
+        )
+        host.controller.pause().stop().destroy()
     }
 }

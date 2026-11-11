@@ -536,6 +536,12 @@ fun HeroSection(
     val chromeAlpha = HeroScrollHandoff.chromeAlpha(handoff)
     val chromeInteractive = HeroScrollHandoff.chromeInteractive(handoff)
 
+    // RW-168: the share menu's open state — the menu renders
+    // in-hierarchy as this Box's last child (scrim + floating
+    // card under the chrome row), so it is part of the hero's
+    // own composition.
+    var shareMenuOpen by remember { mutableStateOf(false) }
+
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -737,7 +743,7 @@ fun HeroSection(
             // entries anchored beneath it.
             if (shareActions != null) {
                 HeroShareButton(
-                    actions = shareActions,
+                    onClick = { shareMenuOpen = true },
                     enabled = chromeInteractive
                 )
                 Spacer(Modifier.width(8.dp))
@@ -913,6 +919,33 @@ fun HeroSection(
                 }
             }
         }
+
+        // RW-168: the share menu overlay — a tap-catching scrim
+        // over the hero (any tap outside the card dismisses) and
+        // the floating card itself, seated under the chrome row
+        // at the top end: status inset + the row's 16dp padding
+        // + the 38dp button + an 8dp gap.
+        if (shareMenuOpen && shareActions != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(
+                        interactionSource = remember {
+                            androidx.compose.foundation.interaction
+                                .MutableInteractionSource()
+                        },
+                        indication = null
+                    ) { shareMenuOpen = false }
+            )
+            HeroShareMenuCard(
+                actions = shareActions,
+                onDismiss = { shareMenuOpen = false },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .statusBarsPadding()
+                    .padding(top = 62.dp, end = 16.dp)
+            )
+        }
     }
 }
 
@@ -1011,92 +1044,86 @@ data class HeroShareActions(
 /**
  * RW-168: the share button in the hero's top-right chrome — the
  * gear's own chrome circle (38dp, warm-black fill, cream outline,
- * cream glyph) carrying a share glyph — and its menu: a floating
- * card on the app ground system (Surface, 16dp radius, 1dp ink
- * hairline, 16dp soft shadow — the RW-152 boundary/depth standard,
- * never a rectangular block), anchored under the button.
+ * cream glyph) carrying a share glyph.
  */
 @Composable
 fun HeroShareButton(
-    actions: HeroShareActions,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true
 ) {
-    var menuOpen by remember { mutableStateOf(false) }
-    val density = androidx.compose.ui.platform.LocalDensity.current
-    Box(modifier = modifier) {
-        Surface(
-            onClick = { menuOpen = true },
-            enabled = enabled,
-            modifier = Modifier.size(38.dp),
-            shape = CircleShape,
-            color = com.runwear.app.ui.theme.HeroChromeInk.copy(alpha = 84f / 255f),
-            border = BorderStroke(
-                1.dp, com.runwear.app.ui.theme.PhotoInk.copy(alpha = 30f / 255f)
-            )
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.Share,
-                contentDescription = "Share",
-                tint = com.runwear.app.ui.theme.PhotoInk,
-                modifier = Modifier
-                    .padding(9.dp)
-                    .size(20.dp)
-            )
-        }
-        if (menuOpen) {
-            androidx.compose.ui.window.Popup(
-                alignment = Alignment.TopEnd,
-                offset = androidx.compose.ui.unit.IntOffset(
-                    0, with(density) { 46.dp.roundToPx() }
-                ),
-                onDismissRequest = { menuOpen = false },
-                properties = androidx.compose.ui.window.PopupProperties(
-                    focusable = true
-                )
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = com.runwear.app.ui.theme.RunWearColors.Surface,
-                    border = BorderStroke(
-                        1.dp,
-                        com.runwear.app.ui.theme.RunWearColors.TextPrimary
-                            .copy(alpha = 0.09f)
-                    ),
-                    shadowElevation = 16.dp,
-                    modifier = Modifier.width(236.dp)
-                ) {
-                    Column(Modifier.padding(vertical = 8.dp)) {
-                        HeroShareMenuRow(
-                            icon = Icons.Outlined.Share,
-                            label = "Share this outfit",
-                            enabled = actions.outfitEnabled,
-                            onClick = {
-                                menuOpen = false
-                                actions.onShareOutfit()
-                            }
-                        )
-                        HeroShareMenuRow(
-                            icon = Icons.Outlined.PhotoLibrary,
-                            label = "Share from collection",
-                            enabled = true,
-                            onClick = {
-                                menuOpen = false
-                                actions.onShareFromCollection()
-                            }
-                        )
-                        HeroShareMenuRow(
-                            icon = Icons.Outlined.SaveAlt,
-                            label = "Save to photos",
-                            enabled = actions.outfitEnabled,
-                            onClick = {
-                                menuOpen = false
-                                actions.onSaveToPhotos()
-                            }
-                        )
-                    }
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier.size(38.dp),
+        shape = CircleShape,
+        color = com.runwear.app.ui.theme.HeroChromeInk.copy(alpha = 84f / 255f),
+        border = BorderStroke(
+            1.dp, com.runwear.app.ui.theme.PhotoInk.copy(alpha = 30f / 255f)
+        )
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Share,
+            contentDescription = "Share",
+            tint = com.runwear.app.ui.theme.PhotoInk,
+            modifier = Modifier
+                .padding(9.dp)
+                .size(20.dp)
+        )
+    }
+}
+
+/**
+ * RW-168: the share menu card — a floating card on the app
+ * ground system (Surface, 16dp radius, 1dp ink hairline, 16dp
+ * soft shadow — the RW-152 boundary/depth standard, never a
+ * rectangular block), carrying the three existing doors.
+ */
+@Composable
+fun HeroShareMenuCard(
+    actions: HeroShareActions,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = com.runwear.app.ui.theme.RunWearColors.Surface,
+        border = BorderStroke(
+            1.dp,
+            com.runwear.app.ui.theme.RunWearColors.TextPrimary
+                .copy(alpha = 0.09f)
+        ),
+        shadowElevation = 16.dp,
+        modifier = modifier.width(236.dp)
+    ) {
+        Column(Modifier.padding(vertical = 8.dp)) {
+            HeroShareMenuRow(
+                icon = Icons.Outlined.Share,
+                label = "Share this outfit",
+                enabled = actions.outfitEnabled,
+                onClick = {
+                    onDismiss()
+                    actions.onShareOutfit()
                 }
-            }
+            )
+            HeroShareMenuRow(
+                icon = Icons.Outlined.PhotoLibrary,
+                label = "Share from collection",
+                enabled = true,
+                onClick = {
+                    onDismiss()
+                    actions.onShareFromCollection()
+                }
+            )
+            HeroShareMenuRow(
+                icon = Icons.Outlined.SaveAlt,
+                label = "Save to photos",
+                enabled = actions.outfitEnabled,
+                onClick = {
+                    onDismiss()
+                    actions.onSaveToPhotos()
+                }
+            )
         }
     }
 }
