@@ -551,8 +551,16 @@ final class WearIveRunElementMachineTests: XCTestCase {
                       "RW-152 §1: the expanded form is the overlay panel")
         XCTAssertTrue(view.contains("Color.clear"),
                       "D-12: the thumbnail slot's undecodable branch paints clear, not a tile")
-        XCTAssertTrue(view.contains("if case .success(let image) = phase"),
-                      "the thumbnail must be decode-gated")
+        // RE-PINNED for RW-169 §7E.3 (Nov 11, 2026; supersedes
+        // the AsyncImage phase pin that stood here): the slot
+        // is now the PROMOTED thumbnail — it loads the bound
+        // reference itself and swaps only on a successful
+        // decode (UIImage(data:) gate), holding the current
+        // decoded image while a successor resolves, so the
+        // decode gate the D-12 rule wants is stronger, not
+        // weaker.
+        XCTAssertTrue(view.contains("guard let data, let decoded = UIImage(data: data) else { return }"),
+                      "RW-169 §7E.3: the promoted thumbnail is decode-gated — it swaps only on a successful decode")
     }
 
     func testHomeFeedsTheDimmingSeam_sourcePin() throws {

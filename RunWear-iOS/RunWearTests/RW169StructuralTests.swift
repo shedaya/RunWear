@@ -166,10 +166,14 @@ final class RW169StructuralTests: XCTestCase {
         let unifiedEnd = try XCTUnwrap(bar.range(
             of: "// MARK: - RW-152 §1 / RW-169 §7A", range: unifiedStart.upperBound..<bar.endIndex))
         let unified = bar[unifiedStart.lowerBound..<unifiedEnd.lowerBound]
-        // ONE narration line object in the unified hierarchy.
+        // ONE rendered narration view in the unified hierarchy:
+        // the single `narrationView(line)` call site (the two
+        // further `line(for:)` derivations in this slice are
+        // the narration deferral's model-side version stamps —
+        // they render nothing).
         XCTAssertEqual(
-            unified.components(separatedBy: "WearIveRunNarration.line(for:").count - 1, 1,
-            "the unified surface derives its narration ONCE — there is no second form's narration to ghost (D3)")
+            unified.components(separatedBy: "narrationView(line)").count - 1, 1,
+            "the unified surface renders its narration ONCE — there is no second form's narration to ghost (D3)")
         // The overlay composes the unified surface ONLY — the
         // retired dual composition (mini view + expanded view
         // in a ZStack) cannot return through the container.
@@ -245,13 +249,16 @@ final class RW169StructuralTests: XCTestCase {
     func testRW169C_TopChrome_OneNegotiatingPass_SourcePins() throws {
         let hero = try sourceFile("../RunWear/Views/FirstScreenHero.swift")
         let start = try XCTUnwrap(hero.range(of: "struct HeroTopChromeView"))
+        // The slice ends at the NEXT declaration — the chrome
+        // struct itself, not whatever follows it in the file.
         let end = try XCTUnwrap(hero.range(
-            of: "// MARK: - Date/time chip", range: start.upperBound..<hero.endIndex))
+            of: "\nstruct ", range: start.upperBound..<hero.endIndex))
         let chrome = hero[start.lowerBound..<end.lowerBound]
         // The wordmark is a sibling inside the HStack — the
         // pre-fix ZStack overlay (a centred layer that never
-        // negotiated with the pill) is gone from this view.
-        XCTAssertFalse(chrome.contains("ZStack"),
+        // negotiated with the pill) is gone from this view
+        // (the word survives only in the retirement comment).
+        XCTAssertFalse(chrome.contains("ZStack {"),
                        "no overlaying layer: pill, wordmark, share and gear negotiate in one pass (D10)")
         // [Spacer][share][gear] remain the row's end, in order.
         let shareIdx = try XCTUnwrap(chrome.range(of: "\"square.and.arrow.up\""))
