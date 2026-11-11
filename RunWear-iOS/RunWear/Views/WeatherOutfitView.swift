@@ -1210,19 +1210,10 @@ struct WeatherOutfitView: View {
         // recorded momentReading — never the live sheetMoment.
         // RW-169 §7E.2: when the presented snapshot stands, its
         // OWN committed state is the surface's state (the
-        // snapshot and its narration are one object).
-        let state: WearIveRunState
-        if wearExitInProgress {
-            state = wearExitState ?? .preAdd
-        } else if let presentedSnapshot, presentedSnapshot.entry.id == todays?.id {
-            state = presentedSnapshot.state
-        } else {
-            state = WearIveRunMiniBarModel.state(
-                todaysEntry: todays,
-                moment: todays?.momentReading ?? .now,
-                wasUpdatedThisSession: todays?.wasUpdatedInSession ?? false
-            )
-        }
+        // snapshot and its narration are one object). Computed
+        // by a plain helper — a result builder cannot hold
+        // imperative branch assignment.
+        let state = dockPresentedState(todays: todays)
         if state != .preAdd, let todays {
             WearIveRunOverlayView(
                 state: state,
@@ -1270,6 +1261,24 @@ struct WeatherOutfitView: View {
                 }
             )
         }
+    }
+
+    /// RW-169 §7E.2: the dock's state — the exit's frozen state
+    /// during an exit, the presented snapshot's own committed
+    /// state while it stands, else the live derivation.
+    private func dockPresentedState(todays: WearIveRunEntry?) -> WearIveRunState {
+        if wearExitInProgress {
+            return wearExitState ?? .preAdd
+        }
+        if let presentedSnapshot, let todays,
+           presentedSnapshot.entry.id == todays.id {
+            return presentedSnapshot.state
+        }
+        return WearIveRunMiniBarModel.state(
+            todaysEntry: todays,
+            moment: todays?.momentReading ?? .now,
+            wasUpdatedThisSession: todays?.wasUpdatedInSession ?? false
+        )
     }
 
     // MARK: - RW-152 §1 exit (§4.7/§4.8 carried into the one surface)
