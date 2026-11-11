@@ -108,8 +108,22 @@ fun WearIveRunCollectionScreen(
      * render proofs (their refs are stable file URLs, which pass
      * through the resolver untouched).
      */
-    heroResign: (suspend (String) -> String?)? = null
+    heroResign: (suspend (String) -> String?)? = null,
+    /**
+     * RW-166 (Nov 10, 2026): the bank re-link recovery seam —
+     * resolves an entry that settled with NO hero reference to
+     * its own banked hero (HeroRecovery). The gender segment
+     * defaults from [gender] (the same key the cells were banked
+     * under), so hosts that already pass both seams share the
+     * recovery automatically; render proofs may override or
+     * leave it.
+     */
+    heroRecovery: HeroRecoverySeam? = null,
+    /** RW-166: a recovery hit is persisted on the entry through
+     * here (the host's store heal), so it happens once. */
+    onHeroRecovered: (WearIveRunDayEntry, String) -> Unit = { _, _ -> }
 ) {
+
     var filter by remember { mutableStateOf(WearWeatherFilter.ALL) }
     var openChapter by remember { mutableStateOf<String?>(null) }
     var shareEntry by remember { mutableStateOf<WearIveRunDayEntry?>(null) }
@@ -215,7 +229,9 @@ fun WearIveRunCollectionScreen(
                             openChapter = null
                         },
                         onViewPhoto = onViewPhoto,
-                        heroResign = heroResign
+                        heroResign = heroResign,
+                        heroRecovery = heroRecovery,
+                        onHeroRecovered = onHeroRecovered
                     )
                 } else if (entries.isEmpty()) {
                     HonestEmptyState(modifier = Modifier.weight(1f))
@@ -258,6 +274,8 @@ fun WearIveRunCollectionScreen(
                                         temperatureUnit = temperatureUnit,
                                         pinned = true,
                                         heroResign = heroResign,
+                                        heroRecovery = heroRecovery,
+                                        onHeroRecovered = onHeroRecovered,
                                         onDelete = { requestDelete(pinnedTodayEntry) },
                                         onPhotoClick = { onViewPhoto(pinnedTodayEntry) },
                                         onView = if (
@@ -287,7 +305,9 @@ fun WearIveRunCollectionScreen(
                                     // never the whole place group.
                                     onDelete = ch.cover?.let { coverEntry ->
                                         { requestDelete(coverEntry) }
-                                    }
+                                    },
+                                    heroRecovery = heroRecovery,
+                                    onHeroRecovered = onHeroRecovered
                                 )
                             }
                         }
@@ -305,6 +325,8 @@ fun WearIveRunCollectionScreen(
             temperatureUnit = temperatureUnit,
             onDismiss = { shareEntry = null },
             heroResign = heroResign,
+            heroRecovery = heroRecovery,
+            onHeroRecovered = { path -> onHeroRecovered(entry, path) },
             // RW-158: the sheet's poster preview is the eye's new
             // home — tapping it opens the entry's full photo
             // (RW-133) through the same host door as before.
@@ -406,16 +428,28 @@ private fun HonestEmptyState(modifier: Modifier = Modifier) {
 internal fun CollectionThumbnail(
     entry: WearIveRunDayEntry,
     heroResign: (suspend (String) -> String?)? = null,
+    /** RW-166: the bank re-link recovery seam (HeroRecovery). */
+    heroRecovery: HeroRecoverySeam? = null,
+    /** RW-166: a recovery hit is persisted through here. */
+    onHeroRecovered: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val url = rememberResolvedHeroUrl(entry, heroResign)
+    var recovered by remember(entry) { mutableStateOf(false) }
+    val url = rememberResolvedHeroUrl(
+        entry, heroResign, heroRecovery
+    ) { path ->
+        recovered = true
+        onHeroRecovered(path)
+    }
     BoxWithConstraints(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
             .background(RunWearColors.Surface)
             .semantics {
                 contentDescription =
-                    if (HeroRefResolver.hasLoadableReference(entry)) {
+                    if (HeroRefResolver.hasLoadableReference(entry) ||
+                        recovered || url != null
+                    ) {
                         "Entry photo"
                     } else {
                         "No photo for this entry"
@@ -461,7 +495,11 @@ internal fun ChapterCover(
     heroResign: (suspend (String) -> String?)? = null,
     /** RW-152 §4 / J2: trash for the cover (representative) entry
      * only. Null = no delete affordance. */
-    onDelete: (() -> Unit)? = null
+    onDelete: (() -> Unit)? = null,
+    /** RW-166: the bank re-link recovery seam (HeroRecovery). */
+    heroRecovery: HeroRecoverySeam? = null,
+    /** RW-166: a recovery hit is persisted through here. */
+    onHeroRecovered: (WearIveRunDayEntry, String) -> Unit = { _, _ -> }
 ) {
     Surface(
         shape = RoundedCornerShape(16.dp),
@@ -479,6 +517,10 @@ internal fun ChapterCover(
                 CollectionThumbnail(
                     entry = cover,
                     heroResign = heroResign,
+                    heroRecovery = heroRecovery,
+                    onHeroRecovered = { path ->
+                        onHeroRecovered(cover, path)
+                    },
                     modifier = Modifier.width(58.dp).height(72.dp)
                 )
             } else {
@@ -583,7 +625,11 @@ internal fun ChapterDetail(
     /** RW-133: open an entry's stored photograph full-screen. */
     onViewPhoto: ((WearIveRunDayEntry) -> Unit)? = null,
     /** RW-152 §3: the resolver's re-sign seam. */
-    heroResign: (suspend (String) -> String?)? = null
+    heroResign: (suspend (String) -> String?)? = null,
+    /** RW-166: the bank re-link recovery seam (HeroRecovery). */
+    heroRecovery: HeroRecoverySeam? = null,
+    /** RW-166: a recovery hit is persisted through here. */
+    onHeroRecovered: (WearIveRunDayEntry, String) -> Unit = { _, _ -> }
 ) {
     LazyColumn(
         modifier = modifier.padding(horizontal = 16.dp),
@@ -707,7 +753,9 @@ internal fun ChapterDetail(
                             null
                         },
                         temperatureUnit = temperatureUnit,
-                        heroResign = heroResign
+                        heroResign = heroResign,
+                        heroRecovery = heroRecovery,
+                        onHeroRecovered = onHeroRecovered
                     )
                 }
             }
@@ -814,7 +862,11 @@ internal fun DayCard(
      * means "no image slot"; every stay card carries the slot. */
     pinned: Boolean = false,
     /** RW-152 §3: the resolver's re-sign seam. */
-    heroResign: (suspend (String) -> String?)? = null
+    heroResign: (suspend (String) -> String?)? = null,
+    /** RW-166: the bank re-link recovery seam (HeroRecovery). */
+    heroRecovery: HeroRecoverySeam? = null,
+    /** RW-166: a recovery hit is persisted through here. */
+    onHeroRecovered: (WearIveRunDayEntry, String) -> Unit = { _, _ -> }
 ) {
     Surface(
         shape = RoundedCornerShape(14.dp),
@@ -841,6 +893,10 @@ internal fun DayCard(
                 CollectionThumbnail(
                     entry = entry,
                     heroResign = heroResign,
+                    heroRecovery = heroRecovery,
+                    onHeroRecovered = { path ->
+                        onHeroRecovered(entry, path)
+                    },
                     modifier = Modifier.width(46.dp).height(58.dp)
                 )
                 Spacer(Modifier.width(12.dp))

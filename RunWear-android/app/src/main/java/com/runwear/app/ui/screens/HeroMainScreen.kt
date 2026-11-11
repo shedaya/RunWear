@@ -974,6 +974,22 @@ fun HeroMainScreen(
                 onCollapse = wirGlideFromFooter,
                 onDelete = wirTrash,
                 onOpenCollection = { showWearIveRunCollection = true },
+                // RW-166: the footer thumbnail resolves through
+                // the recovering resolver (its raw stored ref is
+                // a signed URL, dead one hour after issue; an
+                // entry with no ref recovers through the bank).
+                heroResign = { path ->
+                    makeItMeViewModel?.signedHeroUrlForPath(path)
+                },
+                heroRecovery = com.runwear.app.weariverun.HeroRecoverySeam(
+                    genderSegment = uiState.genderPreference.name,
+                    bankPaths = { makeItMeViewModel?.bankHeroPaths() }
+                ),
+                onHeroRecovered = { entry, path ->
+                    screenScope.launch {
+                        wearIveRunStore.healHeroReference(entry, path)
+                    }
+                },
                 // RW-158 (user ruling, Nov 10, 2026): a PAST
                 // entry's footer row opens its share studio;
                 // today's entry keeps the collection doorway.
@@ -1754,6 +1770,18 @@ fun HeroMainScreen(
                 // at render (the resolver's seam).
                 heroResign = { path ->
                     makeItMeViewModel?.signedHeroUrlForPath(path)
+                },
+                // RW-166: the bank re-link recovery — an entry
+                // that settled with no hero reference recovers
+                // its own banked hero and heals onto it.
+                heroRecovery = com.runwear.app.weariverun.HeroRecoverySeam(
+                    genderSegment = uiState.genderPreference.name,
+                    bankPaths = { makeItMeViewModel?.bankHeroPaths() }
+                ),
+                onHeroRecovered = { entry, path ->
+                    screenScope.launch {
+                        wearIveRunStore.healHeroReference(entry, path)
+                    }
                 }
             )
         }
@@ -1769,6 +1797,15 @@ fun HeroMainScreen(
                 onDismiss = { wirFooterShareEntry = null },
                 heroResign = { path ->
                     makeItMeViewModel?.signedHeroUrlForPath(path)
+                },
+                heroRecovery = com.runwear.app.weariverun.HeroRecoverySeam(
+                    genderSegment = uiState.genderPreference.name,
+                    bankPaths = { makeItMeViewModel?.bankHeroPaths() }
+                ),
+                onHeroRecovered = { path ->
+                    screenScope.launch {
+                        wearIveRunStore.healHeroReference(entry, path)
+                    }
                 },
                 onViewPhoto = { heroViewerEntry = it }
             )
@@ -1797,6 +1834,15 @@ fun HeroMainScreen(
             entry,
             resign = { path ->
                 makeItMeViewModel?.signedHeroUrlForPath(path)
+            },
+            recovery = com.runwear.app.weariverun.HeroRecoverySeam(
+                genderSegment = uiState.genderPreference.name,
+                bankPaths = { makeItMeViewModel?.bankHeroPaths() }
+            ),
+            onHeroRecovered = { path ->
+                screenScope.launch {
+                    wearIveRunStore.healHeroReference(entry, path)
+                }
             }
         )
         if (ref != null) {

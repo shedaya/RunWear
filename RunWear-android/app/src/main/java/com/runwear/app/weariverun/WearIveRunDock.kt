@@ -614,6 +614,17 @@ fun WearIveRunFooterSection(
      * entry) keeps the collection doorway on the row; the
      * "Open the collection ›" line below always keeps it. */
     onEntryTap: (() -> Unit)? = null,
+    /** RW-166 (Nov 10, 2026): the resolver's re-sign seam for the
+     * footer thumbnail. When set (and the entry carries its
+     * recorded form), the thumbnail resolves through the
+     * recovering resolver (HeroRecovery) instead of loading the
+     * raw stored reference; null keeps the pre-RW-166 behaviour
+     * (render proofs). */
+    heroResign: (suspend (String) -> String?)? = null,
+    /** RW-166: the bank re-link recovery seam (HeroRecovery). */
+    heroRecovery: HeroRecoverySeam? = null,
+    /** RW-166: a recovery hit is persisted through here. */
+    onHeroRecovered: (WearIveRunDayEntry, String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
     sheetGapDp: Int = WearIveRunDockPolicy.FOOTER_SHEET_GAP_DP,
     growInKey: Int = 0,
@@ -883,8 +894,29 @@ fun WearIveRunFooterSection(
                             // the decode-gated paint rule — until
                             // decoded the slot is a plain tinted
                             // box, never a broken-image glyph.
+                            // RW-166: with the host's seams present
+                            // the URL is the RESOLVED one — the raw
+                            // stored reference is a signed URL, dead
+                            // one hour after issue; an entry with no
+                            // reference at all recovers through the
+                            // bank re-link like every other surface.
+                            val footerThumbnailUrl =
+                                if (heroResign != null &&
+                                    entry.sourceEntry != null
+                                ) {
+                                    rememberResolvedHeroUrl(
+                                        entry.sourceEntry!!,
+                                        heroResign, heroRecovery
+                                    ) { path ->
+                                        onHeroRecovered(
+                                            entry.sourceEntry!!, path
+                                        )
+                                    }
+                                } else {
+                                    entry.thumbnailUrl
+                                }
                             Crossfade(
-                                targetState = entry.thumbnailUrl,
+                                targetState = footerThumbnailUrl,
                                 animationSpec = tween(
                                     WearIveRunDockPolicy.NARRATION_CROSSFADE_MS
                                 ),

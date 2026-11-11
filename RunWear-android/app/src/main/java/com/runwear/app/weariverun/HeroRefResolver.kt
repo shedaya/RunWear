@@ -101,24 +101,122 @@ object HeroRefResolver {
 }
 
 /**
+ * RW-166 (Nov 10, 2026): the bank re-link recovery seam — the
+ * production caller supplies the user's bank as combination_id →
+ * storage_path (PersonalHeroService.fetchBankHeroPaths via the
+ * Make It Me view model) plus the gender segment the user's
+ * cells are keyed under. A surface granted this seam resolves an
+ * entry with NO loadable reference through [HeroRecovery];
+ * surfaces without it resolve exactly as RW-152 left them.
+ */
+data class HeroRecoverySeam(
+    val genderSegment: String,
+    val bankPaths: suspend () -> Map<String, String>?
+)
+
+/**
+ * RW-166: one entry's render resolution. [url] is the loadable
+ * display URL when one exists NOW (null while any async leg is
+ * still in flight, and null for good when the entry is honestly
+ * photo-less); [pending] is true exactly while a re-sign or a
+ * recovery attempt has not concluded — the Share Studio's hero
+ * gate reads it so an empty-ref entry whose recovery is still
+ * running waits instead of failing its poster on the spot.
+ */
+data class HeroUrlResolution(
+    val url: String?,
+    val pending: Boolean
+)
+
+/**
+ * RW-152 §3 + RW-166: resolve an entry's hero at render.
+ *
+ * - The entry's own reference resolves first, exactly as RW-152
+ *   built it: a stable URL passes through untouched; a Storage
+ *   path (or an expired signed URL's extracted path) re-signs
+ *   through [resign].
+ * - RW-166: only when the entry carries NO loadable reference
+ *   (the empty-settle shape) and a [recovery] seam is present
+ *   does the bank re-link run: the entry's own outfit cell is
+ *   looked up in the bank ([HeroRecovery]); a hit is reported
+ *   through [onHeroRecovered] (the host persists it on the
+ *   entry, so the recovery happens ONCE) and re-signed through
+ *   the same [resign]. No hit → the entry stays honestly empty.
+ */
+@Composable
+fun rememberHeroResolution(
+    entry: WearIveRunDayEntry,
+    resign: (suspend (String) -> String?)? = null,
+    recovery: HeroRecoverySeam? = null,
+    onHeroRecovered: ((String) -> Unit)? = null
+): HeroUrlResolution {
+    val stored = remember(entry) { HeroRefResolver.storedRef(entry) }
+    val path = remember(stored) { HeroRefResolver.storagePathOf(stored) }
+    var resigned by remember(stored) { mutableStateOf<String?>(null) }
+    var resignSettled by remember(stored) {
+        mutableStateOf(path == null || resign == null)
+    }
+    LaunchedEffect(stored) {
+        if (path != null && resign != null) {
+            resigned = resign(path)
+            resignSettled = true
+        }
+    }
+    val ownUrl = HeroRefResolver.resolveDisplay(stored, resigned)
+
+    // RW-166 recovery leg: attempted only for an entry with no
+    // loadable reference of its own, only with a seam present.
+    val recoveryApplies = stored == null && recovery != null
+    var recoveredUrl by remember(entry) { mutableStateOf<String?>(null) }
+    var recoverySettled by remember(entry) {
+        mutableStateOf(!recoveryApplies)
+    }
+    LaunchedEffect(entry, recoveryApplies) {
+        if (!recoveryApplies) return@LaunchedEffect
+        val seam = recovery ?: return@LaunchedEffect
+        val bank = runCatching { seam.bankPaths() }.getOrNull()
+        val recoveredPath = bank?.let {
+            HeroRecovery.recoveredDurableReference(
+                entry, seam.genderSegment, it
+            )
+        }
+        if (recoveredPath != null) {
+            onHeroRecovered?.invoke(recoveredPath)
+            recoveredUrl = if (resign != null) {
+                resign(recoveredPath)
+            } else {
+                // No re-sign seam (render proofs): the recovered
+                // durable path cannot be displayed raw — it is
+                // persisted by the heal and resolves on the next
+                // composition that carries the seam.
+                null
+            }
+        }
+        recoverySettled = true
+    }
+
+    val url = ownUrl ?: recoveredUrl
+    val pending = when {
+        url != null -> false
+        stored != null -> !resignSettled
+        recoveryApplies -> !recoverySettled
+        else -> false
+    }
+    return HeroUrlResolution(url, pending)
+}
+
+/**
  * RW-152 §3: resolve an entry's hero to a loadable display URL at
  * render — re-signing its Storage path through [resign] (the
  * production caller passes PersonalHeroService.signedUrlFor via
  * the Make It Me view model). Stable URLs resolve synchronously;
- * a path resolves when its re-sign lands.
+ * a path resolves when its re-sign lands. RW-166: the recovering
+ * form — see [rememberHeroResolution].
  */
 @Composable
 fun rememberResolvedHeroUrl(
     entry: WearIveRunDayEntry,
-    resign: (suspend (String) -> String?)? = null
-): String? {
-    val stored = remember(entry) { HeroRefResolver.storedRef(entry) }
-    val path = remember(stored) { HeroRefResolver.storagePathOf(stored) }
-    var resigned by remember(stored) { mutableStateOf<String?>(null) }
-    LaunchedEffect(stored) {
-        if (path != null && resign != null) {
-            resigned = resign(path)
-        }
-    }
-    return HeroRefResolver.resolveDisplay(stored, resigned)
-}
+    resign: (suspend (String) -> String?)? = null,
+    recovery: HeroRecoverySeam? = null,
+    onHeroRecovered: ((String) -> Unit)? = null
+): String? = rememberHeroResolution(entry, resign, recovery, onHeroRecovered).url

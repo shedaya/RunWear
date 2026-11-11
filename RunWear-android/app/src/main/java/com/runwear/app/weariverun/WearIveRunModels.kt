@@ -68,7 +68,15 @@ data class WearIveRunEntry(
     val itemCount: Int = 0,
     /** GEN-5 (RW-29 FA-34): the entry's kit item names, for the
      * expanded subtitle's outfit line. */
-    val itemNames: List<String> = emptyList()
+    val itemNames: List<String> = emptyList(),
+    /** RW-166 (Nov 10, 2026): the recorded entry this projection
+     * was built from — carried so the EXPANDED footer's thumbnail
+     * can resolve its hero through the recovering resolver
+     * (HeroRecovery) instead of loading [thumbnailUrl] raw (a
+     * signed URL, dead one hour after issue). Null in hand-built
+     * render fixtures; the projection itself stays a pure
+     * function of the record (RW-135). */
+    val sourceEntry: WearIveRunDayEntry? = null
 )
 
 /**
@@ -743,6 +751,13 @@ class WearIveRunBarStateHolder {
                 entry.date, knownDay ?: entry.date
             ),
             thumbnailUrl = entry.heroRef,
+            // RW-166: the recorded entry alongside the projection,
+            // so the expanded footer's thumbnail can resolve the
+            // entry's hero through the recovering resolver
+            // (HeroRecovery) instead of loading this raw stored
+            // reference (dead one hour after issue). The bar state
+            // itself stays a pure function of the record (RW-135).
+            sourceEntry = entry,
             feelsLikeF = entry.feelsLikeF,
             itemCount = entry.items.size,
             itemNames = entry.items

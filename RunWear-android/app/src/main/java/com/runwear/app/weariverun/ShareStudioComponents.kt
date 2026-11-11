@@ -662,7 +662,16 @@ fun ShareStudioSheet(
      * hero rule, reached from inside the sheet now that a past
      * entry's tap opens the sheet instead of the photo). Null =
      * the preview is not tappable (render proofs). */
-    onViewPhoto: ((WearIveRunDayEntry) -> Unit)? = null
+    onViewPhoto: ((WearIveRunDayEntry) -> Unit)? = null,
+    /** RW-166 (Nov 10, 2026): the bank re-link recovery seam —
+     * an entry that settled with NO hero reference resolves its
+     * own banked hero through [HeroRecovery] before the poster
+     * gate judges it photo-less. Null = no recovery (render
+     * proofs and hosts without the bank). */
+    heroRecovery: HeroRecoverySeam? = null,
+    /** RW-166: a recovery hit is persisted on the entry through
+     * here (the host's store heal), so it happens once. */
+    onHeroRecovered: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -695,11 +704,27 @@ fun ShareStudioSheet(
     // — Hero input —
     // RW-152 §3: through the resolver — a personal hero's stored
     // signed URL is re-signed by path before the poster loads it.
-    val resolvedHeroRef = rememberResolvedHeroUrl(entry, heroResign)
+    // RW-166: an entry with NO loadable reference resolves through
+    // the recovery seam too, and its poster gate waits while the
+    // recovery is still pending — the empty-ref entry whose bank
+    // hero exists must load it; only a recovery that concludes
+    // with no banked look lands on NoPhoto.
+    val heroResolution = rememberHeroResolution(
+        entry, heroResign, heroRecovery, onHeroRecovered
+    )
+    val resolvedHeroRef = heroResolution.url
     var heroState by remember(entry) { mutableStateOf<HeroLoadState>(HeroLoadState.Loading) }
-    LaunchedEffect(entry, resolvedHeroRef) {
+    LaunchedEffect(entry, resolvedHeroRef, heroResolution.pending) {
         heroState = when {
-            !HeroRefResolver.hasLoadableReference(entry) -> HeroLoadState.NoPhoto
+            !HeroRefResolver.hasLoadableReference(entry) ->
+                when {
+                    heroResolution.pending -> HeroLoadState.Loading
+                    resolvedHeroRef != null ->
+                        ShareExportRenderer.loadHeroBitmap(context, resolvedHeroRef)
+                            ?.let { HeroLoadState.Loaded(it) }
+                            ?: HeroLoadState.Failed
+                    else -> HeroLoadState.NoPhoto
+                }
             resolvedHeroRef == null -> HeroLoadState.Loading
             else -> ShareExportRenderer.loadHeroBitmap(context, resolvedHeroRef)
                 ?.let { HeroLoadState.Loaded(it) } ?: HeroLoadState.Failed

@@ -651,6 +651,46 @@ open class PersonalHeroService @Inject constructor(
         return heroCells to jobStatuses
     }
 
+    /**
+     * RW-166 (Nov 10, 2026): the bank as combination_id →
+     * storage_path, WITHOUT signing — the Wear I've Run re-link
+     * recovery's lookup table (HeroRecovery). The same
+     * owner-read personal_heroes table [fetchBankCells] reads;
+     * ordered by combination_id so the first row per cell wins
+     * deterministically, as on iOS. Null when the read fails —
+     * recovery then simply does not happen and the entry stays
+     * honestly empty.
+     */
+    suspend fun fetchBankHeroPaths(): Map<String, String>? {
+        val session = session() ?: return null
+        return runCatching {
+            val response = http.get(
+                "$BASE_URL/rest/v1/personal_heroes" +
+                    "?select=combination_id,storage_path" +
+                    "&order=combination_id.asc"
+            ) {
+                header("apikey", ANON_KEY)
+                header("Authorization", "Bearer ${session.accessToken}")
+            }
+            if (!response.status.isSuccess()) return@runCatching null
+            val paths = LinkedHashMap<String, String>()
+            json.parseToJsonElement(response.bodyAsText()).jsonArray
+                .forEach { row ->
+                    val id = row.jsonObject["combination_id"]
+                        ?.jsonPrimitive?.contentOrNull
+                    val path = row.jsonObject["storage_path"]
+                        ?.jsonPrimitive?.contentOrNull
+                    if (id != null && !path.isNullOrBlank() &&
+                        !paths.containsKey(id)
+                    ) {
+                        paths[id] = path
+                    }
+                }
+            paths
+        }.onFailure { Log.w(TAG, "bank hero paths read failed", it) }
+            .getOrNull()
+    }
+
     /** The caller's registered reference-photo storage paths, in order. */
     open suspend fun fetchReferencePaths(): List<String> {
         val session = session() ?: return emptyList()
