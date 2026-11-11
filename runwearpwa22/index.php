@@ -57,14 +57,20 @@
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Great+Vibes&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script>
         // App-landing gate decision, made before first paint: installed PWA
-        // launches, returning web-app users, and query-string deep links go
-        // straight to the web app; everyone else meets the landing first.
+        // launches, returning web-app users, and explicit web-app entry
+        // links (?entry=webapp) go straight to the web app; everyone else
+        // meets the landing first — including tracked/shared links carrying
+        // ordinary query parameters. (Owner ruling, Nov 11, 2026: the old
+        // any-query-string skip made the landing vanish whenever a typed
+        // address autocompleted to a parameterised URL.)
         (function () {
             try {
                 var standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
                 var returning = false;
                 try { returning = window.localStorage.getItem('rw_entry') === 'webapp'; } catch (e) {}
-                if (standalone || returning || window.location.search.length > 1) {
+                var explicitEntry = false;
+                try { explicitEntry = new URLSearchParams(window.location.search).get('entry') === 'webapp'; } catch (e) {}
+                if (standalone || returning || explicitEntry) {
                     document.documentElement.classList.add('rw-skip-landing');
                 }
             } catch (e) {}
