@@ -130,7 +130,10 @@ object ShareArtifacts {
                 android.provider.MediaStore.Images.Media.DISPLAY_NAME,
                 "${kind.fileStem}-${System.currentTimeMillis()}.png"
             )
-            put(android.provider.MediaStore.Images.Media.MIME_TYPE, MIME_TYPE)
+            put(
+                android.provider.MediaStore.Images.Media.MIME_TYPE,
+                SharePayload.MIME_TYPE
+            )
             if (android.os.Build.VERSION.SDK_INT >= 29) {
                 put(
                     android.provider.MediaStore.Images.Media.RELATIVE_PATH,
