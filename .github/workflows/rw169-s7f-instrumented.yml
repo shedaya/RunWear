@@ -1,0 +1,100 @@
+name: RW-169 S7F Instrumented (MediaStore)
+
+# Scratch CI for RW-169 §7F ONLY: runs ShareArtifactsInstrumentedTest
+# against a REAL Android MediaStore on a hardware-accelerated emulator
+# (macos-14, arm64). The production CI (android-tests.yml) has no
+# instrumented path. This workflow exists on the scratch branch
+# ci/rw169-s7f-instrumented only; test/app code is byte-identical
+# to b1d4b76.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  instrumented:
+    name: ShareArtifacts instrumented test (emulator API 34)
+    runs-on: macos-14
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: SDK platforms (diagnostic)
+        continue-on-error: true
+        run: |
+          set -x
+          java -version
+          echo "ANDROID_HOME=$ANDROID_HOME ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          ls "$ANDROID_HOME" || true
+          ls "$ANDROID_HOME/platforms" || true
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$SDKMANAGER" ] || SDKMANAGER=sdkmanager
+          "$SDKMANAGER" --version || true
+          yes | "$SDKMANAGER" "platforms;android-34" "platforms;android-35" "platforms;android-36" "build-tools;35.0.0" "build-tools;36.0.0" || true
+          ls "$ANDROID_HOME/platforms" || true
+
+      - name: Run instrumented test on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: arm64-v8a
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          script: |
+            cd RunWear-android
+            ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.runwear.app.weariverun.ShareArtifactsInstrumentedTest --stacktrace 2>&1 | tee "$RUNNER_TEMP/connected.log"
+            code=${PIPESTATUS[0]}
+            echo "connectedDebugAndroidTest exit code: $code"
+            if [ "$code" -ne 0 ]; then
+              echo '## Connected test failure (tail)' >> "$GITHUB_STEP_SUMMARY"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+              tail -200 "$RUNNER_TEMP/connected.log" >> "$GITHUB_STEP_SUMMARY" || true
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+            fi
+            exit "$code"
+
+      - name: Publish test summary
+        if: always()
+        run: |
+          python3 - <<'EOF'
+          import glob, os, xml.etree.ElementTree as ET
+          rows, tot_t, tot_f, tot_e, tot_s = [], 0, 0, 0, 0
+          for path in sorted(glob.glob('RunWear-android/**/build/outputs/androidTest-results/**/*.xml', recursive=True) + glob.glob('RunWear-android/**/build/test-results/**/*.xml', recursive=True)):
+              try:
+                  r = ET.parse(path).getroot()
+              except Exception:
+                  continue
+              t, f, e, s = (int(r.get(k, 0)) for k in ('tests', 'failures', 'errors', 'skipped'))
+              tot_t += t; tot_f += f; tot_e += e; tot_s += s
+              rows.append(f"| {r.get('name')} | {t} | {f} | {e} | {s} |")
+              for tc in r.iter('testcase'):
+                  rows.append(f"| testcase: {tc.get('classname')}#{tc.get('name')} time={tc.get('time')} | | | | |")
+          with open(os.environ.get('GITHUB_STEP_SUMMARY','/tmp/summary.md'), 'a') as out:
+              out.write('## RW-169 S7F instrumented results\n\n')
+              out.write('| Suite / testcase | Tests | Failures | Errors | Skipped |\n|---|---|---|---|---|\n')
+              out.write('\n'.join(rows) + '\n')
+              out.write(f"\n**Total: {tot_t} tests, {tot_f} failures, {tot_e} errors, {tot_s} skipped**\n")
+          print(f"total={tot_t} failures={tot_f} errors={tot_e} skipped={tot_s}")
+          EOF
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: s7f-instrumented-results
+          path: |
+            RunWear-android/app/build/outputs/androidTest-results/**
+            RunWear-android/app/build/reports/androidTests/**
+            RunWear-android/**/build/test-results/**/*.xml
+          if-no-files-found: warn
