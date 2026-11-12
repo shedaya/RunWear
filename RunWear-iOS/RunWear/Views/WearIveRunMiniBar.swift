@@ -2696,8 +2696,9 @@ struct WearIveRunUnifiedSurfaceView: View {
             ZStack {
                 Rectangle().fill(.regularMaterial)
                 Rectangle().fill(
-                    Color(hex: WearIveRunMorph.unifiedSurfaceHex(
-                        isDark: colorScheme == .dark)
+                    Color(hex: p >= 1
+                        ? WearIveRunMorph.unifiedSurfaceHex(isDark: colorScheme == .dark)
+                        : (colorScheme == .dark ? AppTheme.sheetDarkHex : AppTheme.sheetLightHex) // RW170-DISCRIM scratch: two-token tint
                     ).opacity(WearIveRunMorph.tintOpacity(
                         progress: p,
                         isDark: colorScheme == .dark
