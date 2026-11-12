@@ -80,16 +80,8 @@ jobs:
             export RUNWEAR_FIXTURE_WRITE=1
             echo "RUNWEAR_FIXTURE_WRITE=1 (generation mode)"
           fi
-          # TEMPORARY (RW-169 lane diagnostic — restored before the
-          # lane's final full-gate run): targeted classes only.
-          ./gradlew :app:testDebugUnitTest \
-            --tests "com.runwear.app.weariverun.Rw169*" \
-            --tests "com.runwear.app.weariverun.Rw99*" \
-            --tests "com.runwear.app.weariverun.ShareArtifactsTest" \
-            --tests "com.runwear.app.weariverun.WearIveRunElementPinTest" \
-            --tests "com.runwear.app.ui.screens.Rw169*" \
-            --tests "com.runwear.app.ui.screens.Rw152Morph*" \
-            --tests "com.runwear.app.ui.screens.Rw140*" \
+          ./gradlew :engine:testDebugUnitTest :shared:testDebugUnitTest \
+            :app:testDebugUnitTest :wear:testDebugUnitTest :app:assembleDebug \
             --stacktrace 2>&1 | tee "$RUNNER_TEMP/gradle.log"
           code=${PIPESTATUS[0]}
           if [ "$code" -ne 0 ]; then
