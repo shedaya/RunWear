@@ -300,9 +300,15 @@ class Rw169PillSeatProbeTest : Rw169HomeBase() {
                 "expanded over its seat (map §7: never removed)",
             1, overlayPillCopies(host)
         )
+        // Two semantics nodes carry the pill text in this
+        // state: the presented overlay copy (asserted above)
+        // and the in-list copy, which the host holds at
+        // alpha 0 while the panel covers its seat — present
+        // in the tree, not drawn. Exactly one copy is ever
+        // PRESENTED; that is the §7 invariant.
         assertEquals(
-            "the pill exists exactly once across both copies",
-            1, nodeBoxes(host).count { it.text == pillText }
+            "in-list (alpha-0, undrawn) + overlay (presented) copies",
+            2, nodeBoxes(host).count { it.text == pillText }
         )
         // The panel's header wordmark: exactly one instance,
         // rendered WHOLE inside the panel's bounds — its full
