@@ -55,7 +55,11 @@ class Rw99PosterCoverSourcePinTest {
         )
         assertTrue(
             "the thumbnail resolves through HeroRefResolver",
-            src.contains("rememberResolvedHeroUrl")
+            // RW-169 §7E.4 (Nov 11, 2026): the collection
+            // thumbnail resolves through the HELD variant — a
+            // shown thumbnail never returns to an empty slot
+            // while a successor reference resolves.
+            src.contains("rememberHeldResolvedHeroUrl")
         )
         assertTrue(
             "the photo keeps the settled top-centre poster framing",

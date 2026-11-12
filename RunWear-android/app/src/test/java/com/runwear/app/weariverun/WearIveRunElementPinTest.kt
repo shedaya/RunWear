@@ -66,7 +66,11 @@ class WearIveRunElementPinTest {
         // the footer section inside the scroll content.
         val host = heroMainScreen()
         val pullAt = host.indexOf("PullToRefreshBox(")
-        val dockAt = host.indexOf("WearIveRunDock(", pullAt)
+        // RE-PINNED (RW-169 §7A, Nov 11, 2026): the host's dock
+        // presence is the morph surface, rendered by the
+        // wirFooterRender overlay block invoked after the scroll
+        // area — the retired WearIveRunDock call is gone.
+        val dockAt = host.indexOf("wirFooterRender()", pullAt)
         assertTrue("PullToRefreshBox must exist", pullAt >= 0)
         assertTrue("the dock is composed after the scroll area", dockAt > pullAt)
         assertTrue(
@@ -86,7 +90,11 @@ class WearIveRunElementPinTest {
             // overlay, so the pin now asserts the morph's presence
             // in the same bottom-aligned residence instead of the
             // fade derivation.
-            host.contains("\"wirDockSurfaceMorph\"") &&
+            // RE-PINNED (RW-169 §7A): the RW-152 AnimatedContent
+            // tag is retired with the two-form surface it named;
+            // the one morph surface in the same bottom-aligned
+            // residence is the presence asserted now.
+            host.contains("WearIveRunMorphSurface(") &&
                 host.contains(".align(Alignment.BottomCenter)")
         )
         assertTrue(
@@ -103,7 +111,10 @@ class WearIveRunElementPinTest {
         // in-flow "wir-footer" item is removed, not relocated.
         assertTrue(
             "the expanded form is the footer section, in the overlay",
-            host.contains("WearIveRunFooterSection(")
+            // RE-PINNED (RW-169 §7A): the expanded form is the
+            // morph surface's expanded state, driven by the one
+            // wirExpanded state in the overlay host.
+            host.contains("expanded = wirExpanded")
         )
         assertFalse(
             "the in-flow wir-footer item is retired (RW-152 §1)",

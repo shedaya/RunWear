@@ -781,7 +781,7 @@ fun HeroSection(
                     // structural binding is the model).
                     HeroChromeEndGroup(
                         shareActions = shareActions,
-                        onShareClick = { shareMenuOpen = true },
+                        onShare = { shareMenuOpen = true },
                         onSettingsClick = onSettingsClick,
                         enabled = chromeInteractive
                     )
@@ -1148,7 +1148,7 @@ object HeroChromePolicy {
 @Composable
 fun HeroChromeEndGroup(
     shareActions: HeroShareActions?,
-    onShareClick: () -> Unit,
+    onShare: () -> Unit,
     onSettingsClick: () -> Unit,
     enabled: Boolean = true,
     modifier: Modifier = Modifier
@@ -1159,7 +1159,7 @@ fun HeroChromeEndGroup(
     ) {
         if (shareActions != null) {
             HeroShareButton(
-                onClick = onShareClick,
+                onClick = onShare,
                 enabled = enabled
             )
             Spacer(Modifier.width(HeroChromePolicy.PAIR_GAP_DP.dp))
