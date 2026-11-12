@@ -87,9 +87,15 @@ class Rw169FlickSpeedProbeTest : Rw169HomeBase() {
         node.config[SemanticsActions.ScrollBy].action
             ?.invoke(0f, range.maxValue())
         advanceFrames(host, 1)
-        assertEquals(
-            "mid-flick: exactly one narration instance",
-            1, narrationNodes(host).size
+        // RW-135 REBUILD + R-1: the flick lands at the page
+        // end, which now PRESENTS the expanded form — the
+        // morph may be inside its dissolve dead zone at this
+        // sample, where zero narrations are legible. The
+        // invariant is at most one legible narration.
+        assertTrue(
+            "mid-flick: at most one legible narration " +
+                "(was ${narrationNodes(host).size})",
+            narrationNodes(host).size <= 1
         )
         assertWordmarkWhole(host, "mid-flick")
         settleReveal(host)
@@ -107,9 +113,10 @@ class Rw169FlickSpeedProbeTest : Rw169HomeBase() {
         node2.config[SemanticsActions.ScrollBy].action?.invoke(0f, -4000f)
         advanceFrames(host, 1)
         capture(host, "rw169-flick-morph-midflight.png")
-        assertEquals(
-            "morph mid-flight under scroll: exactly one narration",
-            1, narrationNodes(host).size
+        assertTrue(
+            "morph mid-flight under scroll: at most one legible narration " +
+                "(was ${narrationNodes(host).size})",
+            narrationNodes(host).size <= 1
         )
         assertWordmarkWhole(host, "morph mid-flight under scroll")
         host.controller.pause().stop().destroy()
@@ -255,7 +262,7 @@ class Rw169ResettleProbeTest : Rw169HomeBase() {
 class Rw169PillSeatProbeTest : Rw169HomeBase() {
 
     @Test
-    fun `rw169 D8 loop-back - expanded panel header whole, pill absent-by-design, in the folded class`() {
+    fun `rw169 D8 loop-back - expanded panel header whole, pill present exactly once in front, in the folded class`() {
         val photo = heroPhotoUrl("cool_clear_male.webp")
         val state = nyState(photo)
         seedExactEntry(state)
@@ -275,14 +282,27 @@ class Rw169PillSeatProbeTest : Rw169HomeBase() {
         settleReveal(host)
         capture(host, "rw169-pill-over-panel.png")
 
-        // The blocking defect was the overlay copy rendering
-        // OVER the expanded panel's header wordmark. The
-        // loop-back rule (diagnosis sections 2.4 + 2.6): while
-        // expanded, NO pill copy renders over the panel — the
-        // overlay copy exists only for the mini state.
+        // RW-135 REBUILD (RB-09, Nov 12, 2026) — this RW-169
+        // expectation is SUPERSEDED. The conformance map §7
+        // invariant: the pill is whole and unbisected in MINI,
+        // mid-scroll AND EXPANDED — it is never removed while
+        // expanded. The pre-rebuild host gated the overlay
+        // copy with !wirExpanded while still suppressing the
+        // in-list copy on panel overlap, so on an overlapping
+        // seat the pill VANISHED while expanded (Sol's
+        // recording). The rule now: exactly one pill copy
+        // exists in every state — the in-list copy when the
+        // panel is clear of its seat, the overlay copy (in
+        // front of the panel, never over its header) when the
+        // panel covers the seat.
         assertEquals(
-            "no overlay pill copy while the panel is expanded",
-            0, overlayPillCopies(host)
+            "exactly one overlay pill copy while the panel is " +
+                "expanded over its seat (map §7: never removed)",
+            1, overlayPillCopies(host)
+        )
+        assertEquals(
+            "the pill exists exactly once across both copies",
+            1, nodeBoxes(host).count { it.text == pillText }
         )
         // The panel's header wordmark: exactly one instance,
         // rendered WHOLE inside the panel's bounds — its full
