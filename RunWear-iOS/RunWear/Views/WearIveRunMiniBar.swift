@@ -2851,8 +2851,10 @@ struct WearIveRunUnifiedSurfaceView: View {
             .onGeometryChange(for: CGFloat.self) { proxy in
                 proxy.size.height
             } action: { _, height in
+                // RW-169 §7A discipline, kept: the mini rest
+                // capture is confined to the mini rest state.
+                if p == 0 { miniNarrationHeight = height }
                 if height > 0 {
-                    miniNarrationHeight = height
                     onRestHeights?(miniRestHeight, expandedRestHeight)
                 }
             }
@@ -2869,8 +2871,11 @@ struct WearIveRunUnifiedSurfaceView: View {
             .onGeometryChange(for: CGFloat.self) { proxy in
                 proxy.size.height
             } action: { _, height in
+                // RW-169 §7A discipline, kept: the expanded
+                // rest capture is confined to the expanded
+                // rest state.
+                if p == 1 { expandedNarrationHeight = height }
                 if height > 0 {
-                    expandedNarrationHeight = height
                     onRestHeights?(miniRestHeight, expandedRestHeight)
                 }
             }

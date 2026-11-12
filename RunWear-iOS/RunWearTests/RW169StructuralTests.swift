@@ -1154,8 +1154,15 @@ final class RW169LoopbackTests: XCTestCase {
         // no frame double-exposes two forms by construction.
         for i in 0...16 {
             let p = Double(i) / 16.0
-            XCTAssertEqual(WearIveRunMorphProbe.legibleNarrationCount(progress: p), 1,
-                           "p=\(p): exactly one legible narration")
+            // RE-PINNED for the RW-135 REBUILD (Nov 12, 2026;
+            // RB-03 supersedes the RW-169 == 1 pin): the two
+            // narration placements dissolve over DISJOINT
+            // windows (mini out over [0, 0.35], expanded in
+            // over [0.55, 1]) with a dead zone between — the
+            // invariant is AT MOST one legible narration, and
+            // mid-morph neither is.
+            XCTAssertLessThanOrEqual(WearIveRunMorphProbe.legibleNarrationCount(progress: p), 1,
+                                     "p=\(p): at most one legible narration (RB-03)")
             let h = rests.mini + (rests.expanded - rests.mini) * CGFloat(p)
             try writeRender(
                 ZStack {
@@ -1407,12 +1414,18 @@ final class RW169LoopbackTests: XCTestCase {
         var trace = "RW-169 iOS LOOP-BACK — §8 check 4 flick-speed probe (HARNESS-GRADE; device check remains UNPROVEN)\n"
         let miniW = 96.0, expW = 176.0
         for p in [0.0, 0.34, 0.67, 1.0] {
-            XCTAssertEqual(WearIveRunMorphProbe.legibleNarrationCount(progress: p), 1)
+            // RE-PINNED for the RW-135 REBUILD (Nov 12, 2026;
+            // RB-03): at most one legible narration — the
+            // disjoint dissolve windows leave a dead zone
+            // (p = 0.34 and p = 0.67 sit inside it / at its
+            // edges, where neither placement is legible).
+            let legible = WearIveRunMorphProbe.legibleNarrationCount(progress: p)
+            XCTAssertLessThanOrEqual(legible, 1)
             let w = WearIveRunMorphProbe.wordmarkWidth(progress: p, miniRestWidth: miniW, expandedRestWidth: expW)
             XCTAssertGreaterThanOrEqual(w, miniW)
             let h = WearIveRunMorphProbe.containerHeight(miniRest: 60, expandedRest: 264, progress: p)
             XCTAssertEqual(h, 60 + (264 - 60) * p, accuracy: 0.001)
-            trace += "flick step p=\(p): legibleNarrations=1 wordmarkWidth=\(w) containerHeight=\(h)\n"
+            trace += "flick step p=\(p): legibleNarrations=\(legible) wordmarkWidth=\(w) containerHeight=\(h)\n"
         }
         trace += "RESULT: invariants hold at flick-coarse steps; the device-frame check itself is NOT closed by this probe.\n"
         print(trace)

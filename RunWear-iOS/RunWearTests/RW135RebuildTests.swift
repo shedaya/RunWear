@@ -360,9 +360,13 @@ final class RW135RebuildTests: XCTestCase {
         // The container level: the production overlay at mini
         // rest frames the surface at that same height (its
         // seed endpoint IS DockResidence.measuredDockHeight
-        // until the surface's own rest read lands).
+        // until the surface's own rest read lands). Same
+        // one-line fixture: the KC narration wraps at this
+        // column width, and the wrapped growth is content
+        // (§4.3), not the footprint being measured here.
         let overlay = WearIveRunOverlayView(
-            state: kcState, entry: kcEntry(), formattedFeelsLike: "37°F",
+            state: .updated(payload: .placeAtMoment("Miami, FL", .now)),
+            entry: miamiEntry, formattedFeelsLike: "82°F",
             cueCount: 0, viewportHeight: 852,
             onOpenCollection: {}, onTrash: {})
             .padding(.horizontal, 12)
