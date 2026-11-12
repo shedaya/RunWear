@@ -70,12 +70,13 @@ abstract class Rw169CapBase : Rw169Base() {
     protected fun CapFixture(
         photo: String,
         items: Int,
-        capDp: Float
+        capDp: Float,
+        fontScale: Float = 2.4f
     ) {
         val day = fixtureDayEntry(photo)
         CompositionLocalProvider(
             LocalDensity provides Density(
-                density = 2f, fontScale = 2.4f
+                density = 2f, fontScale = fontScale
             )
         ) {
             Box(Modifier.fillMaxSize()) {
@@ -206,7 +207,7 @@ class Rw169CapWideRenderTest : Rw169CapBase() {
         val cap = com.runwear.app.ui.screens.WirOverlayPanelPolicy
             .maxPanelHeightDp(800f)
         val host = compose(dark = false) {
-            CapFixture(photo, items = 14, capDp = cap)
+            CapFixture(photo, items = 14, capDp = cap, fontScale = 2.9f)
         }
         assertCapBindsAndPins(host, cap, "wide cap")
         capture(host, "rw169-wide-expanded-cap.png")
