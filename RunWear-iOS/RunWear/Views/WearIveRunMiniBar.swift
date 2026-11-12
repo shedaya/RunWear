@@ -2733,7 +2733,8 @@ struct WearIveRunUnifiedSurfaceView: View {
         // model, nothing animated. (RW-170 Move 3 is
         // verify-and-confirm on iOS; the travel-clip finding
         // is recorded in the lane report.)
-        .shadow(color: Color.black.opacity(0.14), radius: 12, x: 0, y: 6)
+        // RW170-DISCRIM scratch: elevation halo
+                    .shadow(color: Color.black.opacity(0.14), radius: 24, x: 0, y: 0)
         // §4.7 exit split (WearIveRunExitPolicy): opacity and
         // sink are the policy's functions of the host's one
         // exit progress and the form the exit started from.
