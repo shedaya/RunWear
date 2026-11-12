@@ -1250,14 +1250,14 @@ final class RW169LoopbackTests: XCTestCase {
 
     @MainActor
     func testRW169LB_Diagnostics() throws {
-        let entry = approvalEntry(itemNames: approvalKit)
-        let rests = try surfaceRestHeights(entry: entry)
+        let entry = fixtureEntry(place: "Los Angeles, CA")
+        let rests = try fixtureRestHeights(surfaceWidth: 369, entry: entry)
         // D-A: the unified surface as a DIRECT bottom child of a
         // ZStack over a plain page block (no page VStack).
         try writeRender(
             ZStack(alignment: .bottom) {
                 AppTheme.sheet
-                unified(rests, 0, .planned(.brooklyn), entry)
+                unifiedSurface(progress: 0, state: plannedState, entry: entry)
                     .frame(width: 369, height: rests.mini)
                     .padding(.horizontal, 12)
                     .padding(.bottom, 14)
@@ -1270,7 +1270,7 @@ final class RW169LoopbackTests: XCTestCase {
                 AppTheme.sheet
                 VStack(spacing: 0) {
                     Spacer(minLength: 0)
-                    unified(rests, 0, .planned(.brooklyn), entry)
+                    unifiedSurface(progress: 0, state: plannedState, entry: entry)
                         .frame(width: 369, height: rests.mini)
                 }
                 .padding(.horizontal, 12)
@@ -1279,31 +1279,32 @@ final class RW169LoopbackTests: XCTestCase {
             size: CGSize(width: 393, height: 852),
             name: "RW169-ios-diagB-dock-vstack.png")
         // D-C: the composition's hero ALONE in the canvas.
-        let comp = RW169CompositionView(
+        let comp = composition(
             presentation: .serving,
             pillState: .freeLook(used: 3, allowance: 10),
-            dockProgress: 0, dockHeight: rests.mini,
-            entry: entry, state: .planned(.brooklyn),
-            unified: { p, s, e in AnyView(self.unified(rests, p, s, e)) })
+            dockProgress: 0, dockHeight: rests.mini, entry: entry)
         try writeRender(comp.heroOnlyForDiagnostics,
             size: CGSize(width: 393, height: 852),
             name: "RW169-ios-diagC-hero.png")
-        // D-D: the cap surface, SETTLED render (two passes).
-        let tallEntry = WearIveRunEntry(
-            dayStart: Date(timeIntervalSince1970: 1_763_568_000),
-            placeName: "Los Angeles, CA", feelsLikeF: 58, actualF: 62,
-            condition: "Clear",
-            itemNames: (1...24).map { "Item \($0) Long Garment Name" },
-            itemKeys: [], heroImageReference: "", windMph: 5,
-            dayLowF: 55, dayHighF: 66, faceAnchor: nil)
-        let tallRests = try surfaceRestHeights(entry: tallEntry)
+        // D-D: the cap surface, SETTLED render (two passes on
+        // one host, run loop spun between them).
+        let tallEntry = fixtureEntry(
+            place: "Los Angeles, CA",
+            items: (1...24).map { "Item \($0) Long Garment Name" })
+        let tallRests = try fixtureRestHeights(surfaceWidth: 369, entry: tallEntry)
         let cap: CGFloat = 480 - 116
         try writeRenderSettled(
             ZStack {
                 AppTheme.background
                 VStack(spacing: 0) {
                     Spacer(minLength: 0)
-                    unified(tallRests, 1, .planned(.brooklyn), tallEntry, viewportHeight: 480)
+                    AnyView(WearIveRunUnifiedSurfaceView(
+                        state: plannedState, entry: tallEntry,
+                        formattedFeelsLike: "58°",
+                        cueCount: 0, viewportHeight: 480,
+                        heroURLResolver: nil, expansionProgress: 1,
+                        onToggle: {}, onOpenCollection: {},
+                        onOpenShareEntry: nil, onTrash: {}))
                         .frame(width: 369, height: min(tallRests.expanded, cap))
                 }
                 .padding(.horizontal, 12)
