@@ -13,7 +13,6 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.robolectric.annotation.Config
-import org.robolectric.Robolectric
 
 /**
  * RW-169 (Nov 11, 2026): full-screen probes on the real build —
@@ -221,8 +220,12 @@ class Rw169ResettleProbeTest : Rw169HomeBase() {
         advanceFrames(host, 30)
         var entryAfter = entryLineText(host)
         var rounds = 0
-        while (entryAfter == entryBefore && rounds < 40) {
-            Robolectric.flushBackgroundThreadScheduler()
+        while (entryAfter == entryBefore && rounds < 60) {
+            // DataStore's edit runs on real IO threads; give
+            // them real time, then pump the main looper through
+            // the harness settle. (Robolectric's scheduler-flush
+            // APIs throw in this suite's PAUSED looper mode.)
+            Thread.sleep(30)
             settleReveal(host)
             entryAfter = entryLineText(host)
             rounds++
