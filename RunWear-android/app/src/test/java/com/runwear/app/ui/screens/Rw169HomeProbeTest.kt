@@ -13,6 +13,7 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.robolectric.annotation.Config
+import org.robolectric.Robolectric
 
 /**
  * RW-169 (Nov 11, 2026): full-screen probes on the real build —
@@ -210,9 +211,23 @@ class Rw169ResettleProbeTest : Rw169HomeBase() {
 
         // Past the window the flip lands ATOMICALLY: entry line
         // and narration swap together in the same settled frame.
+        // The commit's write is a real DataStore edit on IO
+        // threads while the harness clock is virtual — landing is
+        // awaited with a bounded poll (background scheduler
+        // flushed each round) rather than one fixed advance whose
+        // real-time budget varies with suite load (the probe
+        // flaked twice under full-suite load on exactly this
+        // wait, and passed in every targeted run).
         advanceFrames(host, 30)
-        settleReveal(host)
-        val entryAfter = entryLineText(host)
+        var entryAfter = entryLineText(host)
+        var rounds = 0
+        while (entryAfter == entryBefore && rounds < 40) {
+            Robolectric.getBackgroundThreadScheduler().idle()
+            settleReveal(host)
+            entryAfter = entryLineText(host)
+            rounds++
+        }
+        println("RW169 G3 landing rounds: $rounds")
         println("RW169 G3 after: entry='$entryAfter'")
         assertNotEquals(
             "the settled change does land after the window",
