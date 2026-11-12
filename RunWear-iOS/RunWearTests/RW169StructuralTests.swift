@@ -177,19 +177,24 @@ final class RW169StructuralTests: XCTestCase {
             of: "// MARK: - RW-152 §1 / RW-169 §7A", range: unifiedStart.upperBound..<bar.endIndex))
         let unified = bar[unifiedStart.lowerBound..<unifiedEnd.lowerBound]
         // The narration's render sites in the unified
-        // hierarchy. RE-PINNED for RB-03 (RW-135 rebuild,
-        // Nov 12, 2026): exactly TWO placements of the same
-        // string — `miniNarrationView(line)` and
-        // `expandedNarrationView(line)` — dissolving over
-        // disjoint windows so both-legible is impossible.
-        // (The RW-169 pin counted the single lerped
-        // `narrationView(line)`; RB-03 retired that form.)
+        // hierarchy. RE-PINNED for RW-170 (Nov 12, 2026):
+        // exactly ONE narration composition —
+        // `narrationView(line)` — whose slot migrates with
+        // progress (font 12 → 15 pt, beside-wordmark →
+        // below-header) at opacity 1. (The RW-169 pin counted
+        // this same single lerped form; RB-03 briefly split
+        // it into two placements dissolving over disjoint
+        // windows; RW-170 retired that split on the
+        // diagnosis's evidence — two cross-fading copies read
+        // as a swap, and one migrating view makes both-legible
+        // impossible by construction.)
         XCTAssertEqual(
-            unified.components(separatedBy: "miniNarrationView(line)").count - 1, 1,
-            "the unified surface renders the MINI narration placement once (RB-03)")
-        XCTAssertEqual(
-            unified.components(separatedBy: "expandedNarrationView(line)").count - 1, 1,
-            "the unified surface renders the EXPANDED narration placement once (RB-03)")
+            unified.components(separatedBy: "narrationView(line)").count - 1, 1,
+            "the unified surface renders the ONE narration once (RW-170)")
+        XCTAssertFalse(unified.contains("miniNarrationView"),
+                       "the MINI narration placement is retired (RW-170)")
+        XCTAssertFalse(unified.contains("expandedNarrationView"),
+                       "the EXPANDED narration placement is retired (RW-170)")
         // The overlay composes the unified surface ONLY — the
         // retired dual composition (mini view + expanded view
         // in a ZStack) cannot return through the container.
@@ -376,10 +381,16 @@ final class RW169StructuralTests: XCTestCase {
         // Bounded residence (§2.2): the scroll-end clearance
         // reserves exactly the dock's band, so at scroll rest
         // no outfit card or chart label row sits under the bar.
-        XCTAssertEqual(DockResidence.scrollEndClearance, 80, accuracy: 0.001)
-        XCTAssertGreaterThanOrEqual(
+        // RE-PINNED for RW-170 (Nov 12, 2026): the clearance
+        // prices the PRESENTED form exactly — bottom inset
+        // (14) + presented mini height (49) = 63. (The 80 pt
+        // constant this pinned before carried 17 pt of empty
+        // band above the presented card — DIAGNOSIS Q1/Q4.)
+        XCTAssertEqual(DockResidence.scrollEndClearance, 63, accuracy: 0.001)
+        XCTAssertEqual(
             DockResidence.scrollEndClearance,
-            DockResidence.bottomInset + DockResidence.measuredDockHeight)
+            DockResidence.bottomInset + DockResidence.measuredDockHeight,
+            accuracy: 0.001)
     }
 
     // MARK: - E · the settle discipline

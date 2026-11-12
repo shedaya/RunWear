@@ -225,11 +225,15 @@ final class RW145147FixTests: XCTestCase {
         // expanded panel is the overlay dock's own state, so
         // there is no footer-top arithmetic left to pin. The
         // RW-147 invariant below is untouched.
-        // The scroll-end clearance is UNCHANGED by this pass:
-        // it is what carries the glance band (and every other
-        // sheet element) fully clear of the dock at scroll end,
-        // in the stacked layout and the Duo column alike.
-        XCTAssertEqual(DockResidence.scrollEndClearance, 80, accuracy: 0.5)
+        // The scroll-end clearance carries the glance band
+        // (and every other sheet element) fully clear of the
+        // dock at scroll end, in the stacked layout and the
+        // Duo column alike. RE-PINNED for RW-170 (Nov 12,
+        // 2026): it prices the PRESENTED form exactly —
+        // bottom inset 14 + presented mini height 49 = 63
+        // (the 80 pt constant priced 17 pt of empty band;
+        // DIAGNOSIS Q1/Q4).
+        XCTAssertEqual(DockResidence.scrollEndClearance, 63, accuracy: 0.5)
     }
 
     // MARK: - RW-147 (Duo): the expanded-layout dock residence,

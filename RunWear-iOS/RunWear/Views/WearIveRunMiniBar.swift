@@ -67,12 +67,25 @@ enum DockResidence {
     /// stood here was the 44 pt-control formula's output —
     /// the "room" Sol's recording showed around the content.)
     static let measuredDockHeight: CGFloat = 49
-    /// Bottom clearance carried below the page content in every
-    /// Home scroll view: the dock's height + its bottom inset +
-    /// 10 pt of margin, sized up for the wrapped-narration dock
-    /// forms (RW-138's wrap-and-grow can stand taller than
-    /// 56 pt).
-    static let scrollEndClearance: CGFloat = 80
+    /// RW-170 (Nov 12, 2026) — ONE BAND: the host's reserved
+    /// clearance prices the PRESENTED (mini) form only: the
+    /// presented height + its 14 pt lift. At the one-line rest
+    /// that is 49 + 14 = 63 pt. A wrapped narration grows the
+    /// presented height and the reserve follows it through
+    /// `clearance(forPresentedMiniHeight:)` — the host's two
+    /// clearance sites consume THAT quantity, never a constant
+    /// sized for a state that is not on screen. The expanded
+    /// form's height is NEVER reserved: it grows over the sheet
+    /// from this same residence. (The 80 pt constant that stood
+    /// here priced 17 pt of empty band above the presented card
+    /// at every scroll position — DIAGNOSIS Q1/Q4.)
+    static let scrollEndClearance: CGFloat = bottomInset + measuredDockHeight
+
+    /// The clearance for a presented mini form of the given
+    /// height: exactly its height plus the bottom lift.
+    static func clearance(forPresentedMiniHeight height: CGFloat) -> CGFloat {
+        bottomInset + height
+    }
 
     /// The dock band's top edge in a viewport of `viewportHeight`
     /// for a dock of `dockHeight`.
@@ -906,6 +919,20 @@ enum WearIveRunMorph {
         return mini + (1 - mini) * clamped(progress)
     }
 
+    /// RW-170 (Nov 12, 2026) — ONE SURFACE, Sol's ruling: the
+    /// unified surface paints ONE token in BOTH states — the
+    /// EXPANDED state's darker warm tone: light the page-ground
+    /// family #F5F1E8 (`AppTheme.groundLightHex`, the §2.2
+    /// footer ground), dark the warm-charcoal #2A251E
+    /// (`AppTheme.cardDarkHex`, spec §6). The MINI state's old
+    /// token (#FDFBF6 sheet) is superseded for this surface.
+    /// The morph animates ALPHA ONLY (tintOpacity above: the
+    /// mini rest alpha 0.85 light / 0.82 dark → 1.00 expanded);
+    /// there is no colour cross-fade anywhere in the surface.
+    static func unifiedSurfaceHex(isDark: Bool) -> String {
+        isDark ? AppTheme.cardDarkHex : AppTheme.groundLightHex
+    }
+
     /// Corner radius tokens. RW-135 §7.6 (Direction A, Nov 7,
     /// 2026) RESTORES the design of record (2026-11-02): the
     /// dock is a floating card, radius 16 in BOTH docked forms,
@@ -943,23 +970,21 @@ enum WearIveRunMorph {
         4 * (1 - expandedContentOpacity(progress: progress))
     }
 
-    // MARK: RB-03 (RW-135 rebuild, Nov 12, 2026) — the dissolve windows
+    // MARK: RW-170 (Nov 12, 2026) — ONE narration, moved not cross-faded
     //
-    // The morph is a REAL in-place dissolve honouring the
-    // RW-152 §1.3 legibility invariant: the narration exists
-    // in TWO placements of the same string (the mini slot
-    // beside the wordmark at 12 pt; the expanded slot below
-    // the header, full width, at 15 pt), each dissolving over
-    // its own window — mini out across p in [0, 0.35],
-    // expanded in across p in [0.55, 1] — with a dead zone
-    // between in which NEITHER is legible, so both-legible is
-    // impossible at any progress value. (The RW-169 form —
-    // one narration view sliding between the slots while its
-    // font lerped 12 → 15 — lerped one narration through the
-    // other's space; RB-03 retires it.) Expanded-only content
-    // (entry row + doorway) dissolves in over p in [0.45, 1]
-    // (the standing window above), laid out at its expanded
-    // geometry inside the growing surface.
+    // SUPERSEDES the RB-03 two-placement dissolve: the
+    // narration is ONE view whose slot migrates with progress
+    // (font 12 → 15 pt, beside-wordmark → below-header, width
+    // flexing between the two slots' widths), at full opacity
+    // throughout. Exactly one narration exists in the view and
+    // semantics tree at every progress value, so the RW-152
+    // §1.3 legibility invariant holds BY CONSTRUCTION — there
+    // is never a second copy to ghost (DIAGNOSIS Q3, cause 2:
+    // the two placements cross-fading through a dead zone read
+    // as a swap, not a transform). Expanded-only content
+    // (entry row + doorway) still dissolves in over p in
+    // [0.45, 1] (the standing window above), laid out at its
+    // expanded geometry inside the growing surface.
 
     /// The morph's length and curve (spec §4 tokens): 380 ms,
     /// cubic-bezier(0.32, 0.72, 0, 1).
@@ -985,14 +1010,19 @@ enum WearIveRunMorph {
         return t * t * (3 - 2 * t)
     }
 
-    /// The MINI placement's alpha: 1 − smoothstep(p in [0, 0.35]).
-    static func miniNarrationOpacity(progress: Double) -> Double {
-        1 - smoothstep(progress, 0, 0.35)
+    /// RW-170: the ONE narration's font size — 12 pt at the
+    /// mini slot, 15 pt at the expanded slot, linear in
+    /// progress (the slot's position and width lerp on the
+    /// same progress in the surface's layout).
+    static func narrationFontSize(progress: Double) -> Double {
+        12 + 3 * clamped(progress)
     }
 
-    /// The EXPANDED placement's alpha: smoothstep(p in [0.55, 1]).
-    static func expandedNarrationOpacity(progress: Double) -> Double {
-        smoothstep(progress, 0.55, 1)
+    /// RW-170: the ONE narration's opacity — 1 at every
+    /// progress value. It is never dissolved; it MOVES.
+    static func narrationOpacity(progress: Double) -> Double {
+        _ = clamped(progress)
+        return 1
     }
 
     /// The expanded-only content's alpha over p in [0.45, 1]
@@ -1270,9 +1300,13 @@ struct WearIveRunMiniBarView: View {
     /// no self-measurement in the paint path — the one
     /// measurement below serves only the entrance's rise
     /// distance). RW-152 §1: this bar is the overlay surface's
-    /// MINI state; the expanded anatomy is the same surface's
-    /// other state (WearIveRunExpandedPanelView), cross-faded
-    /// by the overlay container — not a separate section.
+    /// MINI state. (Retained standalone form: the production
+    /// host composes the ONE unified surface —
+    /// WearIveRunUnifiedSurfaceView — whose single composition
+    /// carries both states; this view and
+    /// WearIveRunExpandedPanelView remain as the states'
+    /// reference forms and test fixtures, and paint the same
+    /// ruled token so the file carries one surface law.)
     private var dockBar: some View {
         headerRow
             .onGeometryChange(for: Double.self) { proxy in
@@ -1282,17 +1316,17 @@ struct WearIveRunMiniBarView: View {
             }
             .background {
                 // §7.6 / spec §2.1: the MINI material — the
-                // translucent card tint over the system
-                // material blur (light #FDFBF6 at 85% / dark
-                // #2A251E at 82%). The material itself is never
-                // animated (decision §4 — no blur animation).
+                // translucent tint over the system material
+                // blur, on the RW-170 ruled unified token
+                // (light #F5F1E8 at 85% / dark #2A251E at 82% —
+                // ONE token in both states, alpha only). The
+                // material itself is never animated (decision
+                // §4 — no blur animation).
                 ZStack {
                     Rectangle().fill(.regularMaterial)
                     Rectangle().fill(
-                        (colorScheme == .dark
-                            ? Color(hex: AppTheme.cardDarkHex)
-                            : Color(hex: AppTheme.sheetLightHex)
-                        ).opacity(WearIveRunMorph.tintOpacity(
+                        Color(hex: WearIveRunMorph.unifiedSurfaceHex(
+                            isDark: colorScheme == .dark)).opacity(WearIveRunMorph.tintOpacity(
                             progress: 0,
                             isDark: colorScheme == .dark
                         ))
@@ -1947,16 +1981,14 @@ struct WearIveRunExpandedPanelView: View {
         // content — caught by this lane's expanded frames.)
         .background {
             // The dock's own material, at the EXPANDED state's
-            // settled opacity (BackgroundPolicy: opaque sheet
-            // tint over .regularMaterial) — one surface, one
-            // material, two states.
+            // settled opacity (BackgroundPolicy: the opaque
+            // RW-170 ruled unified token over .regularMaterial)
+            // — one surface, one material, two states.
             ZStack {
                 Rectangle().fill(.regularMaterial)
                 Rectangle().fill(
-                    (colorScheme == .dark
-                        ? Color(hex: AppTheme.cardDarkHex)
-                        : Color(hex: AppTheme.sheetLightHex)
-                    ).opacity(WearIveRunMorph.tintOpacity(
+                    Color(hex: WearIveRunMorph.unifiedSurfaceHex(
+                        isDark: colorScheme == .dark)).opacity(WearIveRunMorph.tintOpacity(
                         progress: 1,
                         isDark: colorScheme == .dark
                     ))
@@ -2271,27 +2303,25 @@ struct WearIveRunSettleGate {
 // MARK: - RW-169 §7A — the morph probe (mechanical acceptance)
 //
 // The acceptance probe of §7A, as pure functions the tests pin.
-// RE-PINNED for RB-03 (RW-135 rebuild, Nov 12, 2026): the
-// narration now exists in TWO placements of the same string
-// dissolving over disjoint windows (mini out [0, 0.35],
-// expanded in [0.55, 1]) — the invariant the probe counts is
-// the legibility invariant: at every morph progress value
-// AT MOST ONE placement is legible (alpha > 0.5), and in the
-// dead zone between the windows neither is. (The RW-169
-// single-view form this probe originally described — one
-// narration at opacity 1 throughout — lerped one narration
-// through the other's space and is retired by RB-03.) The
-// wordmark's rendered width remains the interpolation of its
-// two REST widths — never below the mini rest width, never
-// the ≈33 pt crush D1 shipped.
+// RE-PINNED for RW-170 (Nov 12, 2026): the narration is ONE
+// view again (the RW-169 single-view form), but on the RW-170
+// law — its slot MIGRATES with progress (font 12 → 15 pt,
+// beside-wordmark → below-header) at opacity 1 throughout, so
+// the legibility invariant is exactly-one-legible at every
+// progress value, by construction. (The RB-03 two-placement
+// dissolve this briefly carried — mini out [0, 0.35],
+// expanded in [0.55, 1], dead zone between — is retired: the
+// diagnosis showed the cross-fade through the dead zone is
+// what made the morph read as a swap.) The wordmark's
+// rendered width remains the interpolation of its two REST
+// widths — never below the mini rest width, never the ≈33 pt
+// crush D1 shipped.
 enum WearIveRunMorphProbe {
-    /// How many narration placements are legible (alpha
-    /// > 0.5) at `progress`: never more than one.
+    /// How many narrations are legible at `progress`: the ONE
+    /// narration view, at opacity 1 — exactly one at every
+    /// progress value.
     static func legibleNarrationCount(progress: Double) -> Int {
-        var count = 0
-        if WearIveRunMorph.miniNarrationOpacity(progress: progress) > 0.5 { count += 1 }
-        if WearIveRunMorph.expandedNarrationOpacity(progress: progress) > 0.5 { count += 1 }
-        return count
+        WearIveRunMorph.narrationOpacity(progress: progress) > 0.5 ? 1 : 0
     }
 
     /// The wordmark's rendered width at `progress`: the linear
@@ -2402,15 +2432,16 @@ struct WearIveRunPromotedThumbnail: View {
 // WearIveRunOverlayPolicy.contentHeight — a rest computation,
 // never a during-morph measurement).
 //
-// RB-03 (RW-135 rebuild, Nov 12, 2026) amends the narration's
-// part in that hierarchy: the RW-169 form carried ONE
-// narration view that slid from the mini slot to the expanded
-// slot while its font lerped 12 → 15 — one narration lerped
-// through the other's space. The narration now stands in TWO
-// placements of the same string at their fixed slots, each
-// dissolving over its own window (mini out [0, 0.35],
-// expanded in [0.55, 1]) with a dead zone between, so the
-// legibility invariant holds by construction.
+// RW-170 (Nov 12, 2026) settles the narration's part in that
+// hierarchy: ONE narration view whose slot migrates with
+// progress — font 12 → 15 pt, beside the wordmark → below
+// the header, width flexing between the slots — at opacity 1
+// throughout. (The RB-03 two-placement dissolve that stood
+// here briefly — two copies cross-fading through a dead zone
+// — is retired on the diagnosis's evidence: it read as a
+// swap, not a transform. With one view there is never a
+// second copy to ghost, so the legibility invariant holds
+// by construction.)
 
 struct WearIveRunUnifiedSurfaceView: View {
     let state: WearIveRunState
@@ -2555,18 +2586,21 @@ struct WearIveRunUnifiedSurfaceView: View {
         GeometryReader { geo in
             let width = geo.size.width
             let topPad = lerp(Self.miniTopPadding, Self.expandedTopPadding)
-            // RB-03: the two narration placements stand at
-            // their own FIXED slot geometry for the whole
-            // travel — the mini slot beside the wordmark, the
-            // expanded slot below the header at full width.
-            // Neither slides into the other's space; only
-            // their alphas move (the dissolve windows).
+            // RW-170: the ONE narration's slot geometry — the
+            // mini slot (beside the wordmark) and the expanded
+            // slot (below the header, full width) are the two
+            // ENDS of one migration: x, y and width all lerp on
+            // the same progress, and the font lerps 12 → 15 pt
+            // inside the view. There is no second placement.
             let miniNarrationX = 16 + wordmarkWidth + 8
             let miniNarrationY = Self.miniTopPadding
                 + max(0, (Self.miniRowHeight - miniNarrationHeight) / 2)
             let miniNarrationWidth = max(
                 40, width - miniNarrationX - 16 - 56 - 4)
             let expandedNarrationY = Self.expandedTopPadding + Self.expandedHeaderZone
+            let narrationX = lerp(miniNarrationX, 16)
+            let narrationY = lerp(miniNarrationY, expandedNarrationY)
+            let narrationWidth = lerp(miniNarrationWidth, width - 32)
             // Expanded-only content stands at its EXPANDED
             // geometry from the first frame (RB-03): the
             // entry region below the expanded narration slot,
@@ -2617,29 +2651,16 @@ struct WearIveRunUnifiedSurfaceView: View {
                 // the expanded header row respectively.
                 controls
                     .offset(x: width - 16 - 56, y: topPad + lerp(0, 9))
-                // The narration — TWO placements of the same
-                // string (RB-03), dissolving over disjoint
-                // windows: the mini placement (12 pt, beside
-                // the wordmark) fades out across p in
-                // [0, 0.35]; the expanded placement (15 pt,
-                // below the header, full width) fades in
-                // across p in [0.55, 1]. The dead zone between
-                // makes both-legible impossible; the sub-0.5
-                // placement is out of the accessibility tree.
+                // The narration — ONE view (RW-170), migrating
+                // between its two slots on the one progress:
+                // exactly one narration in the view and
+                // semantics tree at every progress value, at
+                // opacity 1 throughout, so the legibility
+                // invariant holds by construction.
                 if let line = WearIveRunNarration.line(for: shownState) {
-                    miniNarrationView(line)
-                        .frame(width: miniNarrationWidth, alignment: .leading)
-                        .offset(x: miniNarrationX, y: miniNarrationY)
-                        .opacity(WearIveRunMorph.miniNarrationOpacity(progress: p))
-                        .accessibilityHidden(
-                            WearIveRunMorph.miniNarrationOpacity(progress: p) < 0.5)
-                        .allowsHitTesting(false)
-                    expandedNarrationView(line)
-                        .frame(width: width - 32, alignment: .leading)
-                        .offset(x: 16, y: expandedNarrationY)
-                        .opacity(WearIveRunMorph.expandedNarrationOpacity(progress: p))
-                        .accessibilityHidden(
-                            WearIveRunMorph.expandedNarrationOpacity(progress: p) < 0.5)
+                    narrationView(line)
+                        .frame(width: narrationWidth, alignment: .leading)
+                        .offset(x: narrationX, y: narrationY)
                         .allowsHitTesting(false)
                 }
                 // The entry region — the same row throughout,
@@ -2664,18 +2685,19 @@ struct WearIveRunUnifiedSurfaceView: View {
             .frame(width: width, alignment: .topLeading)
         }
         .background {
-            // One material throughout: the mini state's
-            // translucent tint (light .85 / dark .82, §2.1)
-            // over the system blur, deepening to the expanded
-            // state's opaque sheet tint with progress — the
-            // tint layer's opacity is what moves, never the
-            // material's blur.
+            // RW-170 — ONE SURFACE: one token throughout, the
+            // ruled unified token (light #F5F1E8 / dark
+            // #2A251E — the expanded state's warm tone, per
+            // Sol's ruling), over the system blur. The ONLY
+            // background animation is the tint layer's ALPHA
+            // (mini rest .85 light / .82 dark → 1.00 expanded);
+            // the token never cross-fades and the material's
+            // blur never animates.
             ZStack {
                 Rectangle().fill(.regularMaterial)
                 Rectangle().fill(
-                    (colorScheme == .dark
-                        ? Color(hex: AppTheme.cardDarkHex)
-                        : Color(hex: AppTheme.sheetLightHex)
+                    Color(hex: WearIveRunMorph.unifiedSurfaceHex(
+                        isDark: colorScheme == .dark)
                     ).opacity(WearIveRunMorph.tintOpacity(
                         progress: p,
                         isDark: colorScheme == .dark
@@ -2704,6 +2726,13 @@ struct WearIveRunUnifiedSurfaceView: View {
                         : Color.black.opacity(0.08),
                     lineWidth: 0.5)
         }
+        // Spec §2.1 shadow, VERIFIED at the RW-170 audit: the
+        // settled iOS expression — black 14%, radius 12 (half
+        // the spec's 24 pt blur in SwiftUI terms), offset
+        // (0, +6), constant across progress. No elevation
+        // model, nothing animated. (RW-170 Move 3 is
+        // verify-and-confirm on iOS; the travel-clip finding
+        // is recorded in the lane report.)
         .shadow(color: Color.black.opacity(0.14), radius: 12, x: 0, y: 6)
         // §4.7 exit split (WearIveRunExitPolicy): opacity and
         // sink are the policy's functions of the host's one
@@ -2837,43 +2866,24 @@ struct WearIveRunUnifiedSurfaceView: View {
         }
     }
 
-    /// RB-03: the MINI placement of the narration — 12 pt, in
-    /// the slot beside the wordmark. Its measured height is a
-    /// property of the placement (fixed font, fixed column),
-    /// not of the progress value, so it feeds the mini rest
-    /// height whenever it lands.
+    /// RW-170: THE narration — one view, font lerping
+    /// 12 → 15 pt as its slot migrates (the slot geometry is
+    /// computed in the body). Its measured height feeds the
+    /// rest height of whichever rest state the surface stands
+    /// in — mini at p == 0, expanded at p == 1 (the RW-169
+    /// §7A discipline, kept: rest captures are confined to
+    /// their rest states, so a mid-travel height never feeds
+    /// an endpoint).
     @ViewBuilder
-    private func miniNarrationView(_ line: String) -> some View {
+    private func narrationView(_ line: String) -> some View {
         narrationText(line, for: shownState)
-            .font(.system(size: 12))
+            .font(.system(size: CGFloat(WearIveRunMorph.narrationFontSize(progress: p))))
             .id(line)
             .transition(.opacity)
             .onGeometryChange(for: CGFloat.self) { proxy in
                 proxy.size.height
             } action: { _, height in
-                // RW-169 §7A discipline, kept: the mini rest
-                // capture is confined to the mini rest state.
                 if p == 0 { miniNarrationHeight = height }
-                if height > 0 {
-                    onRestHeights?(miniRestHeight, expandedRestHeight)
-                }
-            }
-    }
-
-    /// RB-03: the EXPANDED placement of the same narration
-    /// string — 15 pt, below the header, full width.
-    @ViewBuilder
-    private func expandedNarrationView(_ line: String) -> some View {
-        narrationText(line, for: shownState)
-            .font(.system(size: 15))
-            .id(line)
-            .transition(.opacity)
-            .onGeometryChange(for: CGFloat.self) { proxy in
-                proxy.size.height
-            } action: { _, height in
-                // RW-169 §7A discipline, kept: the expanded
-                // rest capture is confined to the expanded
-                // rest state.
                 if p == 1 { expandedNarrationHeight = height }
                 if height > 0 {
                     onRestHeights?(miniRestHeight, expandedRestHeight)
@@ -3152,6 +3162,13 @@ struct WearIveRunOverlayView: View {
     /// §4.7 exit split keys its choreography on the form the
     /// exit starts from).
     var onExpansionChange: ((Bool) -> Void)? = nil
+    /// RW-170 — ONE BAND: the host learns the surface's
+    /// PRESENTED (mini) rest height, so its scroll clearance
+    /// prices the presented form (DockResidence.clearance) —
+    /// a wrapped narration grows the presented height and the
+    /// reserve follows; the expanded height is never reported
+    /// for clearance.
+    var onPresentedMiniHeight: ((CGFloat) -> Void)? = nil
 
     /// RB-01/R-1: the expansion decision — the ONLY source of
     /// the expanded state. Tap summons persist until an
@@ -3231,6 +3248,9 @@ struct WearIveRunOverlayView: View {
                 // become the morph's two endpoints.
                 if mini > 0 { miniRestHeight = Double(mini) }
                 if expanded > 0 { expandedRestHeight = Double(expanded) }
+                // RW-170: the host's clearance follows the
+                // PRESENTED (mini) height only.
+                if mini > 0 { onPresentedMiniHeight?(mini) }
             },
             onToggle: { toggle() },
             onCollapse: { collapseExplicit() },

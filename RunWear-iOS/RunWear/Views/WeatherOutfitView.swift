@@ -118,6 +118,13 @@ struct WeatherOutfitView: View {
     /// from (MINI: 300 ms fade+sink; EXPANDED: 160 ms fade
     /// then 400 ms fold).
     @State private var wearSurfaceExpanded = false
+    /// RW-170 — ONE BAND: the Wear surface's PRESENTED (mini)
+    /// rest height, reported by the overlay as its rest
+    /// geometry lands. The scroll clearance below prices this
+    /// presented form (plus the 14 pt lift) — a wrapped
+    /// narration grows it and the reserve follows; the
+    /// expanded height is never reserved.
+    @State private var wearPresentedMiniHeight: CGFloat = DockResidence.measuredDockHeight
     @State private var wearExitInProgress = false
     @State private var wearExitRemovesData = false
     @State private var wearDockExitProgress: Double = 0
@@ -823,11 +830,14 @@ struct WeatherOutfitView: View {
                                 // flow — it is the overlay dock's
                                 // expanded state (miniBarDock).
                             }
-                            // RW-147: the scroll-end clearance
-                            // (DockResidence) — the column's
-                            // content can rest fully clear of the
-                            // dock's rest band.
-                            .padding(.bottom, DockResidence.scrollEndClearance)
+                            // RW-147 / RW-170: the scroll-end
+                            // clearance — the column's content
+                            // can rest fully clear of the dock's
+                            // PRESENTED band (presented mini
+                            // height + 14 pt lift, and nothing
+                            // for any other state).
+                            .padding(.bottom, DockResidence.clearance(
+                                forPresentedMiniHeight: wearPresentedMiniHeight))
                         }
                         .onScrollPhaseChange { _, phase in
                             isScrollGestureActive = phase != .idle
@@ -1029,14 +1039,18 @@ struct WeatherOutfitView: View {
             // dock (miniBarDock), summoned in place. The page
             // now ends with the personal section plus the
             // scroll-end clearance below.
-            // RW-147: the scroll-end clearance (DockResidence) —
-            // present exactly while a session entry (and so the
-            // dock) exists, so at scroll end the page's end rests
-            // fully clear above the dock's rest band. The value
-            // is unchanged: exactly the mini-dock reservation.
+            // RW-147 / RW-170: the scroll-end clearance
+            // (DockResidence) — present exactly while a session
+            // entry (and so the dock) exists, so at scroll end
+            // the page's end rests fully clear above the dock's
+            // rest band. The value prices the PRESENTED form:
+            // presented mini height + the 14 pt lift — the same
+            // quantity the Duo column reserves, and never the
+            // expanded height.
             if collectionModel.sessionEntry() != nil || wearExitInProgress {
                 Color.clear
-                    .frame(height: DockResidence.scrollEndClearance)
+                    .frame(height: DockResidence.clearance(
+                        forPresentedMiniHeight: wearPresentedMiniHeight))
             }
         }
         .background {
@@ -1325,7 +1339,10 @@ struct WeatherOutfitView: View {
                         beginWearExit(snapshot: entry, removesData: true)
                     }
                 },
-                onExpansionChange: { wearSurfaceExpanded = $0 }
+                onExpansionChange: { wearSurfaceExpanded = $0 },
+                // RW-170: the presented (mini) height feeds the
+                // host's clearance pricing (ONE BAND).
+                onPresentedMiniHeight: { wearPresentedMiniHeight = $0 }
             )
         }
     }

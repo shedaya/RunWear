@@ -23,11 +23,20 @@ import CryptoKit
 ///   production path's decision function toggles the state
 ///   from either activation. DEVICE tap-through is UNPROVEN
 ///   (no device in this lane) and is not claimed here.
-/// - RB-03: the real dissolve morph — two narration
-///   placements, disjoint smoothstep windows, the legibility
-///   invariant, expanded-only content over [0.45, 1], the
-///   380 ms cubic-bezier(0.32, 0.72, 0, 1) morph, Reduced
-///   Motion ≤150 ms.
+/// - RB-03: the morph — RE-PINNED for RW-170 (Nov 12, 2026):
+///   ONE narration whose slot migrates (font 12 → 15 pt,
+///   beside-wordmark → below-header) at opacity 1 — the
+///   legibility invariant holds by construction; the
+///   two-placement dissolve RB-03 briefly carried is retired
+///   on the diagnosis's evidence. Expanded-only content over
+///   [0.45, 1], the 380 ms cubic-bezier(0.32, 0.72, 0, 1)
+///   morph, Reduced Motion ≤150 ms.
+/// - RW-170: ONE SURFACE (the ruled unified token, alpha-only
+///   morph), ONE BAND (clearance prices the presented form),
+///   ONE SHADOW (spec §2.1 values, constant), ONE NARRATION
+///   (above), NO RE-FLOW (host composition never gated on the
+///   expanded state) — pinned in the RW170 section below, with
+///   composited full-home probes.
 /// - RB-04: MINI content-sized at the measured ≈49 pt
 ///   footprint; EXPANDED height == intrinsic content height
 ///   (bottom padding 12).
@@ -271,35 +280,39 @@ final class RW135RebuildTests: XCTestCase {
         XCTAssertFalse(policy.isExpanded, "activating the body collapses — the same action, toggled")
     }
 
-    // MARK: - RB-03 · the dissolve windows and the legibility invariant
+    // MARK: - RB-03 · the morph — RW-170: ONE narration, moved not cross-faded
 
-    func testRB03_MorphWindows_LegibilityInvariant() {
-        // The window endpoints, exactly as specified.
-        XCTAssertEqual(WearIveRunMorph.miniNarrationOpacity(progress: 0), 1, accuracy: 0.0001)
-        XCTAssertEqual(WearIveRunMorph.miniNarrationOpacity(progress: 0.35), 0, accuracy: 0.0001)
-        XCTAssertEqual(WearIveRunMorph.expandedNarrationOpacity(progress: 0.55), 0, accuracy: 0.0001)
-        XCTAssertEqual(WearIveRunMorph.expandedNarrationOpacity(progress: 1), 1, accuracy: 0.0001)
-        // Sampled across the whole travel: the two alphas are
-        // DISJOINT (their product is 0 at every sample — one
-        // is always fully out while the other is in), at most
-        // one placement is ever legible, and the dead zone
-        // (0.35, 0.55) has neither.
+    func testRB03_MorphWindows_LegibilityInvariant() throws {
+        // RW-170 law (supersedes the RB-03 two-placement
+        // windows this test pinned before): the narration is
+        // ONE view — its font lerps 12 → 15 pt, its slot
+        // migrates beside-wordmark → below-header, and its
+        // opacity is 1 at EVERY progress value. Exactly one
+        // legible narration at every sample — by construction,
+        // not by disjoint windows.
+        XCTAssertEqual(WearIveRunMorph.narrationFontSize(progress: 0), 12, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.narrationFontSize(progress: 0.5), 13.5, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.narrationFontSize(progress: 1), 15, accuracy: 0.0001)
         for i in 0...100 {
             let p = Double(i) / 100
-            let mini = WearIveRunMorph.miniNarrationOpacity(progress: p)
-            let expanded = WearIveRunMorph.expandedNarrationOpacity(progress: p)
-            XCTAssertEqual(mini * expanded, 0, accuracy: 0.0001,
-                           "p=\(p): the windows are disjoint — both-legible is impossible")
-            XCTAssertLessThanOrEqual(WearIveRunMorphProbe.legibleNarrationCount(progress: p), 1,
-                                     "p=\(p): at most one legible narration")
-            if p > 0.35 && p < 0.55 {
-                XCTAssertEqual(mini, 0, accuracy: 0.0001, "p=\(p): dead zone — mini is out")
-                XCTAssertEqual(expanded, 0, accuracy: 0.0001, "p=\(p): dead zone — expanded is not yet in")
-            }
+            XCTAssertEqual(WearIveRunMorph.narrationOpacity(progress: p), 1, accuracy: 0.0001,
+                           "p=\(p): the one narration never dissolves — it moves")
+            XCTAssertEqual(WearIveRunMorphProbe.legibleNarrationCount(progress: p), 1,
+                           "p=\(p): exactly one legible narration")
         }
-        // The endpoints carry exactly one legible narration each.
-        XCTAssertEqual(WearIveRunMorphProbe.legibleNarrationCount(progress: 0), 1)
-        XCTAssertEqual(WearIveRunMorphProbe.legibleNarrationCount(progress: 1), 1)
+        // Source level: the unified surface composes the
+        // narration ONCE — the two placement views are gone.
+        let bar = try sourceFile("../RunWear/Views/WearIveRunMiniBar.swift")
+        let unifiedStart = try XCTUnwrap(bar.range(of: "struct WearIveRunUnifiedSurfaceView"))
+        let unifiedEnd = try XCTUnwrap(bar.range(
+            of: "// MARK: - RW-152 §1 / RW-169 §7A", range: unifiedStart.upperBound..<bar.endIndex))
+        let unified = bar[unifiedStart.lowerBound..<unifiedEnd.lowerBound]
+        XCTAssertEqual(unified.components(separatedBy: "narrationView(line)").count - 1, 1,
+                       "exactly one narration composition in the unified surface")
+        XCTAssertFalse(unified.contains("miniNarrationView"),
+                       "the MINI placement is retired (RW-170)")
+        XCTAssertFalse(unified.contains("expandedNarrationView"),
+                       "the EXPANDED placement is retired (RW-170)")
         // Expanded-only content dissolves in over [0.45, 1],
         // monotonically.
         XCTAssertEqual(WearIveRunMorph.expandedOnlyOpacity(progress: 0.45), 0, accuracy: 0.0001)
@@ -641,5 +654,474 @@ final class RW135RebuildTests: XCTestCase {
         }
         XCTAssertEqual(Set(hashes.values).count, 5,
                        "all five morph samples are pairwise distinct renders: \(hashes)")
+    }
+
+    // MARK: - RW-170 · ONE SURFACE / ONE BAND / ONE SHADOW / ONE NARRATION / NO RE-FLOW
+    //
+    // The structural fix for Sol's Nov 12 device-pass failure
+    // (DIAGNOSIS Q1–Q4), iOS leg. Probes are COMPOSITED (the
+    // surface over a real page composition, light AND dark) —
+    // never surface-only — per the diagnosis's rendered-
+    // evidence standard. Each probe's discrimination is proven
+    // on a scratch branch (see the lane report).
+
+    // MARK: RW-170 · Move 1 — one token, alpha only
+
+    func testRW170_SurfaceToken_OneTokenAlphaOnly() throws {
+        // Sol's ruling: the unified token is the EXPANDED
+        // state's darker warm tone in BOTH states — light
+        // #F5F1E8 (the page-ground family), dark #2A251E (the
+        // warm-charcoal family). The token function takes no
+        // progress input: there is nothing to cross-fade.
+        XCTAssertEqual(WearIveRunMorph.unifiedSurfaceHex(isDark: false), "F5F1E8")
+        XCTAssertEqual(WearIveRunMorph.unifiedSurfaceHex(isDark: false), AppTheme.groundLightHex)
+        XCTAssertEqual(WearIveRunMorph.unifiedSurfaceHex(isDark: true), "2A251E")
+        XCTAssertEqual(WearIveRunMorph.unifiedSurfaceHex(isDark: true), AppTheme.cardDarkHex)
+        // The only background animation is ALPHA: the mini
+        // rest alpha (0.85 light / 0.82 dark) → 1.00 expanded.
+        XCTAssertEqual(WearIveRunMorph.tintOpacity(progress: 0, isDark: false), 0.85, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.tintOpacity(progress: 0, isDark: true), 0.82, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.tintOpacity(progress: 1, isDark: false), 1.0, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.tintOpacity(progress: 1, isDark: true), 1.0, accuracy: 0.0001)
+        // Source level: no surface in this file still paints
+        // the superseded sheet token — every Wear I've Run
+        // background resolves through the one token function.
+        let bar = try sourceFile("../RunWear/Views/WearIveRunMiniBar.swift")
+        XCTAssertFalse(bar.contains("sheetLightHex"),
+                       "the superseded MINI token (#FDFBF6) is retired from the Wear surfaces")
+        XCTAssertGreaterThanOrEqual(
+            bar.components(separatedBy: "unifiedSurfaceHex(").count - 1, 3,
+            "mini form, expanded form and the unified surface all paint the ruled token")
+    }
+
+    // MARK: RW-170 · Move 2 — one band (verify-and-price the presented form)
+
+    func testRW170_Band_PresentedFormPricing() throws {
+        // At the one-line rest the reserve IS the presented
+        // form: 49 pt card + 14 pt lift = 63 pt, exactly.
+        XCTAssertEqual(DockResidence.measuredDockHeight, 49, accuracy: 0.001)
+        XCTAssertEqual(DockResidence.bottomInset, 14, accuracy: 0.001)
+        XCTAssertEqual(DockResidence.scrollEndClearance, 63, accuracy: 0.001,
+                       "the reserve prices the presented form — no empty band above it")
+        XCTAssertEqual(DockResidence.clearance(forPresentedMiniHeight: 49), 63, accuracy: 0.001)
+        // A wrapped narration grows the presented height and
+        // the reserve follows it, point for point.
+        XCTAssertEqual(DockResidence.clearance(forPresentedMiniHeight: 65), 79, accuracy: 0.001)
+        // The host's two clearance sites consume the SAME
+        // presented-form quantity (the reported mini height),
+        // and neither consults the old constant any more.
+        let host = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
+        XCTAssertEqual(
+            host.components(separatedBy: "forPresentedMiniHeight: wearPresentedMiniHeight").count - 1, 2,
+            "stacked sheet and Duo column both reserve the presented-form clearance")
+        XCTAssertFalse(host.contains("DockResidence.scrollEndClearance"),
+                       "no host site reserves the constant band any more")
+        // The overlay reports the PRESENTED (mini) height to
+        // the host — never the expanded height.
+        let bar = try sourceFile("../RunWear/Views/WearIveRunMiniBar.swift")
+        XCTAssertTrue(bar.contains("onPresentedMiniHeight?(mini)"),
+                      "the clearance input is the mini rest height only")
+    }
+
+    // MARK: RW-170 · Move 3 — one shadow (verify-and-confirm)
+
+    func testRW170_Shadow_SpecExpression_Verified() throws {
+        // The iOS spec §2.1 expression, already of record and
+        // confirmed by the RW-170 audit: black 14%, radius 12
+        // (SwiftUI's radius is half the spec's 24 pt blur),
+        // offset (0, +6), constant across progress — the SAME
+        // expression in the unified surface as in the two
+        // reference forms. No elevation model exists in
+        // SwiftUI to mistake it for.
+        let bar = try sourceFile("../RunWear/Views/WearIveRunMiniBar.swift")
+        XCTAssertEqual(
+            bar.components(separatedBy: ".shadow(color: Color.black.opacity(0.14), radius: 12, x: 0, y: 6)").count - 1, 3,
+            "mini form, expanded form and unified surface carry the one spec shadow")
+        let unifiedStart = try XCTUnwrap(bar.range(of: "struct WearIveRunUnifiedSurfaceView"))
+        let unifiedEnd = try XCTUnwrap(bar.range(
+            of: "// MARK: - RW-152 §1 / RW-169 §7A", range: unifiedStart.upperBound..<bar.endIndex))
+        let unified = bar[unifiedStart.lowerBound..<unifiedEnd.lowerBound]
+        XCTAssertFalse(unified.contains("radius: 24"),
+                       "no doubled-radius shadow crept into the unified surface")
+    }
+
+    // MARK: RW-170 · Move 5 — no re-flow
+
+    func testRW170_NoReflow_HostCompositionNotGatedOnExpansion() throws {
+        // The diagnosis's Android Q3 cause 3 (in-list items
+        // evicted when the expanded state presents) has NO
+        // iOS equivalent: the host's expanded-state record
+        // (`wearSurfaceExpanded`) feeds ONLY the §4.7 exit
+        // split, and no scroll-content composition in the
+        // host is gated on it. Source-pinned here so the
+        // equivalent can never arrive silently.
+        let host = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
+        XCTAssertFalse(host.contains("if wearSurfaceExpanded"),
+                       "no host composition is gated on the expanded state")
+        XCTAssertFalse(host.contains("wearSurfaceExpanded ?"),
+                       "no host composition branches on the expanded state")
+        // The scroll content's sections stand unconditionally
+        // in the sheet composition (their own inputs aside).
+        for section in ["homeBandSection", "dayChartBand", "proTipSection", "personalSection"] {
+            XCTAssertTrue(host.contains(section), "the sheet still composes \(section)")
+        }
+    }
+
+    // MARK: RW-170 · composited probes — helpers
+
+    /// The KC fixture's two REST heights from the production
+    /// formulas over measured text (the captures method).
+    @MainActor
+    private func rw170RestHeights() throws -> (mini: CGFloat, expanded: CGFloat) {
+        let entry = kcEntry()
+        let line = try XCTUnwrap(WearIveRunNarration.line(for: kcState))
+        let entryLine = WearIveRunNarration.expandedLine(for: entry, formattedFeelsLike: "37°F")
+        let surfaceWidth: CGFloat = 369
+        let wordmarkW = textWidth(
+            WearIveRunMiniBarModel.wordmark,
+            font: try XCTUnwrap(UIFont(name: "GreatVibes-Regular", size: 17)))
+        let miniColumn = surfaceWidth - (16 + wordmarkW + 8) - 16 - 56 - 4
+        let miniNarrH = measuredTextHeight(line, font: .systemFont(ofSize: 12), width: miniColumn)
+        let miniH = WearIveRunUnifiedSurfaceView.miniTopPadding
+            + max(WearIveRunUnifiedSurfaceView.miniRowHeight, miniNarrH)
+            + WearIveRunUnifiedSurfaceView.miniBottomPadding
+        let expNarrH = measuredTextHeight(line, font: .systemFont(ofSize: 15), width: surfaceWidth - 32)
+        let entryH = measuredTextHeight(entryLine, font: .systemFont(ofSize: 14.5), width: surfaceWidth - 32 - 56 - 12)
+        let expandedH = WearIveRunUnifiedSurfaceView.expandedTopPadding
+            + WearIveRunUnifiedSurfaceView.expandedHeaderZone
+            + expNarrH + 12 + entryH + 12 + 24
+            + WearIveRunUnifiedSurfaceView.expandedBottomPadding
+        return (miniH, expandedH)
+    }
+
+    @MainActor
+    private func rw170Surface(progress: Double, height: CGFloat) -> some View {
+        WearIveRunUnifiedSurfaceView(
+            state: kcState, entry: kcEntry(), formattedFeelsLike: "37°F",
+            cueCount: 0, viewportHeight: 852,
+            heroURLResolver: nil, expansionProgress: progress,
+            onToggle: {}, onOpenCollection: {},
+            onOpenShareEntry: nil, onTrash: {})
+            .frame(width: 369, height: height)
+    }
+
+    private func rw170Card(dark: Bool, title: String, height: CGFloat) -> some View {
+        ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: 12)
+                .fill(dark ? Color(hex: "211D17") : Color(hex: "FDFBF6"))
+            Text(title)
+                .font(.system(size: 13))
+                .foregroundColor(dark ? Color(hex: "F5F1EA") : Color(hex: "33291F"))
+                .padding(12)
+        }
+        .frame(height: height)
+    }
+
+    /// A pixel reader over a rendered PNG (scale 2 renders:
+    /// pixel coordinates are points × 2, rows top-first).
+    private func rw170Pixels(_ data: Data) throws -> (pixel: (Int, Int) -> (Int, Int, Int), width: Int, height: Int) {
+        let image = try XCTUnwrap(UIImage(data: data)?.cgImage, "render PNG undecodable")
+        let cfData = try XCTUnwrap(image.dataProvider?.data, "render pixels unreadable")
+        let bytes = cfData as Data
+        let bpr = image.bytesPerRow
+        let pixel: (Int, Int) -> (Int, Int, Int) = { x, y in
+            let o = y * bpr + x * 4
+            return (Int(bytes[o]), Int(bytes[o + 1]), Int(bytes[o + 2]))
+        }
+        return (pixel, image.width, image.height)
+    }
+
+    private func rw170WriteProbe(_ text: String, name: String) throws {
+        let dir = artefactsDirectory()
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try text.write(to: dir.appendingPathComponent(name), atomically: true, encoding: .utf8)
+        print(text)
+    }
+
+    // MARK: RW-170 · composited full-home captures + probes (b), (c), (d)
+
+    @MainActor
+    func testRW170_Captures_CompositedHome_LightDark() throws {
+        try registerGreatVibes()
+        let rests = try rw170RestHeights()
+        var hashes: [String: String] = [:]
+        // (scheme, label, progress, scroll shift of the page content)
+        let states: [(Bool, String, Double, CGFloat)] = [
+            (false, "mini-rest", 0, 0), (false, "mid-scroll", 0, 120),
+            (false, "scroll-end", 0, 260), (false, "mid-morph", 0.5, 260),
+            (false, "expanded", 1, 260),
+            (true, "mini-rest", 0, 0), (true, "mid-scroll", 0, 120),
+            (true, "scroll-end", 0, 260), (true, "mid-morph", 0.5, 260),
+            (true, "expanded", 1, 260),
+        ]
+        for (dark, label, progress, shift) in states {
+            let h = rests.mini + (rests.expanded - rests.mini) * CGFloat(progress)
+            let data = try writeRenderSettled(
+                ZStack {
+                    dark ? Color(hex: "16130F") : Color(hex: "F5F1E8")
+                    VStack(alignment: .leading, spacing: 16) {
+                        rw170Card(dark: dark, title: "Outfit cards", height: 150)
+                        rw170Card(dark: dark, title: "Day chart", height: 110)
+                        rw170Card(dark: dark, title: "Pro Tip", height: 90)
+                        rw170Card(dark: dark, title: "Personal", height: 80)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 16).padding(.top, 140)
+                    .offset(y: -shift)
+                    VStack {
+                        Spacer()
+                        rw170Surface(progress: progress, height: h)
+                    }
+                    .padding(.horizontal, 12).padding(.bottom, 14)
+                }
+                .environment(\.colorScheme, dark ? .dark : .light),
+                size: CGSize(width: 393, height: 852),
+                name: "RW170-ios-home-\(dark ? "dark" : "light")-\(label).png")
+            hashes["\(dark ? "dark" : "light")-\(label)"] =
+                SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        }
+        // (d) landmark stability: every composited state is a
+        // distinct render of the ONE surface over the page —
+        // no state is another state relabelled.
+        XCTAssertEqual(Set(hashes.values).count, hashes.count,
+                       "all ten composited states are pairwise distinct: \(hashes)")
+
+        // (c) shadow spill, measured on the LIGHT mini-rest
+        // composite (canvas 393×852 @2x; the card's painted
+        // rect is x 12…381 pt, y 789…838 pt at the one-line
+        // rest — bottom lift 14, height 49 by the RB-04 law;
+        // the KC fixture's presented height is rests.mini,
+        // so the rect is computed from it).
+        let light = try rw170Pixels(try Data(contentsOf:
+            artefactsDirectory().appendingPathComponent("RW170-ios-home-light-mini-rest.png")))
+        let ground = (245, 241, 232)
+        func darkening(_ px: (Int, Int, Int)) -> Double {
+            Double((ground.0 - px.0) + (ground.1 - px.1) + (ground.2 - px.2)) / 3.0
+        }
+        let cardTop = 852 - 14 - Int(rests.mini)
+        let cardBottom = 852 - 14
+        func spill(from start: Int, step: Int, sample: (Int) -> (Int, Int, Int)) -> Int {
+            var count = 0
+            var v = start
+            while count < 40 {
+                if darkening(sample(v)) > 6 { count += 1; v += step } else { break }
+            }
+            return count
+        }
+        // Centre column x=196 pt (px 392), scanning outward
+        // (each step is 2 px = 1 pt, so the count IS points).
+        let aboveSpill = spill(from: (cardTop - 1) * 2, step: -2) { y in light.pixel(392, y) }
+        let belowSpill = spill(from: (cardBottom + 1) * 2, step: 2) { y in light.pixel(392, y) }
+        let midY = (cardTop + cardBottom) / 2 * 2
+        let leftSpill = spill(from: 11 * 2, step: -2) { x in light.pixel(x, midY) }
+        let rightSpill = spill(from: 382 * 2, step: 2) { x in light.pixel(x, midY) }
+        try rw170WriteProbe(
+            "RW170 shadow spill (light, mini rest, pt): above=\(aboveSpill) below=\(belowSpill) left=\(leftSpill) right=\(rightSpill)\n",
+            name: "RW170-probe-shadow-spill.txt")
+        XCTAssertGreaterThan(belowSpill, aboveSpill,
+                             "the §2.1 shadow pools BELOW the card (offset +6): below \(belowSpill) > above \(aboveSpill)")
+        XCTAssertGreaterThanOrEqual(belowSpill, 4,
+                                    "a real shadow pool exists below the card (\(belowSpill) pt)")
+        XCTAssertLessThanOrEqual(aboveSpill, 26, "no halo above the card (\(aboveSpill) pt)")
+        XCTAssertLessThanOrEqual(leftSpill, 26, "no halo left of the card (\(leftSpill) pt)")
+        XCTAssertLessThanOrEqual(rightSpill, 26, "no halo right of the card (\(rightSpill) pt)")
+    }
+
+    // MARK: RW-170 · probe (a) painted bounds vs reserved clearance
+
+    @MainActor
+    func testRW170_Probe_PaintedVsReserved() throws {
+        try registerGreatVibes()
+        // The painted MINI span over a dark backdrop (the
+        // RB-04 method), one-line Miami fixture.
+        let overlay = WearIveRunOverlayView(
+            state: miamiState,
+            entry: miamiEntry(), formattedFeelsLike: "82°F",
+            cueCount: 0, viewportHeight: 852,
+            onOpenCollection: {}, onTrash: {})
+        let data = try writeRenderSettled(
+            ZStack {
+                Color(hex: "2E2A24")
+                VStack {
+                    Spacer()
+                    overlay.padding(.horizontal, 12)
+                }
+                .padding(.bottom, 14)
+            },
+            size: CGSize(width: 393, height: 852),
+            name: "RW170-probe-painted.png")
+        let reader = try rw170Pixels(data)
+        let ground = reader.pixel(reader.width / 2, 100)
+        func differs(_ y: Int) -> Bool {
+            let px = reader.pixel(reader.width / 2, y)
+            return max(abs(px.0 - ground.0), abs(px.1 - ground.1), abs(px.2 - ground.2)) > 8
+        }
+        var cardRows = 0
+        var y = reader.height - 1
+        var trailing = 0
+        while y >= 0 {
+            if differs(y) { cardRows += 1; trailing = 0 }
+            else {
+                trailing += 1
+                if cardRows > 0 && trailing > 12 { break }
+            }
+            y -= 1
+        }
+        let painted = Double(cardRows) / 2.0
+        let reserved = Double(DockResidence.scrollEndClearance)
+        try rw170WriteProbe(
+            "RW170 painted-vs-reserved: paintedSpan=\(painted) lift=\(DockResidence.bottomInset) reserved=\(reserved) excess=\(reserved - painted - Double(DockResidence.bottomInset))\n",
+            name: "RW170-probe-painted-reserved.txt")
+        XCTAssertGreaterThanOrEqual(painted, 45)
+        XCTAssertLessThanOrEqual(painted, 55)
+        XCTAssertEqual(reserved - painted - Double(DockResidence.bottomInset), 0, accuracy: 0.6,
+                       "reserved − (painted + lift) = 0: the band prices the presented form exactly (was +17 pt of empty band at the 80 pt constant)")
+        // Wrapped growth follows: the Los Angeles plan line
+        // wraps in the mini column, the presented height
+        // grows, and the clearance grows point for point.
+        let wordmarkW = textWidth(
+            WearIveRunMiniBarModel.wordmark,
+            font: try XCTUnwrap(UIFont(name: "GreatVibes-Regular", size: 17)))
+        let miniColumn = 369 - (16 + wordmarkW + 8) - 16 - 56 - 4
+        let laLine = "Planned for Los Angeles, CA · Tomorrow"
+        let laNarrH = measuredTextHeight(laLine, font: .systemFont(ofSize: 12), width: miniColumn)
+        let wrappedMini = WearIveRunUnifiedSurfaceView.miniTopPadding
+            + max(WearIveRunUnifiedSurfaceView.miniRowHeight, laNarrH)
+            + WearIveRunUnifiedSurfaceView.miniBottomPadding
+        XCTAssertGreaterThan(wrappedMini, 49,
+                             "the plan line wraps and the presented form grows (\(wrappedMini) pt)")
+        XCTAssertEqual(
+            DockResidence.clearance(forPresentedMiniHeight: wrappedMini),
+            wrappedMini + 14, accuracy: 0.001,
+            "the reserve follows the wrapped presented height exactly")
+    }
+
+    // MARK: RW-170 · probe (b) cross-state interior RGB identity
+
+    @MainActor
+    func testRW170_Probe_CrossStateRGBIdentity() throws {
+        try registerGreatVibes()
+        let rests = try rw170RestHeights()
+        var report = "RW170 cross-state interior RGB (sampled at the surface's bottom-centre interior, over the token-coloured ground):\n"
+        for dark in [false, true] {
+            let tokenHex = WearIveRunMorph.unifiedSurfaceHex(isDark: dark)
+            var samples: [Double: (Int, Int, Int)] = [:]
+            for progress in [0.0, 0.5, 1.0] {
+                let h = rests.mini + (rests.expanded - rests.mini) * CGFloat(progress)
+                let data = try writeRenderSettled(
+                    ZStack {
+                        Color(hex: tokenHex)
+                        VStack {
+                            Spacer()
+                            rw170Surface(progress: progress, height: h)
+                        }
+                        .padding(.horizontal, 12).padding(.bottom, 14)
+                    }
+                    .environment(\.colorScheme, dark ? .dark : .light),
+                    size: CGSize(width: 393, height: 852),
+                    name: "RW170-probe-rgb-\(dark ? "dark" : "light")-p\(Int(progress * 100)).png")
+                let reader = try rw170Pixels(data)
+                // Bottom-centre interior: 5 pt above the
+                // surface's bottom edge, centred — inside the
+                // surface at every progress, clear of text.
+                let px = reader.pixel(196 * 2, (852 - 14 - 5) * 2)
+                samples[progress] = px
+                report += "\(dark ? "dark" : "light") p=\(progress): (\(px.0), \(px.1), \(px.2))\n"
+            }
+            let s0 = try XCTUnwrap(samples[0.0])
+            let s5 = try XCTUnwrap(samples[0.5])
+            let s1 = try XCTUnwrap(samples[1.0])
+            func maxDiff(_ a: (Int, Int, Int), _ b: (Int, Int, Int)) -> Int {
+                max(abs(a.0 - b.0), abs(a.1 - b.1), abs(a.2 - b.2))
+            }
+            report += "\(dark ? "dark" : "light") maxDiff p0-p1=\(maxDiff(s0, s1)) p0-p0.5=\(maxDiff(s0, s5))\n"
+            XCTAssertLessThanOrEqual(maxDiff(s0, s1), 18,
+                                     "\(dark ? "dark" : "light"): ONE token across states — interior differs only by the alpha blend over the token's own ground (p0 \(s0) vs p1 \(s1))")
+            XCTAssertLessThanOrEqual(maxDiff(s0, s5), 18,
+                                     "\(dark ? "dark" : "light"): mid-morph interior is the same token (p0.5 \(s5))")
+        }
+        try rw170WriteProbe(report, name: "RW170-probe-rgb-identity.txt")
+    }
+
+    // MARK: RW-170 · Move 3 check — the shadow under the travel clip (finding probe)
+
+    @MainActor
+    func testRW170_Probe_ShadowTravelClip() throws {
+        try registerGreatVibes()
+        let rests = try rw170RestHeights()
+        let h = rests.mini + (rests.expanded - rests.mini) * 0.5
+        // Mid-morph surface seated at the bottom of a short
+        // canvas over the light ground, rendered twice: as
+        // the surface paints itself (its own clip + shadow),
+        // and with the overlay container's travel clip applied
+        // (the production clippedIfMorphing form during
+        // travel: a rounded-rect clip at the container's
+        // bounds). The finding is measured, not assumed.
+        func render(clipped: Bool, name: String) throws -> Data {
+            let surface = rw170Surface(progress: 0.5, height: h)
+            return try writeRenderSettled(
+                ZStack {
+                    Color(hex: "F5F1E8")
+                    VStack {
+                        Spacer()
+                        if clipped {
+                            surface.clipShape(RoundedRectangle(cornerRadius: 16))
+                        } else {
+                            surface
+                        }
+                    }
+                    .padding(.horizontal, 12).padding(.bottom, 14)
+                }
+                .environment(\.colorScheme, .light),
+                size: CGSize(width: 393, height: 400),
+                name: name)
+        }
+        func belowSpill(_ data: Data) throws -> Int {
+            let reader = try rw170Pixels(data)
+            let ground = (245, 241, 232)
+            // The surface's bottom edge: canvas 400 − lift 14.
+            var count = 0
+            var yy = (400 - 14 + 1) * 2
+            while count < 40 {
+                let px = reader.pixel(196 * 2, yy)
+                let darkening = Double((ground.0 - px.0) + (ground.1 - px.1) + (ground.2 - px.2)) / 3.0
+                if darkening > 6 { count += 1; yy += 2 } else { break }
+            }
+            return count // each step is 2 px = 1 pt
+        }
+        let unclipped = try belowSpill(render(clipped: false, name: "RW170-probe-shadow-travel-unclipped.png"))
+        let clipped = try belowSpill(render(clipped: true, name: "RW170-probe-shadow-travel-clipped.png"))
+        try rw170WriteProbe(
+            "RW170 travel-clip finding: mid-morph below-spill unclipped=\(unclipped) pt, container-clipped=\(clipped) pt. At REST the container does not clip (clippedIfMorphing is travel-only) and the full §2.1 shadow stands; DURING travel the container's rounded-rect clip bounds the shadow's spill outside the surface's frame.\n",
+            name: "RW170-probe-travel-clip.txt")
+        XCTAssertGreaterThanOrEqual(unclipped, 4,
+                                    "the surface's own shadow pools below it mid-morph (\(unclipped) pt)")
+        XCTAssertLessThanOrEqual(clipped, unclipped,
+                                 "the travel clip can only bound the spill, never add to it")
+    }
+
+    // MARK: RW-170 · probe (d) one-surface / one-narration node counts
+
+    func testRW170_Probe_NodeCounts() throws {
+        let bar = try sourceFile("../RunWear/Views/WearIveRunMiniBar.swift")
+        let overlayStart = try XCTUnwrap(bar.range(of: "struct WearIveRunOverlayView"))
+        let overlay = bar[overlayStart.lowerBound..<bar.endIndex]
+        XCTAssertEqual(
+            overlay.components(separatedBy: "WearIveRunUnifiedSurfaceView(").count - 1, 1,
+            "the container composes exactly ONE surface")
+        XCTAssertFalse(overlay.contains("WearIveRunMiniBarView("),
+                       "no second (mini) composition in the container")
+        XCTAssertFalse(overlay.contains("WearIveRunExpandedPanelView("),
+                       "no second (expanded) composition in the container")
+        // One narration, one wordmark, across the whole morph.
+        for i in 0...20 {
+            let p = Double(i) / 20
+            XCTAssertEqual(WearIveRunMorphProbe.legibleNarrationCount(progress: p), 1,
+                           "p=\(p): exactly one legible narration")
+            XCTAssertEqual(WearIveRunMorph.narrationOpacity(progress: p), 1, accuracy: 0.0001)
+        }
+        try rw170WriteProbe(
+            "RW170 node counts: surfacesInContainer=1 narrationCompositions=1 legibleNarrations=1 at every sampled progress (0…1 step 0.05)\n",
+            name: "RW170-probe-nodes.txt")
     }
 }
