@@ -113,12 +113,14 @@ final class RWNextBuildTests: XCTestCase {
         }
         // The default-type anatomy lands in the design's
         // ≈240–300 pt band once narration or the entry line
-        // wraps (the one-line floor is 220 pt).
+        // wraps (the one-line floor is 212 pt — RB-04: bottom padding 12, not 20).
         XCTAssertEqual(WearIveRunOverlayPolicy.contentHeight(
-            narrationLineCount: 1, entryLineCount: 1, textScale: 1.0), 220, accuracy: 0.5)
+            narrationLineCount: 1, entryLineCount: 1, textScale: 1.0), 212, accuracy: 0.5)
         let wrapped = WearIveRunOverlayPolicy.contentHeight(
             narrationLineCount: 2, entryLineCount: 3, textScale: 1.0)
-        XCTAssertGreaterThanOrEqual(wrapped, 240)
+        // RB-04: the wrapped anatomy is 239 pt with the 12 pt
+        // bottom padding (was 247 with the retired 20).
+        XCTAssertEqual(wrapped, 239, accuracy: 0.5)
         XCTAssertLessThanOrEqual(wrapped, 300)
         // The cap is the viewport minus the top chrome zone,
         // exactly.

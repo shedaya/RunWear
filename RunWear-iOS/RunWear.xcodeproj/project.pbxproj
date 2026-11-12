@@ -65,6 +65,7 @@
 		W15202000000000000000005 /* RWNextBuildTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = W15201000000000000000004 /* RWNextBuildTests.swift */; };
 		W16802000000000000000005 /* RW168ShareMenuTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = W16801000000000000000004 /* RW168ShareMenuTests.swift */; };
 		W16902000000000000000005 /* RW169StructuralTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = W16901000000000000000004 /* RW169StructuralTests.swift */; };
+		W13502000000000000000005 /* RW135RebuildTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = W13501000000000000000004 /* RW135RebuildTests.swift */; };
 		W13702000000000000000005 /* RW137IdentityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = W13701000000000000000004 /* RW137IdentityTests.swift */; };
 		W13702000000000000000002 /* SupabaseAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000102 /* SupabaseAuthService.swift */; };
 		W13702000000000000000003 /* PersonalHeroAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000103 /* PersonalHeroAPI.swift */; };
@@ -377,6 +378,7 @@
 		W15201000000000000000004 /* RWNextBuildTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RWNextBuildTests.swift; sourceTree = "<group>"; };
 		W16801000000000000000004 /* RW168ShareMenuTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RW168ShareMenuTests.swift; sourceTree = "<group>"; };
 		W16901000000000000000004 /* RW169StructuralTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RW169StructuralTests.swift; sourceTree = "<group>"; };
+		W13501000000000000000004 /* RW135RebuildTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RW135RebuildTests.swift; sourceTree = "<group>"; };
 		W13701000000000000000004 /* RW137IdentityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RW137IdentityTests.swift; sourceTree = "<group>"; };
 		W14401000000000000000003 /* garment_tiles_light */ = {isa = PBXFileReference; lastKnownFileType = folder; path = garment_tiles_light; sourceTree = "<group>"; };
 		D10001000000000000000001 /* WearIveRunMiniBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WearIveRunMiniBar.swift; sourceTree = "<group>"; };
@@ -764,6 +766,7 @@
 				W15201000000000000000004 /* RWNextBuildTests.swift */,
 				W16801000000000000000004 /* RW168ShareMenuTests.swift */,
 				W16901000000000000000004 /* RW169StructuralTests.swift */,
+				W13501000000000000000004 /* RW135RebuildTests.swift */,
 				W13701000000000000000004 /* RW137IdentityTests.swift */,
 				G42001000000000000000001 /* Gen4BundledReplenishmentTests.swift */,
 				L10001000000000000000002 /* WearIveRunElementMachineTests.swift */,
@@ -1140,6 +1143,7 @@
 				W15202000000000000000005 /* RWNextBuildTests.swift in Sources */,
 				W16802000000000000000005 /* RW168ShareMenuTests.swift in Sources */,
 				W16902000000000000000005 /* RW169StructuralTests.swift in Sources */,
+				W13502000000000000000005 /* RW135RebuildTests.swift in Sources */,
 				W13702000000000000000005 /* RW137IdentityTests.swift in Sources */,
 				W13702000000000000000002 /* SupabaseAuthService.swift in Sources */,
 				W13702000000000000000003 /* PersonalHeroAPI.swift in Sources */,
@@ -1373,7 +1377,7 @@
 				CODE_SIGN_STYLE = Manual;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
 				CODE_SIGN_ENTITLEMENTS = RunWear/RunWear.entitlements;
-				CURRENT_PROJECT_VERSION = 30;
+				CURRENT_PROJECT_VERSION = 31;
 				DEVELOPMENT_TEAM = L2D8SN7BJ4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1413,7 +1417,7 @@
 				CODE_SIGN_STYLE = Manual;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
 				CODE_SIGN_ENTITLEMENTS = RunWear/RunWear.entitlements;
-				CURRENT_PROJECT_VERSION = 30;
+				CURRENT_PROJECT_VERSION = 31;
 				DEVELOPMENT_TEAM = L2D8SN7BJ4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1452,7 +1456,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Manual;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
-				CURRENT_PROJECT_VERSION = 30;
+				CURRENT_PROJECT_VERSION = 31;
 				DEVELOPMENT_TEAM = L2D8SN7BJ4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1485,7 +1489,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Manual;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
-				CURRENT_PROJECT_VERSION = 30;
+				CURRENT_PROJECT_VERSION = 31;
 				DEVELOPMENT_TEAM = L2D8SN7BJ4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1515,7 +1519,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 30;
+				CURRENT_PROJECT_VERSION = 31;
 				DEVELOPMENT_TEAM = Q3FS685XN8;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
@@ -1539,7 +1543,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 30;
+				CURRENT_PROJECT_VERSION = 31;
 				DEVELOPMENT_TEAM = Q3FS685XN8;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
@@ -1565,7 +1569,7 @@
 				CODE_SIGN_ENTITLEMENTS = RunWearWidget/RunWearWidget.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 30;
+				CURRENT_PROJECT_VERSION = 31;
 				DEVELOPMENT_TEAM = L2D8SN7BJ4;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = RunWearWidget/Info.plist;
@@ -1594,7 +1598,7 @@
 				CODE_SIGN_ENTITLEMENTS = RunWearWidget/RunWearWidget.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 30;
+				CURRENT_PROJECT_VERSION = 31;
 				DEVELOPMENT_TEAM = L2D8SN7BJ4;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = RunWearWidget/Info.plist;

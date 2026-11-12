@@ -1,6 +1,17 @@
 import SwiftUI
 import StoreKit // for the \.requestReview environment action (R-15)
 
+/// RB-01 (RW-135 rebuild, Nov 12, 2026): one scroll-geometry
+/// sample from a Home scroll view — the hero handoff's offset
+/// AND the Wear I've Run footer zone's inputs (the remaining
+/// distance to the content's end, and the container height
+/// it is judged against), from the same ScrollGeometry read.
+private struct HomeScrollSample: Equatable {
+    let offset: CGFloat
+    let distanceToEnd: CGFloat
+    let containerHeight: CGFloat
+}
+
 struct WeatherOutfitView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -95,6 +106,18 @@ struct WeatherOutfitView: View {
     /// store removal fires when the exit completes.
     @State private var wearExitEntry: WearIveRunEntry?
     @State private var wearExitState: WearIveRunState?
+    /// RB-01/R-1: the footer-zone verdict from the Home scroll
+    /// views' real geometry (WearIveRunFooterZone) — reaching
+    /// the page end presents the Wear I've Run expanded form,
+    /// leaving the zone re-docks it (the overlay's R-1 policy
+    /// holds the summon/suppression state).
+    @State private var wearAtFooter = false
+    /// The overlay surface's current expanded state, reported
+    /// by the overlay itself — the §4.7 exit split keys the
+    /// host's exit choreography on the form the exit starts
+    /// from (MINI: 300 ms fade+sink; EXPANDED: 160 ms fade
+    /// then 400 ms fold).
+    @State private var wearSurfaceExpanded = false
     @State private var wearExitInProgress = false
     @State private var wearExitRemovesData = false
     @State private var wearDockExitProgress: Double = 0
@@ -809,6 +832,23 @@ struct WeatherOutfitView: View {
                         .onScrollPhaseChange { _, phase in
                             isScrollGestureActive = phase != .idle
                         }
+                        // RB-01/R-1 (duo column): the column's
+                        // end is this layout's page end — feed
+                        // the same footer zone the single-column
+                        // scrolls feed (the interim build never
+                        // fed the duo scrolls an end-of-scroll
+                        // signal at all).
+                        .onScrollGeometryChange(for: Bool.self) { geometry in
+                            WearIveRunFooterZone.isAtFooter(
+                                distanceToEnd: WearIveRunFooterZone.distanceToEnd(
+                                    contentHeight: Double(geometry.contentSize.height),
+                                    contentInsetsBottom: Double(geometry.contentInsets.bottom),
+                                    containerHeight: Double(geometry.containerSize.height),
+                                    contentOffsetY: Double(geometry.contentOffset.y)),
+                                viewportHeight: Double(geometry.containerSize.height))
+                        } action: { _, atFooter in
+                            wearAtFooter = atFooter
+                        }
                         .refreshable { onRefresh() }
                         fullWeatherEntry
                     }
@@ -827,10 +867,20 @@ struct WeatherOutfitView: View {
                 .onScrollPhaseChange { _, phase in
                     isScrollGestureActive = phase != .idle
                 }
-                .onScrollGeometryChange(for: CGFloat.self) { geometry in
-                    max(0, geometry.contentOffset.y + geometry.contentInsets.top)
-                } action: { _, offset in
-                    updateHeroScrollProgress(offset: offset)
+                .onScrollGeometryChange(for: HomeScrollSample.self) { geometry in
+                    HomeScrollSample(
+                        offset: max(0, geometry.contentOffset.y + geometry.contentInsets.top),
+                        distanceToEnd: CGFloat(WearIveRunFooterZone.distanceToEnd(
+                            contentHeight: Double(geometry.contentSize.height),
+                            contentInsetsBottom: Double(geometry.contentInsets.bottom),
+                            containerHeight: Double(geometry.containerSize.height),
+                            contentOffsetY: Double(geometry.contentOffset.y))),
+                        containerHeight: geometry.containerSize.height)
+                } action: { _, sample in
+                    updateHeroScrollProgress(offset: sample.offset)
+                    wearAtFooter = WearIveRunFooterZone.isAtFooter(
+                        distanceToEnd: Double(sample.distanceToEnd),
+                        viewportHeight: Double(sample.containerHeight))
                 }
                 .refreshable { onRefresh() }
             } else {
@@ -849,10 +899,20 @@ struct WeatherOutfitView: View {
                 .onScrollPhaseChange { _, phase in
                     isScrollGestureActive = phase != .idle
                 }
-                .onScrollGeometryChange(for: CGFloat.self) { geometry in
-                    max(0, geometry.contentOffset.y + geometry.contentInsets.top)
-                } action: { _, offset in
-                    updateHeroScrollProgress(offset: offset)
+                .onScrollGeometryChange(for: HomeScrollSample.self) { geometry in
+                    HomeScrollSample(
+                        offset: max(0, geometry.contentOffset.y + geometry.contentInsets.top),
+                        distanceToEnd: CGFloat(WearIveRunFooterZone.distanceToEnd(
+                            contentHeight: Double(geometry.contentSize.height),
+                            contentInsetsBottom: Double(geometry.contentInsets.bottom),
+                            containerHeight: Double(geometry.containerSize.height),
+                            contentOffsetY: Double(geometry.contentOffset.y))),
+                        containerHeight: geometry.containerSize.height)
+                } action: { _, sample in
+                    updateHeroScrollProgress(offset: sample.offset)
+                    wearAtFooter = WearIveRunFooterZone.isAtFooter(
+                        distanceToEnd: Double(sample.distanceToEnd),
+                        viewportHeight: Double(sample.containerHeight))
                 }
                 .refreshable { onRefresh() }
             }
@@ -1230,6 +1290,12 @@ struct WeatherOutfitView: View {
                 // override is removed outright), and a mid-gesture
                 // settle defers its cross-fade past the gesture.
                 isScrollGestureActive: isScrollGestureActive,
+                // RB-01/R-1: the footer-zone verdict from this
+                // host's real scroll geometry.
+                isAtFooter: wearAtFooter,
+                // §4.7 exit split: the form the surface stands
+                // in, as it reports it (onExpansionChange below).
+                exitFromExpanded: wearSurfaceExpanded,
                 viewportHeight: viewportHeight,
                 // RW-152 §3: the panel thumbnail resolves through
                 // the one resolver (re-signing half).
@@ -1258,7 +1324,8 @@ struct WeatherOutfitView: View {
                     if let entry = liveEntry {
                         beginWearExit(snapshot: entry, removesData: true)
                     }
-                }
+                },
+                onExpansionChange: { wearSurfaceExpanded = $0 }
             )
         }
     }
@@ -1285,17 +1352,23 @@ struct WeatherOutfitView: View {
 
     /// Orchestrate the exit over a FROZEN snapshot of the
     /// record. RW-152 §1: there is ONE surface now, so the exit
-    /// is the §4.7 choreography on that surface — the content
-    /// fades and the height folds (the overlay container drives
-    /// both from this one progress value) over ≈560 ms; the
-    /// store removal fires when the exit completes. Deleting
-    /// the live session's entry this way does NOT end the
-    /// session — a later settle re-creates the entry, exactly
-    /// as before. Session end (§4.8) runs the same choreography
-    /// with removesData == false (the record has already passed
+    /// is the §4.7 choreography on that surface, driven by
+    /// this one progress value — with the §4.7 split the
+    /// RW-135 rebuild's audit restored (the interim build ran
+    /// one 560 ms fade+fold from BOTH forms): from MINI, a
+    /// fade + 26 pt sink over 300 ms on the exit curve; from
+    /// EXPANDED, the content fades over 160 ms and only then
+    /// the height folds over 400 ms (the split itself is
+    /// WearIveRunExitPolicy's, keyed on the form the surface
+    /// reports standing in). The store removal fires when the
+    /// exit completes. Deleting the live session's entry this
+    /// way does NOT end the session — a later settle
+    /// re-creates the entry, exactly as before. Session end
+    /// (§4.8) runs the same choreography with
+    /// removesData == false (the record has already passed
     /// to the collection) and no haptic — haptics live at the
     /// trash tap sites, never here.
-    /// Reduce Motion (§5): a 200 ms fade, no fold travel.
+    /// Reduce Motion (§5): a 200 ms fade, no sink, no fold.
     private func beginWearExit(snapshot: WearIveRunEntry, removesData: Bool) {
         guard !wearExitInProgress else { return }
         wearExitEntry = snapshot
@@ -1306,13 +1379,20 @@ struct WeatherOutfitView: View {
         )
         wearExitRemovesData = removesData
         wearExitInProgress = true
-        withAnimation(.timingCurve(
-            0.65, 0, 0.35, 1, duration: reduceMotion ? 0.2 : 0.56
-        )) {
+        let fromExpanded = wearSurfaceExpanded
+        let duration = WearIveRunExitPolicy.durationSeconds(
+            fromExpanded: fromExpanded, reduceMotion: reduceMotion)
+        // Exit curve from MINI (cubic-bezier(0.5, 0, 0.75, 0));
+        // fold curve from EXPANDED (cubic-bezier(0.65, 0, 0.35, 1)).
+        withAnimation(fromExpanded
+            ? .timingCurve(0.65, 0, 0.35, 1, duration: duration)
+            : .timingCurve(0.5, 0, 0.75, 0, duration: duration)
+        ) {
             wearDockExitProgress = 1
         }
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: reduceMotion ? 220_000_000 : 580_000_000)
+            try? await Task.sleep(
+                nanoseconds: UInt64((duration + 0.02) * 1_000_000_000))
             finishWearExit()
         }
     }

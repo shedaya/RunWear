@@ -127,12 +127,22 @@ final class RW169StructuralTests: XCTestCase {
     func testRW169A_MorphProbe_SingleLegibleNarrationAndWordmarkWidthAtSamples() {
         // The mechanical acceptance probe of §7A: sample the
         // morph at p = 0.25 / 0.5 / 0.75.
+        // RE-PINNED for RB-03 (RW-135 rebuild, Nov 12, 2026):
+        // the narration stands in TWO placements dissolving
+        // over disjoint windows (mini out [0, 0.35], expanded
+        // in [0.55, 1]) — the invariant is AT MOST ONE legible
+        // placement at any sample, with a dead zone between
+        // the windows in which neither is legible. (The RW-169
+        // single-view reading — exactly one legible at every
+        // sample — described the lerped single narration
+        // RB-03 retired.) The full window arithmetic is
+        // pinned in RW135RebuildTests.
         let miniRestWidth = 96.0   // "Wear I've Run" at 17 pt Great Vibes (measured class)
         let expandedRestWidth = 176.0 // the same wordmark at 31 pt
         for p in [0.25, 0.5, 0.75] {
-            XCTAssertEqual(
+            XCTAssertLessThanOrEqual(
                 WearIveRunMorphProbe.legibleNarrationCount(progress: p), 1,
-                "p=\(p): exactly one narration is legible — the same narration view, never two forms")
+                "p=\(p): at most one narration placement is legible — both-legible is impossible")
             let width = WearIveRunMorphProbe.wordmarkWidth(
                 progress: p, miniRestWidth: miniRestWidth, expandedRestWidth: expandedRestWidth)
             XCTAssertEqual(
@@ -166,14 +176,20 @@ final class RW169StructuralTests: XCTestCase {
         let unifiedEnd = try XCTUnwrap(bar.range(
             of: "// MARK: - RW-152 §1 / RW-169 §7A", range: unifiedStart.upperBound..<bar.endIndex))
         let unified = bar[unifiedStart.lowerBound..<unifiedEnd.lowerBound]
-        // ONE rendered narration view in the unified hierarchy:
-        // the single `narrationView(line)` call site (the two
-        // further `line(for:)` derivations in this slice are
-        // the narration deferral's model-side version stamps —
-        // they render nothing).
+        // The narration's render sites in the unified
+        // hierarchy. RE-PINNED for RB-03 (RW-135 rebuild,
+        // Nov 12, 2026): exactly TWO placements of the same
+        // string — `miniNarrationView(line)` and
+        // `expandedNarrationView(line)` — dissolving over
+        // disjoint windows so both-legible is impossible.
+        // (The RW-169 pin counted the single lerped
+        // `narrationView(line)`; RB-03 retired that form.)
         XCTAssertEqual(
-            unified.components(separatedBy: "narrationView(line)").count - 1, 1,
-            "the unified surface renders its narration ONCE — there is no second form's narration to ghost (D3)")
+            unified.components(separatedBy: "miniNarrationView(line)").count - 1, 1,
+            "the unified surface renders the MINI narration placement once (RB-03)")
+        XCTAssertEqual(
+            unified.components(separatedBy: "expandedNarrationView(line)").count - 1, 1,
+            "the unified surface renders the EXPANDED narration placement once (RB-03)")
         // The overlay composes the unified surface ONLY — the
         // retired dual composition (mini view + expanded view
         // in a ZStack) cannot return through the container.
@@ -485,16 +501,16 @@ final class RW169StructuralTests: XCTestCase {
         let line = try XCTUnwrap(WearIveRunNarration.line(for: plannedState))
         // Mini: narration column = width − 32 padding −
         // (wordmark + 8) − 96 controls reserve.
-        let miniColumn = surfaceWidth - 32 - (wordmarkW + 8) - 96
+        let miniColumn = surfaceWidth - 32 - (wordmarkW + 8) - 60
         let miniNarrH = measuredTextHeight(line, font: .systemFont(ofSize: 12), width: miniColumn)
-        let mini = max(16 + max(44, miniNarrH), 26 + miniNarrH)
+        let mini = 11 + max(26, miniNarrH) + 12
         // Expanded: narration spans width − 32 at 15 pt; the
         // entry line sits beside the 56 pt thumbnail + 10.
         let expNarrH = measuredTextHeight(line, font: .systemFont(ofSize: 15), width: surfaceWidth - 32)
         let entryLine = WearIveRunNarration.expandedLine(
             for: fixtureEntry(place: "Los Angeles, CA"), formattedFeelsLike: "58°")
         let entryH = measuredTextHeight(entryLine, font: .systemFont(ofSize: 14.5), width: surfaceWidth - 32 - 56 - 10)
-        let expanded = 20 + 44 + 12 + expNarrH + 12 + entryH + 12 + 24 + 20
+        let expanded = 20 + 44 + 12 + expNarrH + 12 + entryH + 12 + 24 + 12
         return (mini, expanded)
     }
 
@@ -989,13 +1005,13 @@ final class RW169LoopbackTests: XCTestCase {
             WearIveRunMiniBarModel.wordmark,
             font: try XCTUnwrap(UIFont(name: "GreatVibes-Regular", size: 17)))
         let line = try XCTUnwrap(WearIveRunNarration.line(for: plannedState))
-        let miniColumn = surfaceWidth - 32 - (wordmarkW + 8) - 96
+        let miniColumn = surfaceWidth - 32 - (wordmarkW + 8) - 60
         let miniNarrH = measuredTextHeight(line, font: .systemFont(ofSize: 12), width: miniColumn)
-        let mini = max(16 + max(44, miniNarrH), 26 + miniNarrH)
+        let mini = 11 + max(26, miniNarrH) + 12
         let expNarrH = measuredTextHeight(line, font: .systemFont(ofSize: 15), width: surfaceWidth - 32)
         let entryLine = WearIveRunNarration.expandedLine(for: entry, formattedFeelsLike: "58°")
         let entryH = measuredTextHeight(entryLine, font: .systemFont(ofSize: 14.5), width: surfaceWidth - 32 - 56 - 10)
-        let expanded = 20 + 44 + 12 + expNarrH + 12 + entryH + 12 + 24 + 20
+        let expanded = 20 + 44 + 12 + expNarrH + 12 + entryH + 12 + 24 + 12
         return (mini, expanded)
     }
 

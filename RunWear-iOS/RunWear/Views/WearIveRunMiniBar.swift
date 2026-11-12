@@ -60,8 +60,13 @@ enum DockResidence {
     static let bottomInset: CGFloat = 14
     /// The dock's side insets (§2.1: 12 pt).
     static let horizontalInset: CGFloat = 12
-    /// The single-line dock's measured height (RW-144 gate).
-    static let measuredDockHeight: CGFloat = 56
+    /// The single-line dock's measured height. RB-04
+    /// (RW-135 rebuild, Nov 12, 2026): the prototype's own
+    /// footprint — padding 11 top + one 26 pt content row +
+    /// padding 12 bottom = 49 pt. (The 56 pt figure that
+    /// stood here was the 44 pt-control formula's output —
+    /// the "room" Sol's recording showed around the content.)
+    static let measuredDockHeight: CGFloat = 49
     /// Bottom clearance carried below the page content in every
     /// Home scroll view: the dock's height + its bottom inset +
     /// 10 pt of margin, sized up for the wrapped-narration dock
@@ -938,6 +943,65 @@ enum WearIveRunMorph {
         4 * (1 - expandedContentOpacity(progress: progress))
     }
 
+    // MARK: RB-03 (RW-135 rebuild, Nov 12, 2026) — the dissolve windows
+    //
+    // The morph is a REAL in-place dissolve honouring the
+    // RW-152 §1.3 legibility invariant: the narration exists
+    // in TWO placements of the same string (the mini slot
+    // beside the wordmark at 12 pt; the expanded slot below
+    // the header, full width, at 15 pt), each dissolving over
+    // its own window — mini out across p in [0, 0.35],
+    // expanded in across p in [0.55, 1] — with a dead zone
+    // between in which NEITHER is legible, so both-legible is
+    // impossible at any progress value. (The RW-169 form —
+    // one narration view sliding between the slots while its
+    // font lerped 12 → 15 — lerped one narration through the
+    // other's space; RB-03 retires it.) Expanded-only content
+    // (entry row + doorway) dissolves in over p in [0.45, 1]
+    // (the standing window above), laid out at its expanded
+    // geometry inside the growing surface.
+
+    /// The morph's length and curve (spec §4 tokens): 380 ms,
+    /// cubic-bezier(0.32, 0.72, 0, 1).
+    static let morphDurationSeconds: Double = 0.38
+    static let morphCurve: (Double, Double, Double, Double) = (0.32, 0.72, 0, 1)
+
+    /// The morph animation itself — one timing curve of the
+    /// one progress value. Reduced Motion: an opacity
+    /// crossfade ≤150 ms, no travel (the caller still runs
+    /// the same progress; the surface suppresses its offsets).
+    static func morphAnimation(reduceMotion: Bool) -> Animation {
+        if reduceMotion {
+            return .easeInOut(duration: reducedMotionDurationSeconds)
+        }
+        return .timingCurve(
+            morphCurve.0, morphCurve.1, morphCurve.2, morphCurve.3,
+            duration: morphDurationSeconds)
+    }
+
+    /// Smoothstep over an arbitrary window.
+    static func smoothstep(_ progress: Double, _ start: Double, _ end: Double) -> Double {
+        let t = min(1, max(0, (clamped(progress) - start) / (end - start)))
+        return t * t * (3 - 2 * t)
+    }
+
+    /// The MINI placement's alpha: 1 − smoothstep(p in [0, 0.35]).
+    static func miniNarrationOpacity(progress: Double) -> Double {
+        1 - smoothstep(progress, 0, 0.35)
+    }
+
+    /// The EXPANDED placement's alpha: smoothstep(p in [0.55, 1]).
+    static func expandedNarrationOpacity(progress: Double) -> Double {
+        smoothstep(progress, 0.55, 1)
+    }
+
+    /// The expanded-only content's alpha over p in [0.45, 1]
+    /// (the standing expanded-content window, under the name
+    /// the unified surface uses).
+    static func expandedOnlyOpacity(progress: Double) -> Double {
+        expandedContentOpacity(progress: progress)
+    }
+
     // RW-152 §1: the RW-135 §3 handoff mathematics and the
     // §4.4 glide mathematics that stood here are REMOVED with
     // the two-surface split they served — there is no footer
@@ -1281,6 +1345,7 @@ struct WearIveRunMiniBarView: View {
     private var headerRow: some View {
         HStack(spacing: 8) {
             wordmarkView
+                .allowsHitTesting(false)
             let shown = displayedState ?? state
             if let line = WearIveRunNarration.line(for: shown) {
                 // RW-138 (RW-135 spec §4.3): the narration WRAPS
@@ -1292,20 +1357,36 @@ struct WearIveRunMiniBarView: View {
                 dockNarration(line, for: shown)
                     // RW-162 G4(a): the narration takes layout
                     // priority over the wordmark and the fixed
-                    // 44 pt controls, so the wrap the RW-138
-                    // ruling allows composes inside the pill
-                    // instead of cramming against its controls.
+                    // controls, so the wrap the RW-138 ruling
+                    // allows composes inside the pill instead of
+                    // cramming against its controls.
                     .layoutPriority(1)
                     .id(line)
                     .transition(.opacity)
+                    .allowsHitTesting(false)
             }
             Spacer(minLength: 0)
             barControls
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        // RB-04: the prototype's own vertical paddings —
+        // 11 top / 12 bottom around the one 26 pt row.
+        .padding(.top, 11)
+        .padding(.bottom, 12)
         .contentShape(Rectangle())
-        .onTapGesture { handleExpandTap() }
+        // RB-02: the body tap is a background tap layer BELOW
+        // the controls, not an onTapGesture stacked over them
+        // (the stacked recognizers could double-fire or
+        // swallow the toggle Button's action).
+        .background {
+            Button {
+                handleExpandTap()
+            } label: {
+                Color.clear.contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHidden(true)
+        }
     }
 
     /// §4.3: apply a changed recorded line as an opacity-only
@@ -1368,7 +1449,10 @@ struct WearIveRunMiniBarView: View {
                 Image(systemName: "arrow.up.left.and.arrow.down.right")
                     .font(.system(size: 14))
                     .foregroundColor(AppTheme.inkMuted)
-                    .frame(width: 44, height: 44)
+                    // RB-04: the 26 pt glyph box of the
+                    // prototype — the old 44 pt frames were
+                    // what stood the bar at ≈60 pt.
+                    .frame(width: 26, height: 26)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -1384,7 +1468,7 @@ struct WearIveRunMiniBarView: View {
                 Image(systemName: "trash")
                     .font(.system(size: 14))
                     .foregroundColor(AppTheme.inkMuted)
-                    .frame(width: 44, height: 44)
+                    .frame(width: 26, height: 26)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -1611,8 +1695,10 @@ enum WearIveRunOverlayPolicy {
     /// Everything in the panel except the entry region:
     /// top padding 20 + header 44 + spacing 12 + narration
     /// allowance 44 + spacing 12 + doorway 24 + bottom
-    /// padding 20.
-    static let nonEntryChromeHeight: CGFloat = 176
+    /// padding 12 (RB-04: the settled overlay bottom padding
+    /// is 12 — the A′ in-flow seat's larger bottom padding
+    /// does not carry into the overlay).
+    static let nonEntryChromeHeight: CGFloat = 168
 
     /// The cap for a viewport: viewport − top chrome zone.
     static func expandedCap(viewportHeight: CGFloat) -> CGFloat {
@@ -1639,8 +1725,8 @@ enum WearIveRunOverlayPolicy {
 
     /// The fixed allowance below the chrome block: spacing
     /// 12 (chrome → region) + spacing 12 (region → doorway) +
-    /// doorway 24 + bottom padding 20.
-    static let doorwayAllowance: CGFloat = 68
+    /// doorway 24 + bottom padding 12 (RB-04).
+    static let doorwayAllowance: CGFloat = 60
 
     /// The entry region's standing height in the real panel,
     /// where the chrome block (header + narration) is MEASURED:
@@ -1659,7 +1745,7 @@ enum WearIveRunOverlayPolicy {
     /// header 44 + narration lines (20 pt at 15 pt type, scaled)
     /// + the entry row (56 pt thumbnail, or wrapped entry text
     /// at 21 pt/line, scaled) + doorway 24 + two 12 pt spacings
-    /// + 20/20 paddings.
+    /// + 20 top / 12 bottom paddings (RB-04).
     static func contentHeight(
         narrationLineCount: Int,
         entryLineCount: Int,
@@ -1669,7 +1755,7 @@ enum WearIveRunOverlayPolicy {
         let narration = CGFloat(max(1, narrationLineCount)) * 20 * textScale
         let entry = max(56, CGFloat(max(1, entryLineCount)) * 21 * textScale)
         let doorway: CGFloat = 24
-        return header + narration + entry + doorway + 36 + 40
+        return header + narration + entry + doorway + 36 + 32
     }
 }
 
@@ -2184,18 +2270,29 @@ struct WearIveRunSettleGate {
 
 // MARK: - RW-169 §7A — the morph probe (mechanical acceptance)
 //
-// The acceptance probe of §7A, as pure functions the tests pin:
-// at every morph progress value there is exactly ONE narration
-// in the hierarchy (the unified surface's single narration view,
-// opacity 1 throughout the travel — it is never one of two
-// cross-fading forms), and the wordmark's rendered width is the
-// interpolation of its two REST widths — never below the mini
-// rest width, never the ≈33 pt crush D1 shipped.
+// The acceptance probe of §7A, as pure functions the tests pin.
+// RE-PINNED for RB-03 (RW-135 rebuild, Nov 12, 2026): the
+// narration now exists in TWO placements of the same string
+// dissolving over disjoint windows (mini out [0, 0.35],
+// expanded in [0.55, 1]) — the invariant the probe counts is
+// the legibility invariant: at every morph progress value
+// AT MOST ONE placement is legible (alpha > 0.5), and in the
+// dead zone between the windows neither is. (The RW-169
+// single-view form this probe originally described — one
+// narration at opacity 1 throughout — lerped one narration
+// through the other's space and is retired by RB-03.) The
+// wordmark's rendered width remains the interpolation of its
+// two REST widths — never below the mini rest width, never
+// the ≈33 pt crush D1 shipped.
 enum WearIveRunMorphProbe {
-    /// Exactly one narration exists at every progress value:
-    /// the same narration view is repositioned/rescaled by the
-    /// morph, never swapped for a second form's narration.
-    static func legibleNarrationCount(progress: Double) -> Int { 1 }
+    /// How many narration placements are legible (alpha
+    /// > 0.5) at `progress`: never more than one.
+    static func legibleNarrationCount(progress: Double) -> Int {
+        var count = 0
+        if WearIveRunMorph.miniNarrationOpacity(progress: progress) > 0.5 { count += 1 }
+        if WearIveRunMorph.expandedNarrationOpacity(progress: progress) > 0.5 { count += 1 }
+        return count
+    }
 
     /// The wordmark's rendered width at `progress`: the linear
     /// interpolation of its mini and expanded REST widths (its
@@ -2295,15 +2392,25 @@ struct WearIveRunPromotedThumbnail: View {
 // composes a complete mini form and a complete expanded form
 // simultaneously and cross-fades between them over a height
 // measured during the morph. There is ONE content hierarchy —
-// the same wordmark view, the same narration view, the same
-// entry row and the same doorway throughout the travel — whose
-// positions, sizes and opacities are pure functions of the one
-// expansionProgress. The container height is the interpolation
-// of the two REST heights: the mini rest height is measured at
-// mini rest, the expanded rest height is measured at expanded
-// rest (before the first expansion it is derived from the rest
-// content by WearIveRunOverlayPolicy.contentHeight — a rest
-// computation, never a during-morph measurement).
+// the same wordmark view, the same entry row and the same
+// doorway throughout the travel — whose positions, sizes and
+// opacities are pure functions of the one expansionProgress.
+// The container height is the interpolation of the two REST
+// heights: the mini rest height is measured at mini rest, the
+// expanded rest height is measured at expanded rest (before
+// the first expansion it is derived from the rest content by
+// WearIveRunOverlayPolicy.contentHeight — a rest computation,
+// never a during-morph measurement).
+//
+// RB-03 (RW-135 rebuild, Nov 12, 2026) amends the narration's
+// part in that hierarchy: the RW-169 form carried ONE
+// narration view that slid from the mini slot to the expanded
+// slot while its font lerped 12 → 15 — one narration lerped
+// through the other's space. The narration now stands in TWO
+// placements of the same string at their fixed slots, each
+// dissolving over its own window (mini out [0, 0.35],
+// expanded in [0.55, 1]) with a dead zone between, so the
+// legibility invariant holds by construction.
 
 struct WearIveRunUnifiedSurfaceView: View {
     let state: WearIveRunState
@@ -2312,6 +2419,11 @@ struct WearIveRunUnifiedSurfaceView: View {
     let cueCount: Int
     var narrationVersion: Int = 0
     var exitProgress: Double = 0
+    /// Audit sweep (§4.7 exit split): the form the host's exit
+    /// starts from — the exit policy's fade/sink/fold split
+    /// keys on it. The overlay container sets it from its
+    /// expansion state at the trash tap.
+    var exitFromExpanded: Bool = false
     var isDimmedBySheet: Bool = false
     var isScrollGestureActive: Bool = false
     let viewportHeight: CGFloat
@@ -2324,6 +2436,10 @@ struct WearIveRunUnifiedSurfaceView: View {
     /// read lands (and on appear) — never during the travel.
     var onRestHeights: ((CGFloat, CGFloat) -> Void)? = nil
     let onToggle: () -> Void
+    /// RB-01/R-1: the explicit collapse (glide-up) — distinct
+    /// from the toggle so the container's R-1 policy records
+    /// a dismissal, not a state flip.
+    var onCollapse: () -> Void = {}
     let onOpenCollection: () -> Void
     var onOpenShareEntry: ((WearIveRunEntry) -> Void)?
     let onTrash: () -> Void
@@ -2336,7 +2452,6 @@ struct WearIveRunUnifiedSurfaceView: View {
     @State private var wordmarkWidth: CGFloat = 96
     @State private var miniNarrationHeight: CGFloat = 17
     @State private var expandedNarrationHeight: CGFloat = 20
-    @State private var liveNarrationHeight: CGFloat = 17
     @State private var expandedEntryHeight: CGFloat = 56
     @State private var cueHapticNonce = 0
     @State private var trashHapticNonce = 0
@@ -2359,22 +2474,43 @@ struct WearIveRunUnifiedSurfaceView: View {
     private var shownState: WearIveRunState { displayedState ?? state }
     private var shownEntry: WearIveRunEntry { displayedEntry ?? entry }
 
-    /// Mini rest height: vertical padding 8×2 + the one row
-    /// (44 pt controls, or the wrapped narration when taller).
-    /// RW-169 §7B containment: the narration sits at
-    /// topPad + 10, so a wrapped narration's full extent is
-    /// 8 + 10 + its height + 8 bottom padding — the bar grows
-    /// to CONTAIN it (26 + height), never letting the text
-    /// paint past the material's bottom edge.
+    // MARK: RB-04 (RW-135 rebuild) — the measured footprint
+    //
+    // MINI is content-sized at the prototype's own footprint:
+    // padding 11 top + ONE 26 pt content row + padding 12
+    // bottom = 49 pt with a one-line narration. The 26 pt row
+    // is the tallest element (wordmark 17 pt, narration 12 pt,
+    // two 26 pt glyph controls); hit areas may extend by
+    // padding but never add visible height. A wrapped
+    // narration grows the row (and the bar) by its own height
+    // — growth is content, not room.
+    static let miniTopPadding: CGFloat = 11
+    static let miniBottomPadding: CGFloat = 12
+    static let miniRowHeight: CGFloat = 26
+    /// EXPANDED paddings (RB-04): top 20 / sides 16 / bottom
+    /// 12 — the A′ in-flow seat's 32 pt bottom padding (and
+    /// the interim 20) do not carry into the overlay.
+    static let expandedTopPadding: CGFloat = 20
+    static let expandedBottomPadding: CGFloat = 12
+    /// The expanded header zone: header row 44 + the 12 pt
+    /// spacing above the expanded narration slot, measured
+    /// from the expanded top padding.
+    static let expandedHeaderZone: CGFloat = 56
+
     var miniRestHeight: CGFloat {
-        max(16 + max(44, miniNarrationHeight), 26 + miniNarrationHeight)
+        Self.miniTopPadding
+            + max(Self.miniRowHeight, miniNarrationHeight)
+            + Self.miniBottomPadding
     }
     /// Expanded rest height from the measured rest anatomy:
-    /// top 20 + header 44 + 12 + narration + 12 + entry + 12 +
-    /// doorway 24 + bottom 20.
+    /// top 20 + header zone 56 (row 44 + spacing 12) +
+    /// narration + 12 + entry + 12 + doorway 24 + bottom 12.
+    /// Rendered height == this content height at rest.
     var expandedRestHeight: CGFloat {
-        20 + 44 + 12 + expandedNarrationHeight + 12
-            + expandedEntryHeight + 12 + 24 + 20
+        Self.expandedTopPadding + Self.expandedHeaderZone
+            + expandedNarrationHeight + 12
+            + expandedEntryHeight + 12 + 24
+            + Self.expandedBottomPadding
     }
 
     /// RW-152 §2 height cap, inside the one surface (RW-169
@@ -2384,10 +2520,10 @@ struct WearIveRunUnifiedSurfaceView: View {
     /// internally, while the header, narration and doorway stay
     /// pinned and fully visible. The budget is the cap minus
     /// everything that is not the entry region (top pad 20 +
-    /// header 44 + spacing 12 + narration + spacing 12 +
-    /// spacing 12 + doorway 24 + bottom pad 20 = 144 +
-    /// narration), floored at the 56 pt thumbnail cell — the
-    /// same floor the overlay policy uses. (The unified surface
+    /// header zone 56 + narration + spacing 12 + spacing 12 +
+    /// doorway 24 + bottom pad 12 = 136 + narration, RB-04),
+    /// floored at the 56 pt thumbnail cell — the same floor
+    /// the overlay policy uses. (The unified surface
     /// originally carried NO cap behaviour at all: at a binding
     /// cap the entry text simply overflowed the panel's bottom
     /// edge and the doorway was pushed out of the surface —
@@ -2395,7 +2531,7 @@ struct WearIveRunUnifiedSurfaceView: View {
     var entryRegionBudget: CGFloat {
         let cap = WearIveRunOverlayPolicy.expandedCap(
             viewportHeight: viewportHeight)
-        return max(56, cap - (144 + expandedNarrationHeight))
+        return max(56, cap - (136 + expandedNarrationHeight))
     }
 
     /// The entry region's standing height at expanded rest:
@@ -2418,11 +2554,27 @@ struct WearIveRunUnifiedSurfaceView: View {
     var body: some View {
         GeometryReader { geo in
             let width = geo.size.width
-            let topPad = lerp(8, 20)
-            let narrationX = (1 - CGFloat(p)) * (wordmarkWidth + 8)
-            let narrationY = topPad + lerp(10, 56)
-            let narrationWidth = max(40, width - 32 - narrationX - (1 - CGFloat(p)) * 96)
-            let entryY = narrationY + liveNarrationHeight + 12
+            let topPad = lerp(Self.miniTopPadding, Self.expandedTopPadding)
+            // RB-03: the two narration placements stand at
+            // their own FIXED slot geometry for the whole
+            // travel — the mini slot beside the wordmark, the
+            // expanded slot below the header at full width.
+            // Neither slides into the other's space; only
+            // their alphas move (the dissolve windows).
+            let miniNarrationX = 16 + wordmarkWidth + 8
+            let miniNarrationY = Self.miniTopPadding
+                + max(0, (Self.miniRowHeight - miniNarrationHeight) / 2)
+            let miniNarrationWidth = max(
+                40, width - miniNarrationX - 16 - 56 - 4)
+            let expandedNarrationY = Self.expandedTopPadding + Self.expandedHeaderZone
+            // Expanded-only content stands at its EXPANDED
+            // geometry from the first frame (RB-03): the
+            // entry region below the expanded narration slot,
+            // the doorway below the entry region — revealed
+            // by the growing, clipped surface and its own
+            // dissolve window, never slid up from the mini
+            // form's space.
+            let entryY = expandedNarrationY + expandedNarrationHeight + 12
             // RW-152 §2 (RW-169 loop-back): the doorway seats
             // below the entry REGION's standing height — the
             // full entry height interpolated toward the capped
@@ -2432,41 +2584,81 @@ struct WearIveRunUnifiedSurfaceView: View {
             // its bottom edge by the overflowing entry.
             let doorwayY = entryY + lerp(expandedEntryHeight, cappedEntryHeight) + 12
             ZStack(alignment: .topLeading) {
-                // The wordmark — the same view at every progress
-                // value; its size interpolates 17 → 31 pt and it
-                // is fixed-claim (fixedSize) at every sample.
-                wordmark
-                    .offset(x: 16, y: topPad + lerp(8, 0))
-                // The controls — one toggle + trash, top-right
-                // throughout the travel.
-                controls
-                    .offset(x: width - 16 - 92, y: topPad)
-                // THE narration — one view, one line object,
-                // opacity 1 at every progress value; it slides
-                // from beside the wordmark (mini) to below the
-                // header (expanded) and grows 12 → 15 pt.
-                if let line = WearIveRunNarration.line(for: shownState) {
-                    narrationView(line)
-                        .frame(width: narrationWidth, alignment: .leading)
-                        .offset(x: 16 + narrationX, y: narrationY)
+                // RB-02: the body tap layer — ONE tap target
+                // for the whole surface body, seated BELOW
+                // every control. Taps on the toggle, trash,
+                // entry row, or doorway land on those controls
+                // (they sit above this layer); taps anywhere
+                // else land here. There is no parent
+                // `onTapGesture` competing with the buttons —
+                // the pre-rebuild hit path stacked a root
+                // onTapGesture over the toggle Button, so a tap
+                // on the icon could fire the toggle twice (or
+                // be swallowed between the two recognizers)
+                // and read as a dead control.
+                Button {
+                    handleToggleTap()
+                } label: {
+                    Color.clear
+                        .frame(width: width, height: geo.size.height)
+                        .contentShape(Rectangle())
                 }
-                // The entry region — the same row throughout;
-                // it rides below the narration and fades in
-                // with progress (below the mini rest height at
-                // p = 0, so the mini form never shows it). At
-                // expanded rest under a binding cap the region
-                // stands at its budget inside a ScrollView —
-                // the row scrolls internally (RW-152 §2).
+                .buttonStyle(.plain)
+                .accessibilityHidden(true)
+                // The wordmark — ONE instance, anchored
+                // top-left throughout; its size lerps
+                // 17 pt → 31 pt (fixed-claim at every sample).
+                wordmark
+                    .offset(x: 16, y: topPad + lerp(3, 0))
+                    .allowsHitTesting(false)
+                // The controls — one toggle + trash, top-right
+                // throughout the travel, each in its 26 pt box
+                // (RB-02/RB-04), centred on the mini row and on
+                // the expanded header row respectively.
+                controls
+                    .offset(x: width - 16 - 56, y: topPad + lerp(0, 9))
+                // The narration — TWO placements of the same
+                // string (RB-03), dissolving over disjoint
+                // windows: the mini placement (12 pt, beside
+                // the wordmark) fades out across p in
+                // [0, 0.35]; the expanded placement (15 pt,
+                // below the header, full width) fades in
+                // across p in [0.55, 1]. The dead zone between
+                // makes both-legible impossible; the sub-0.5
+                // placement is out of the accessibility tree.
+                if let line = WearIveRunNarration.line(for: shownState) {
+                    miniNarrationView(line)
+                        .frame(width: miniNarrationWidth, alignment: .leading)
+                        .offset(x: miniNarrationX, y: miniNarrationY)
+                        .opacity(WearIveRunMorph.miniNarrationOpacity(progress: p))
+                        .accessibilityHidden(
+                            WearIveRunMorph.miniNarrationOpacity(progress: p) < 0.5)
+                        .allowsHitTesting(false)
+                    expandedNarrationView(line)
+                        .frame(width: width - 32, alignment: .leading)
+                        .offset(x: 16, y: expandedNarrationY)
+                        .opacity(WearIveRunMorph.expandedNarrationOpacity(progress: p))
+                        .accessibilityHidden(
+                            WearIveRunMorph.expandedNarrationOpacity(progress: p) < 0.5)
+                        .allowsHitTesting(false)
+                }
+                // The entry region — the same row throughout,
+                // at its expanded geometry; it dissolves in
+                // over p in [0.45, 1]. At expanded rest under
+                // a binding cap the region stands at its
+                // budget inside a ScrollView — the row scrolls
+                // internally (RW-152 §2).
                 entryRegion
                     .frame(width: width - 32, alignment: .leading)
                     .offset(x: 16, y: entryY)
-                    .opacity(p)
+                    .opacity(WearIveRunMorph.expandedOnlyOpacity(progress: p))
                     .allowsHitTesting(p > 0.5 && exitProgress == 0)
                 // The doorway — always present in the expanded
-                // form (§2.4), fading in with the same travel.
+                // form (§2.4), dissolving in with the same
+                // window at its expanded geometry.
                 doorway
                     .offset(x: 16, y: doorwayY)
-                    .opacity(p)
+                    .opacity(WearIveRunMorph.expandedOnlyOpacity(progress: p))
                     .allowsHitTesting(p > 0.5 && exitProgress == 0)
             }
             .frame(width: width, alignment: .topLeading)
@@ -2499,6 +2691,10 @@ struct WearIveRunUnifiedSurfaceView: View {
                     .opacity(ringOpacity)
             }
         }
+        // RB-05: the corner radius is a CONSTANT 16 pt at
+        // every progress value — cornerRadius(progress:) is
+        // 16 at both tokens by design, and neither the shape
+        // nor the hairline nor the travel clip interpolates it.
         .clipShape(RoundedRectangle(cornerRadius: WearIveRunMorph.cornerRadius(progress: p)))
         .overlay {
             RoundedRectangle(cornerRadius: WearIveRunMorph.cornerRadius(progress: p))
@@ -2509,17 +2705,31 @@ struct WearIveRunUnifiedSurfaceView: View {
                     lineWidth: 0.5)
         }
         .shadow(color: Color.black.opacity(0.14), radius: 12, x: 0, y: 6)
+        // §4.7 exit split (WearIveRunExitPolicy): opacity and
+        // sink are the policy's functions of the host's one
+        // exit progress and the form the exit started from.
         .opacity(WearIveRunElementDimming.opacity(sheetPresented: isDimmedBySheet)
-            * (1 - exitProgress) * entranceProgress)
-        .offset(y: (reduceMotion ? 0 : CGFloat(1 - entranceProgress) * 90)
-            + (reduceMotion ? 0 : CGFloat(26 * exitProgress)))
+            * WearIveRunExitPolicy.opacity(
+                progress: exitProgress, fromExpanded: exitFromExpanded,
+                reduceMotion: reduceMotion)
+            * entranceProgress)
+        .offset(y: (reduceMotion ? 0 : CGFloat(1 - entranceProgress) * miniRestHeight * 1.6)
+            + CGFloat(WearIveRunExitPolicy.sink(
+                progress: exitProgress, fromExpanded: exitFromExpanded,
+                reduceMotion: reduceMotion)))
         .scaleEffect(pulseScale * bounceScale * pressScale)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            // Tapping the surface body toggles it (the toggle
-            // control is the same action, RW-152 §1).
-            if p < 0.5 { handleToggleTap() }
-        }
+        // R-1 dismissal set (RW-152 §1.4, iOS): a glide UP on
+        // the expanded surface collapses it — a simultaneous
+        // gesture, so it never competes with the controls'
+        // taps (RB-02's one-action discipline).
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 12)
+                .onEnded { value in
+                    if value.translation.height < -32, p > 0.5 {
+                        onCollapse()
+                    }
+                }
+        )
         .sensoryFeedback(.impact(flexibility: .soft), trigger: cueHapticNonce)
         .sensoryFeedback(.impact(weight: .light), trigger: trashHapticNonce)
         .sensoryFeedback(.impact(weight: .light), trigger: glideHapticNonce)
@@ -2588,6 +2798,12 @@ struct WearIveRunUnifiedSurfaceView: View {
             }
     }
 
+    /// RB-02: ONE toggle control — a single Button whose
+    /// glyph cross-fades (corners-out ↔ chevron-down) inside
+    /// one 26 pt box; its action is the same `handleToggleTap`
+    /// the body tap layer fires. The trash is its own control.
+    /// Both boxes are 26 pt (RB-04): the visible row height is
+    /// the content row, never the controls' old 44 pt frames.
     private var controls: some View {
         HStack(spacing: 4) {
             Button {
@@ -2601,7 +2817,7 @@ struct WearIveRunUnifiedSurfaceView: View {
                 }
                 .font(.system(size: 14))
                 .foregroundColor(AppTheme.inkMuted)
-                .frame(width: 44, height: 44)
+                .frame(width: 26, height: 26)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -2613,7 +2829,7 @@ struct WearIveRunUnifiedSurfaceView: View {
                 Image(systemName: "trash")
                     .font(.system(size: 14))
                     .foregroundColor(AppTheme.inkMuted)
-                    .frame(width: 44, height: 44)
+                    .frame(width: 26, height: 26)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -2621,26 +2837,41 @@ struct WearIveRunUnifiedSurfaceView: View {
         }
     }
 
+    /// RB-03: the MINI placement of the narration — 12 pt, in
+    /// the slot beside the wordmark. Its measured height is a
+    /// property of the placement (fixed font, fixed column),
+    /// not of the progress value, so it feeds the mini rest
+    /// height whenever it lands.
     @ViewBuilder
-    private func narrationView(_ line: String) -> some View {
+    private func miniNarrationView(_ line: String) -> some View {
         narrationText(line, for: shownState)
-            .font(.system(size: lerp(12, 15)))
+            .font(.system(size: 12))
             .id(line)
             .transition(.opacity)
             .onGeometryChange(for: CGFloat.self) { proxy in
                 proxy.size.height
             } action: { _, height in
                 if height > 0 {
-                    liveNarrationHeight = height
-                    // Rest captures only: a height measured at a
-                    // rest state feeds that state's rest height;
-                    // nothing measured during the travel feeds
-                    // either endpoint.
-                    if p == 0 { miniNarrationHeight = height }
-                    if p == 1 { expandedNarrationHeight = height }
-                    if p == 0 || p == 1 {
-                        onRestHeights?(miniRestHeight, expandedRestHeight)
-                    }
+                    miniNarrationHeight = height
+                    onRestHeights?(miniRestHeight, expandedRestHeight)
+                }
+            }
+    }
+
+    /// RB-03: the EXPANDED placement of the same narration
+    /// string — 15 pt, below the header, full width.
+    @ViewBuilder
+    private func expandedNarrationView(_ line: String) -> some View {
+        narrationText(line, for: shownState)
+            .font(.system(size: 15))
+            .id(line)
+            .transition(.opacity)
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.size.height
+            } action: { _, height in
+                if height > 0 {
+                    expandedNarrationHeight = height
+                    onRestHeights?(miniRestHeight, expandedRestHeight)
                 }
             }
     }
@@ -2691,7 +2922,12 @@ struct WearIveRunUnifiedSurfaceView: View {
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.size.height
         } action: { _, height in
-            if height > 0, p == 1 {
+            // RB-03: the row stands at its expanded geometry
+            // for the whole travel, so its height — a property
+            // of the content at the panel's width, never of
+            // the progress value — is measured whenever the
+            // read lands and feeds the expanded rest height.
+            if height > 0 {
                 expandedEntryHeight = height
                 onRestHeights?(miniRestHeight, expandedRestHeight)
             }
@@ -2857,7 +3093,9 @@ struct WearIveRunUnifiedSurfaceView: View {
 // content by WearIveRunOverlayPolicy.contentHeight). No height
 // is ever measured during the morph (RW-169 §7A retires RW-162
 // G1's during-morph measurement pass and the dual-form ZStack
-// it fed). Expansion is user-summoned ONLY; dismissal restores
+// it fed). Expansion follows the R-1 decision
+// (WearIveRunExpansionPolicy: tap-summoned, or presented on
+// reaching the page end); dismissal restores
 // the page exactly because the page never moved. The host's
 // exit progress folds this container's height while the
 // surface fades — the §4.7 content-fade + height-fold.
@@ -2883,6 +3121,16 @@ struct WearIveRunOverlayView: View {
     /// True while the host page's scroll gesture is live —
     /// forwarded to the surface's narration deferral gate.
     var isScrollGestureActive: Bool = false
+    /// RB-01/R-1: the host scroll's footer-zone verdict, from
+    /// WeatherOutfitView's real scroll geometry
+    /// (WearIveRunFooterZone). Reaching the page end presents
+    /// the expanded form; leaving the zone re-docks it —
+    /// unless a tap summoned it (the R-1 policy below).
+    var isAtFooter: Bool = false
+    /// Audit sweep (§4.7 exit split): the form the host's exit
+    /// starts from, forwarded to the surface and used by the
+    /// container's height fold.
+    var exitFromExpanded: Bool = false
     /// The host viewport's height — the expanded state's §2
     /// cap input.
     let viewportHeight: CGFloat
@@ -2895,7 +3143,17 @@ struct WearIveRunOverlayView: View {
     /// entry's tap opens the Share Studio sheet).
     var onOpenShareEntry: ((WearIveRunEntry) -> Void)?
     let onTrash: () -> Void
+    /// The host learns the surface's expanded state (the
+    /// §4.7 exit split keys its choreography on the form the
+    /// exit starts from).
+    var onExpansionChange: ((Bool) -> Void)? = nil
 
+    /// RB-01/R-1: the expansion decision — the ONLY source of
+    /// the expanded state. Tap summons persist until an
+    /// explicit collapse; the footer presents on arrival and
+    /// re-docks on departure; a collapse at the footer
+    /// suppresses re-presentation until the scroll leaves.
+    @State private var expansionPolicy = WearIveRunExpansionPolicy()
     @State private var expansionProgress: Double = 0
     /// The surface's measured mini rest height (captured from
     /// the unified surface's own rest anatomy at progress 0).
@@ -2925,14 +3183,19 @@ struct WearIveRunOverlayView: View {
     }
 
     /// The container's height: the morph interpolation of the
-    /// two rest heights, capped per §2, folded by the exit.
+    /// two rest heights, capped per §2, folded by the exit —
+    /// the fold being the §4.7 exit policy's height scale
+    /// (from MINI there is no fold; from EXPANDED the fold
+    /// runs only after the content fade's segment).
     private var containerHeight: Double {
         let expanded = min(
             expandedRestHeight > 0 ? expandedRestHeight : expandedRestEstimate,
             Double(WearIveRunOverlayPolicy.expandedCap(viewportHeight: viewportHeight)))
         let base = WearIveRunMorphProbe.containerHeight(
             miniRest: miniRestHeight, expandedRest: expanded, progress: expansionProgress)
-        return exitProgress > 0 ? base * (1 - exitProgress) : base
+        return base * WearIveRunExitPolicy.heightScale(
+            progress: exitProgress, fromExpanded: exitFromExpanded,
+            reduceMotion: reduceMotion)
     }
 
     /// RW-162 G5, carried: the travel clip applies ONLY while
@@ -2951,6 +3214,7 @@ struct WearIveRunOverlayView: View {
             cueCount: cueCount,
             narrationVersion: narrationVersion,
             exitProgress: exitProgress,
+            exitFromExpanded: exitFromExpanded,
             isDimmedBySheet: isDimmedBySheet,
             isScrollGestureActive: isScrollGestureActive,
             viewportHeight: viewportHeight,
@@ -2964,42 +3228,60 @@ struct WearIveRunOverlayView: View {
                 if expanded > 0 { expandedRestHeight = Double(expanded) }
             },
             onToggle: { toggle() },
+            onCollapse: { collapseExplicit() },
             onOpenCollection: onOpenCollection,
             onOpenShareEntry: onOpenShareEntry,
             onTrash: onTrash
         )
         .frame(height: containerHeight)
         .clippedIfMorphing(travelClipActive, radius: WearIveRunMorph.cornerRadius(progress: expansionProgress))
+        .onAppear {
+            expansionPolicy.scrollChanged(atFooter: isAtFooter)
+            syncProgress(animated: false)
+        }
+        .onChange(of: isAtFooter) { _, newValue in
+            // RB-01/R-1: the scroll reached (or left) the page
+            // end — the policy decides what that means for the
+            // presentation; the morph follows its verdict.
+            expansionPolicy.scrollChanged(atFooter: newValue)
+            syncProgress(animated: true)
+        }
     }
 
+    /// The toggle action — the SAME action from the body tap
+    /// and the toggle control (RB-02): the R-1 policy records
+    /// a summon or an explicit collapse, and the morph runs
+    /// to the policy's verdict.
     private func toggle() {
-        if expansionProgress < 0.5 {
-            expand()
+        guard exitProgress == 0 else { return }
+        expansionPolicy.userToggled()
+        syncProgress(animated: true)
+    }
+
+    /// The explicit collapse (glide-up on the surface): an
+    /// R-1 dismissal — at the footer it suppresses the
+    /// footer's re-presentation until the scroll leaves.
+    private func collapseExplicit() {
+        guard exitProgress == 0 else { return }
+        expansionPolicy.userCollapsed()
+        syncProgress(animated: true)
+    }
+
+    /// Run the one progress value to the R-1 policy's current
+    /// verdict, with the morph's 380 ms cubic-bezier(0.32,
+    /// 0.72, 0, 1) (RB-03; Reduced Motion: the ≤150 ms
+    /// crossfade). The host learns the settled expanded state
+    /// for its §4.7 exit choreography.
+    private func syncProgress(animated: Bool) {
+        let target: Double = expansionPolicy.isExpanded ? 1 : 0
+        onExpansionChange?(expansionPolicy.isExpanded)
+        guard target != expansionProgress else { return }
+        if animated {
+            withAnimation(WearIveRunMorph.morphAnimation(reduceMotion: reduceMotion)) {
+                expansionProgress = target
+            }
         } else {
-            collapse()
-        }
-    }
-
-    /// Summon the expanded state: the tap driver spring runs
-    /// the one progress value 0 → 1 between the two rest
-    /// heights (Reduce Motion: the ≤150 ms crossfade).
-    private func expand() {
-        guard expansionProgress == 0, exitProgress == 0 else { return }
-        withAnimation(WearIveRunMorph.animation(
-            for: reduceMotion ? .reducedMotion : .tap
-        )) {
-            expansionProgress = 1
-        }
-    }
-
-    /// Dismiss to the mini state: the collapse driver runs the
-    /// progress back to 0; the surface stands exactly as it did
-    /// before the summon.
-    private func collapse() {
-        withAnimation(WearIveRunMorph.animation(
-            for: reduceMotion ? .reducedMotion : .collapse
-        )) {
-            expansionProgress = 0
+            expansionProgress = target
         }
     }
 }
