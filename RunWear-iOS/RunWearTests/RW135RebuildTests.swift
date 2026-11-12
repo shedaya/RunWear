@@ -322,6 +322,19 @@ final class RW135RebuildTests: XCTestCase {
 
     // MARK: - RB-04 · the room — MINI ≈49 pt, EXPANDED == content
 
+    private func miamiEntry() -> WearIveRunEntry {
+        WearIveRunEntry(
+            dayStart: Calendar.current.startOfDay(for: Date()),
+            placeName: "Miami, FL",
+            feelsLikeF: 82, actualF: 85, condition: "Clear sky",
+            itemNames: kcItems, itemKeys: kcItems.map { _ in "ITEM" },
+            heroImageReference: "", sessionID: "s-rw135")
+    }
+
+    private var miamiState: WearIveRunState {
+        .updated(payload: .placeAtMoment("Miami, FL", .now))
+    }
+
     @MainActor
     func testRB04_MiniRestHeight_MeasuredFootprint() throws {
         try registerGreatVibes()
@@ -338,35 +351,38 @@ final class RW135RebuildTests: XCTestCase {
         // method): the retained MINI form with a one-line
         // narration ("Updated to Miami, FL") measures ≈49 pt
         // tall — the brief's 47–52 band at natural size.
-        let miamiEntry = WearIveRunEntry(
-            dayStart: Calendar.current.startOfDay(for: Date()),
-            placeName: "Miami, FL",
-            feelsLikeF: 82, actualF: 85, condition: "Clear sky",
-            itemNames: kcItems, itemKeys: kcItems.map { _ in "ITEM" },
-            heroImageReference: "", sessionID: "s-rw135")
         let mini = WearIveRunMiniBarView(
-            state: .updated(payload: .placeAtMoment("Miami, FL", .now)),
-            entry: miamiEntry, formattedFeelsLike: "82°F",
+            state: miamiState,
+            entry: miamiEntry(), formattedFeelsLike: "82°F",
             cueCount: 0, onOpenCollection: {}, onTrash: {})
         let renderer = ImageRenderer(content: mini)
         renderer.scale = 3
         renderer.proposedSize = ProposedViewSize(width: 369, height: nil)
         let miniHeight = try XCTUnwrap(renderer.uiImage?.size.height, "MINI fitting render failed")
+        let probeDir = artefactsDirectory()
+        try FileManager.default.createDirectory(at: probeDir, withIntermediateDirectories: true)
+        try "RW135 RB-04 probe: miniBarFittingHeight=\(miniHeight)\n"
+            .write(to: probeDir.appendingPathComponent("RW135-rb04-minibar-probe.txt"),
+                   atomically: true, encoding: .utf8)
         XCTAssertGreaterThanOrEqual(miniHeight, 47,
                                     "MINI rest height \(miniHeight) is at the measured footprint's floor")
         XCTAssertLessThanOrEqual(miniHeight, 52,
                                  "MINI rest height \(miniHeight) ≈ 49 pt — no empty room (RB-04)")
+    }
 
+    @MainActor
+    func testRB04_OverlayRestHeight_MeasuredFootprint() throws {
+        try registerGreatVibes()
         // The container level: the production overlay at mini
-        // rest frames the surface at that same height (its
-        // seed endpoint IS DockResidence.measuredDockHeight
-        // until the surface's own rest read lands). Same
-        // one-line fixture: the KC narration wraps at this
-        // column width, and the wrapped growth is content
-        // (§4.3), not the footprint being measured here.
+        // rest frames the surface at the measured dock height
+        // (its seed endpoint IS DockResidence.measuredDockHeight
+        // until the surface's own rest read lands). One-line
+        // fixture: the KC narration wraps at this column
+        // width, and the wrapped growth is content (§4.3),
+        // not the footprint being measured here.
         let overlay = WearIveRunOverlayView(
-            state: .updated(payload: .placeAtMoment("Miami, FL", .now)),
-            entry: miamiEntry, formattedFeelsLike: "82°F",
+            state: miamiState,
+            entry: miamiEntry(), formattedFeelsLike: "82°F",
             cueCount: 0, viewportHeight: 852,
             onOpenCollection: {}, onTrash: {})
             .padding(.horizontal, 12)
@@ -375,6 +391,11 @@ final class RW135RebuildTests: XCTestCase {
         overlayRenderer.proposedSize = ProposedViewSize(width: 393, height: nil)
         let overlayHeight = try XCTUnwrap(overlayRenderer.uiImage?.size.height,
                                           "overlay fitting render failed")
+        let probeDir = artefactsDirectory()
+        try FileManager.default.createDirectory(at: probeDir, withIntermediateDirectories: true)
+        try "RW135 RB-04 probe: overlayFittingHeight=\(overlayHeight)\n"
+            .write(to: probeDir.appendingPathComponent("RW135-rb04-overlay-probe.txt"),
+                   atomically: true, encoding: .utf8)
         XCTAssertGreaterThanOrEqual(overlayHeight, 47)
         XCTAssertLessThanOrEqual(overlayHeight, 52,
                                  "the overlay's mini rest frame is the measured dock height, not the old ≈60")
