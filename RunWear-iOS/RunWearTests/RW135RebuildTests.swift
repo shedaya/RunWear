@@ -373,32 +373,76 @@ final class RW135RebuildTests: XCTestCase {
     @MainActor
     func testRB04_OverlayRestHeight_MeasuredFootprint() throws {
         try registerGreatVibes()
-        // The container level: the production overlay at mini
-        // rest frames the surface at the measured dock height
-        // (its seed endpoint IS DockResidence.measuredDockHeight
-        // until the surface's own rest read lands). One-line
-        // fixture: the KC narration wraps at this column
-        // width, and the wrapped growth is content (§4.3),
-        // not the footprint being measured here.
+        // The container level, measured the way the RW-169
+        // lane measures this surface: a SETTLED render on a
+        // FIXED canvas in the production placement — NOT a
+        // fitting-size render. (Run 3's probe proved why: the
+        // fitting-size pass feeds the surface degenerate
+        // widths during sizing, its geometry reads land
+        // polluted, and the returned height was 94.67 pt for
+        // a surface whose real rest height is 49 — the
+        // harness limitation RW-169 documented; in
+        // production the surface only ever renders at a real
+        // width.) The painted dock's span is then measured
+        // off the PNG's centre column: rows that differ from
+        // the page ground are the card (+ its soft shadow).
         let overlay = WearIveRunOverlayView(
             state: miamiState,
             entry: miamiEntry(), formattedFeelsLike: "82°F",
             cueCount: 0, viewportHeight: 852,
             onOpenCollection: {}, onTrash: {})
-            .padding(.horizontal, 12)
-        let overlayRenderer = ImageRenderer(content: overlay)
-        overlayRenderer.scale = 3
-        overlayRenderer.proposedSize = ProposedViewSize(width: 393, height: nil)
-        let overlayHeight = try XCTUnwrap(overlayRenderer.uiImage?.size.height,
-                                          "overlay fitting render failed")
+        let data = try writeRenderSettled(
+            ZStack {
+                AppTheme.background
+                VStack {
+                    Spacer()
+                    overlay.padding(.horizontal, 12)
+                }
+                .padding(.bottom, 14)
+            },
+            size: CGSize(width: 393, height: 852),
+            name: "RW135-rb04-overlay-probe.png")
+        let image = try XCTUnwrap(UIImage(data: data)?.cgImage, "overlay probe PNG undecodable")
+        let width = image.width, heightPx = image.height
+        let cfData = try XCTUnwrap(image.dataProvider?.data, "overlay probe pixels unreadable")
+        let bytes = cfData as Data
+        let bytesPerRow = image.bytesPerRow
+        func centrePixelRed(_ y: Int) -> Int {
+            let x = width / 2
+            let offset = y * bytesPerRow + x * 4
+            return Int(bytes[offset])
+        }
+        // The page ground, sampled well above the dock.
+        let ground = centrePixelRed(100)
+        var cardRows = 0
+        var y = heightPx - 1
+        var trailingGround = 0
+        while y >= 0 {
+            let differs = abs(centrePixelRed(y) - ground) > 5
+            if differs { cardRows += 1; trailingGround = 0 }
+            else {
+                trailingGround += 1
+                // Below the dock: the 14 pt bottom padding +
+                // shadow fringe of ground rows comes FIRST
+                // (scanning upward) — only stop once card rows
+                // have been seen and a sustained ground run
+                // follows above the card's top edge.
+                if cardRows > 0 && trailingGround > 12 { break }
+            }
+            y -= 1
+        }
+        // The span includes the card's soft shadow fringe
+        // (~4 pt); scale 2 → points = rows / 2.
+        let spanPoints = Double(cardRows) / 2.0
         let probeDir = artefactsDirectory()
         try FileManager.default.createDirectory(at: probeDir, withIntermediateDirectories: true)
-        try "RW135 RB-04 probe: overlayFittingHeight=\(overlayHeight)\n"
+        try "RW135 RB-04 probe: overlayPaintedSpanPoints=\(spanPoints) cardRows=\(cardRows)\n"
             .write(to: probeDir.appendingPathComponent("RW135-rb04-overlay-probe.txt"),
                    atomically: true, encoding: .utf8)
-        XCTAssertGreaterThanOrEqual(overlayHeight, 47)
-        XCTAssertLessThanOrEqual(overlayHeight, 52,
-                                 "the overlay's mini rest frame is the measured dock height, not the old ≈60")
+        XCTAssertGreaterThanOrEqual(spanPoints, 45,
+                                    "the overlay's painted MINI dock stands at the measured footprint (span \(spanPoints) pt incl. shadow)")
+        XCTAssertLessThanOrEqual(spanPoints, 58,
+                                 "the overlay's painted MINI dock is ≈49 pt of card, not the old ≈60 and not a polluted read (span \(spanPoints) pt incl. shadow)")
     }
 
     func testRB04_ExpandedHeight_EqualsContentFormula() {
