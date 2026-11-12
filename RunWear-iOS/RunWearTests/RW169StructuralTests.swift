@@ -799,43 +799,38 @@ private struct RW169CompositionView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            if scrollOffset > 0 {
-                // Mid-scroll: the natural-height page, offset —
-                // the hero has handed off (its chrome faded per
-                // HomeHandoffGeometry), the sheet's boundary is
-                // still on screen, rows pass under the dock.
-                page
-                    .offset(y: -scrollOffset)
-            } else {
-                page
+        // Hard-placed composition (loop-back round 3): every
+        // surface sits at an EXPLICIT offset from the canvas
+        // top — no stack distribution, no fixed frame around a
+        // taller child. Two rounds of renders proved why: a
+        // SwiftUI fixed frame CENTRES a taller child's content
+        // (the sheet's 1,250 pt of rows inside a short frame
+        // shifted the reserve/pill/header hundreds of points
+        // and broke every seat), and the stack page in this
+        // renderer collapsed the hero and dropped the dock —
+        // while the same hero and the same dock render exactly
+        // right as hard-placed siblings (diagA/B/C captures).
+        ZStack(alignment: .top) {
+            hero
+                .offset(y: -scrollOffset)
+            sheet
+                .offset(y: heroHeight - HomeHandoffGeometry.sheetOverlap - scrollOffset)
+            // The dock: unmoved by the page's scroll
+            // (production: the miniBarDock overlay host), seated
+            // by a spacer column exactly as the proven isolates
+            // seat it.
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                unified(dockProgress, state, entry)
+                    .frame(width: 369, height: dockHeight)
             }
-            // The dock: a bottom child of the screen stack,
-            // unmoved by the page's scroll (production: the
-            // miniBarDock overlay host).
-            unified(dockProgress, state, entry)
-                .frame(width: 369, height: dockHeight)
-                .padding(.horizontal, DockResidence.horizontalInset)
-                .padding(.bottom, DockResidence.bottomInset)
+            .padding(.horizontal, DockResidence.horizontalInset)
+            .padding(.bottom, DockResidence.bottomInset)
         }
         .background(AppTheme.background)
         .environment(\.colorScheme, .light)
-        .frame(width: 393, height: 852)
+        .frame(width: 393, height: 852, alignment: .top)
         .clipped()
-    }
-
-    private var page: some View {
-        VStack(spacing: 0) {
-            hero
-            if scrollOffset > 0 {
-                sheet
-                    .padding(.top, -HomeHandoffGeometry.sheetOverlap)
-            } else {
-                sheet
-                    .padding(.top, -HomeHandoffGeometry.sheetOverlap)
-                    .frame(maxHeight: .infinity)
-            }
-        }
     }
 
     private var hero: some View {
@@ -1108,7 +1103,7 @@ final class RW169LoopbackTests: XCTestCase {
             ZStack(alignment: .top) {
                 AppTheme.background
                 RW169SheetView(pillState: servingPill)
-                    .frame(width: 393, height: 280)
+                    .frame(width: 393)
                     .offset(y: 300)
                 Rectangle().fill(Color.red)
                     .frame(width: 393, height: 1).offset(y: 300)
@@ -1203,7 +1198,17 @@ final class RW169LoopbackTests: XCTestCase {
         // hero's head, the panel bottom-anchored standing at
         // exactly the cap height (480 − 116), framed as the
         // production overlay container frames it.
-        try writeRender(
+        // SETTLED render, and the surface constructed with the
+        // REAL viewport height (480): the production overlay
+        // container passes the screen's height, and the
+        // surface's cap arithmetic keys on it. (Rounds 1–2 of
+        // this capture passed the 852 pt helper by mistake, so
+        // the surface's own cap never bound inside it — its
+        // budget was 572 against a ~500 pt entry — which is
+        // why those renders showed the pre-fix overflow even
+        // after the production fix landed; diagD proved the
+        // fix with the correct height.)
+        try writeRenderSettled(
             ZStack {
                 LinearGradient(colors: [Color(hex: "7A6A53"), Color(hex: "2E2A24")],
                                startPoint: .top, endPoint: .bottom)
@@ -1214,7 +1219,14 @@ final class RW169LoopbackTests: XCTestCase {
                         .padding(.horizontal, 16).padding(.top, 10)
                     Spacer()
                 }
-                VStack { Spacer(); unifiedSurface(progress: 1, state: plannedState, entry: tallEntry)
+                VStack { Spacer()
+                    AnyView(WearIveRunUnifiedSurfaceView(
+                        state: plannedState, entry: tallEntry,
+                        formattedFeelsLike: "58°",
+                        cueCount: 0, viewportHeight: viewport,
+                        heroURLResolver: nil, expansionProgress: 1,
+                        onToggle: {}, onOpenCollection: {},
+                        onOpenShareEntry: nil, onTrash: {}))
                     .frame(width: 369, height: min(rests.expanded, cap)).clipped() }
                     .padding(.horizontal, 12).padding(.bottom, 14)
             },
