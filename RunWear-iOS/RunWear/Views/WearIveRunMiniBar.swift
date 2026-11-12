@@ -2485,7 +2485,7 @@ struct WearIveRunUnifiedSurfaceView: View {
     // narration grows the row (and the bar) by its own height
     // — growth is content, not room.
     static let miniTopPadding: CGFloat = 11
-    static let miniBottomPadding: CGFloat = 12
+    static let miniBottomPadding: CGFloat = 23
     static let miniRowHeight: CGFloat = 26
     /// EXPANDED paddings (RB-04): top 20 / sides 16 / bottom
     /// 12 — the A′ in-flow seat's 32 pt bottom padding (and
