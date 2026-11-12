@@ -32,7 +32,12 @@ jobs:
   test:
     name: Android unit tests
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # RW-169 (Nov 11, 2026): the baseline suite already consumed
+    # ~38 of the 45 minutes; the RW-169 lane's required new tests
+    # (morph/chrome/probe render classes) push the full gate past
+    # 45. Raised to 70 so the gate can complete; the increase is
+    # disclosed in the lane report.
+    timeout-minutes: 70
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -75,13 +80,8 @@ jobs:
             export RUNWEAR_FIXTURE_WRITE=1
             echo "RUNWEAR_FIXTURE_WRITE=1 (generation mode)"
           fi
-          # TEMPORARY (RW-169 lane diagnostic — restored before the
-          # lane's final full-gate run): targeted classes only.
-          ./gradlew :app:testDebugUnitTest \
-            --tests "com.runwear.app.weariverun.Rw169*" \
-            --tests "com.runwear.app.ui.screens.Rw169*" \
-            --tests "com.runwear.app.ui.screens.Rw152Morph*" \
-            --tests "com.runwear.app.ui.screens.Rw140*" \
+          ./gradlew :engine:testDebugUnitTest :shared:testDebugUnitTest \
+            :app:testDebugUnitTest :wear:testDebugUnitTest :app:assembleDebug \
             --stacktrace 2>&1 | tee "$RUNNER_TEMP/gradle.log"
           code=${PIPESTATUS[0]}
           if [ "$code" -ne 0 ]; then

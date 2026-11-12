@@ -660,12 +660,6 @@ fun HeroMainScreen(
             val frame = com.runwear.app.weariverun.ViewedFrame.of(entry)
             val nowMs = System.currentTimeMillis()
             val committedNow = wirStabilityGate.offer(frame, entry, nowMs)
-            println(
-                "RW169DBG offer feels=${frame.feelsLikeF} now=$nowMs " +
-                    "committedNow=${committedNow != null} " +
-                    "pending=${wirStabilityGate.pendingFrame?.feelsLikeF} " +
-                    "committed=${wirStabilityGate.committedFrame?.feelsLikeF}"
-            )
             if (committedNow != null) {
                 screenScope.launch {
                     wearIveRunStore.recordSettled(committedNow)
@@ -677,16 +671,9 @@ fun HeroMainScreen(
                     )
                     // Re-offer ONLY if this frame is still the
                     // pending one — a newer frame owns the gate now.
-                    println(
-                        "RW169DBG delayed job fired for feels=${frame.feelsLikeF} " +
-                            "pendingNow=${wirStabilityGate.pendingFrame?.feelsLikeF}"
-                    )
                     if (wirStabilityGate.pendingFrame == frame) {
                         val committed = wirStabilityGate.offer(
                             frame, entry, System.currentTimeMillis()
-                        )
-                        println(
-                            "RW169DBG delayed offer committed=${committed != null}"
                         )
                         if (committed != null) {
                             wearIveRunStore.recordSettled(committed)
@@ -1019,9 +1006,6 @@ fun HeroMainScreen(
                     uiState.temperatureUnit
                 )
             }
-            println(
-                "RW169DBG snapshot swap feels=${newSnapshot?.entry?.feelsLikeF}"
-            )
             val newLine = newSnapshot?.narration
             val oldLine = wirShownLine
             val oldEntry = wirPrevShownEntry
