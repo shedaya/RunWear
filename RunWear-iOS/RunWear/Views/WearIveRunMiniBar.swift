@@ -1025,6 +1025,15 @@ enum WearIveRunMorph {
         return 1
     }
 
+    // RW170-DISCRIM (scratch, never merge): the pre-fix
+    // two-placement dissolve windows.
+    static func miniNarrationOpacity(progress: Double) -> Double {
+        1 - smoothstep(0, 0.35, progress)
+    }
+    static func expandedNarrationOpacity(progress: Double) -> Double {
+        smoothstep(0.55, 1, progress)
+    }
+
     /// The expanded-only content's alpha over p in [0.45, 1]
     /// (the standing expanded-content window, under the name
     /// the unified surface uses).
@@ -2658,9 +2667,17 @@ struct WearIveRunUnifiedSurfaceView: View {
                 // opacity 1 throughout, so the legibility
                 // invariant holds by construction.
                 if let line = WearIveRunNarration.line(for: shownState) {
+                    // RW170-DISCRIM (scratch, never merge): TWO
+                    // placements with disjoint dissolve windows.
                     narrationView(line)
                         .frame(width: narrationWidth, alignment: .leading)
                         .offset(x: narrationX, y: narrationY)
+                        .opacity(WearIveRunMorph.miniNarrationOpacity(progress: p))
+                        .allowsHitTesting(false)
+                    narrationView(line)
+                        .frame(width: narrationWidth, alignment: .leading)
+                        .offset(x: narrationX, y: narrationY)
+                        .opacity(WearIveRunMorph.expandedNarrationOpacity(progress: p))
                         .allowsHitTesting(false)
                 }
                 // The entry region — the same row throughout,
