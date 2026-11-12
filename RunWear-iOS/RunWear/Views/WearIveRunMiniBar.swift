@@ -79,7 +79,8 @@ enum DockResidence {
     /// from this same residence. (The 80 pt constant that stood
     /// here priced 17 pt of empty band above the presented card
     /// at every scroll position — DIAGNOSIS Q1/Q4.)
-    static let scrollEndClearance: CGFloat = bottomInset + measuredDockHeight
+    // RW170-DISCRIM (scratch, never merge): constant oversized clearance.
+    static let scrollEndClearance: CGFloat = 80
 
     /// The clearance for a presented mini form of the given
     /// height: exactly its height plus the bottom lift.
