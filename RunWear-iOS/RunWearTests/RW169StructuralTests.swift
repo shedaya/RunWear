@@ -650,3 +650,611 @@ final class RW169StructuralTests: XCTestCase {
             name: "RW169-ios-topchrome-wide.png")
     }
 }
+
+// MARK: - RW-169 LOOP-BACK (Nov 12, 2026) — the conformance review's
+// missing-evidence set. The reviewer (work/conformance-review.md)
+// returned iOS FAIL (unproven-blocked): the pill appeared in ZERO
+// captures (D8/D9), the morph video was five crossfaded stills (D3),
+// the mid-scroll capture was a stand-in isolate (D7), the height
+// cap never bound, the §7G.3 probe artifact was never staged (D12),
+// and §8 checks 4/6 had no iOS evidence at all. This class produces
+// FULL-COMPOSITION renders — hero + sheet + straddle pill + dock
+// together, composed from the PRODUCTION components and the
+// PRODUCTION seats (HeroImageView with pillState .hidden +
+// lookFailed from the one PersonalCellPresentation, as Home passes
+// it; HeroChromeOverlayView; the sheet container's exact overlay +
+// StraddleSeatGuide seat; WearIveRunUnifiedSurfaceView as the
+// dock) — plus dense non-crossfaded morph samples, a binding-cap
+// composition, and trace artifacts for the probes. The hero
+// PHOTOGRAPH is a stand-in (gradient + the production temperature
+// tint HeroImageView paints for an empty fallback URL): the
+// harness has no photo asset for the fixture cell, and no claim
+// here depends on the photograph itself.
+
+private struct RW169CompositionView: View {
+    /// The ONE agreed per-cell value (D9): every surface below
+    /// derives from it and nothing else.
+    let presentation: PersonalCellPresentation
+    /// The straddle pill's state — resolved exactly as Home
+    /// resolves it: under FAILED the pill is .hidden (it carries
+    /// no making/serving claim); otherwise HeroPill's value.
+    let pillState: HeroPillState
+    let dockProgress: Double
+    let dockHeight: CGFloat
+    /// Simulated scroll offset of the page column (the production
+    /// page is a ScrollView; a static offset is the harness form
+    /// of a mid-scroll position, labelled as such).
+    var scrollOffset: CGFloat = 0
+    let entry: WearIveRunEntry
+    let state: WearIveRunState
+    let unified: (Double, WearIveRunState, WearIveRunEntry) -> AnyView
+
+    private var heroHeight: CGFloat {
+        HeroHeightPolicy.stackedHeight(viewportHeight: 852)
+    }
+
+    var body: some View {
+        ZStack {
+            AppTheme.background
+            // The page column: hero, then the sheet overlapping
+            // its foot by the production 28 pt, exactly as
+            // WeatherOutfitView's stacked layout composes them.
+            VStack(spacing: 0) {
+                hero
+                sheet
+            }
+            .offset(y: -scrollOffset)
+            // The dock: fixed overlay at the bottom inset,
+            // unmoved by the page's scroll (production: the
+            // miniBarDock overlay host).
+            VStack {
+                Spacer()
+                unified(dockProgress, state, entry)
+                    .frame(width: 369, height: dockHeight)
+            }
+            .padding(.horizontal, DockResidence.horizontalInset)
+            .padding(.bottom, DockResidence.bottomInset)
+        }
+        .frame(width: 393, height: 852)
+        .clipped()
+    }
+
+    private var hero: some View {
+        ZStack {
+            // Photograph stand-in: a warm gradient under the
+            // production tint layer HeroImageView itself paints.
+            LinearGradient(
+                colors: [Color(hex: "7A6A53"), Color(hex: "2E2A24")],
+                startPoint: .top, endPoint: .bottom)
+            HeroImageView(
+                locationName: "Overland Park, KS",
+                temperature: 58, actualTemperature: 62,
+                weatherCondition: .clear,
+                date: Date(timeIntervalSince1970: 1_763_568_000),
+                hour: 9, tempBracket: .MILD,
+                fallbackImageUrl: "", aiImageUrl: nil,
+                pillState: .hidden,
+                lookFailed: presentation == .failed,
+                heroHeightOverride: heroHeight,
+                showsTopControls: false)
+            HeroChromeOverlayView(
+                placeName: "Overland Park, KS",
+                dateText: "Wed, Nov 12", timeText: "Now", isNow: true,
+                formattedFeelsLike: "58°", formattedActual: "Actual 62°",
+                feelsLikeF: 58,
+                topLuminance: 0.5, chipLuminance: 0.5, footLuminance: 0.5,
+                onPlaceTapped: {}, onSettingsTapped: {}, onShareTapped: {},
+                onDateTapped: {}, onTimeTapped: {}, onNowTapped: {},
+                windMph: 11, rainPercent: 10, humidityPercent: 44, uvIndex: 3,
+                weatherLuminance: 0.5,
+                pillHeight: HeroPillMetrics.height(for: pillState),
+                pillBottomOffset: HeroVerticalLayout.straddleDip)
+                .opacity(scrollOffset > 0
+                    ? Double(HomeHandoffGeometry.chromeOpacity(
+                        progress: HomeHandoffGeometry.progress(forScrollOffset: scrollOffset)))
+                    : 1)
+        }
+        .frame(height: heroHeight)
+        .scaleEffect(scrollOffset > 0
+            ? HomeHandoffGeometry.scale(
+                progress: HomeHandoffGeometry.progress(forScrollOffset: scrollOffset))
+            : 1)
+        .clipped()
+    }
+
+    private var sheet: some View {
+        VStack(spacing: 0) {
+            // The straddle reserve (production sheetContainer):
+            // while a pill renders, the sheet's first content
+            // starts below the pill's dip with a 12 pt gap.
+            Color.clear
+                .frame(height: pillState != .hidden
+                    ? HeroVerticalLayout.sheetTopReserveWithPill
+                    : HeroVerticalLayout.sheetTopReserveNoPill)
+            VStack(alignment: .leading, spacing: 0) {
+                Text("4 items for your run")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(AppTheme.inkPrimary)
+                ForEach(["Running Cap", "Short Sleeve Shirt",
+                         "Running Shorts (5-7\")", "Sunglasses"], id: \.self) { item in
+                    HStack(spacing: 12) {
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(AppTheme.cardOnSheet)
+                            .frame(width: 56, height: 56)
+                        Text(item)
+                            .font(.system(size: 15))
+                            .foregroundColor(AppTheme.inkPrimary)
+                        Spacer()
+                    }
+                    .padding(.top, 12)
+                }
+                // The day chart's label row (D7 names it: the
+                // dock must never occlude it at scroll rest, and
+                // mid-scroll it passes above the dock's band).
+                HStack {
+                    Text("Today").font(.system(size: 13, weight: .semibold))
+                    Spacer()
+                    Text("Now").font(.system(size: 13, weight: .semibold))
+                }
+                .foregroundColor(AppTheme.inkSecondary)
+                .padding(.top, 28)
+                HStack(alignment: .bottom, spacing: 6) {
+                    ForEach([0.3, 0.45, 0.6, 0.8, 1.0, 0.85, 0.65, 0.5], id: \.self) { f in
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(AppTheme.pinePayload.opacity(0.55))
+                            .frame(width: 30, height: 54 * f)
+                    }
+                }
+                .padding(.top, 8)
+                // The detailed weather rows — enough of them that
+                // at the mid-scroll offset they pass BENEATH the
+                // still, translucent dock (the D7 state).
+                ForEach(["Humidity|44%", "UV Index|3 of 11", "Wind|11 mph",
+                         "Rain|10%", "Dew Point|41°", "Pressure|30.1 in",
+                         "Visibility|10 mi", "Sunrise|6:58 AM", "Sunset|5:12 PM",
+                         "Moon|Waxing", "AQI|32 Good", "Pollen|Low"], id: \.self) { pair in
+                    let parts = pair.split(separator: "|")
+                    HStack {
+                        Text(parts[0]).font(.system(size: 15))
+                        Spacer()
+                        Text(parts[1]).font(.system(size: 15, weight: .semibold))
+                    }
+                    .foregroundColor(AppTheme.inkPrimary)
+                    .padding(.vertical, 13)
+                    Divider()
+                }
+                Text("Pro tip: the light is best in the first hour.")
+                    .font(.system(size: 14))
+                    .foregroundColor(AppTheme.inkSecondary)
+                    .padding(.top, 20)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 16)
+        }
+        .frame(maxWidth: .infinity)
+        .background {
+            UnevenRoundedRectangle(cornerRadii: RectangleCornerRadii(
+                topLeading: HomeHandoffGeometry.sheetCornerRadius,
+                topTrailing: HomeHandoffGeometry.sheetCornerRadius))
+                .fill(AppTheme.sheet)
+        }
+        .padding(.top, -HomeHandoffGeometry.sheetOverlap)
+        // The straddle pill, seated EXACTLY as production seats
+        // it: an overlay on the sheet container's top edge, its
+        // top alignment guide fed by its own measured height
+        // (RW-169 §7D, StraddleSeatGuide) — never an offset from
+        // planning heights.
+        .overlay(alignment: .top) {
+            if pillState != .hidden {
+                HeroPillView(
+                    pillState: pillState, seat: .straddle,
+                    onPillGetUnlimited: {})
+                    .alignmentGuide(.top) { dimensions in
+                        StraddleSeatGuide.topGuideValue(
+                            measuredPillHeight: dimensions.height)
+                    }
+            }
+        }
+    }
+}
+
+final class RW169LoopbackTests: XCTestCase {
+
+    // MARK: - Harness plumbing (mirrors RW169StructuralTests)
+
+    private func artefactsDirectory() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../render-artefacts", isDirectory: true)
+            .standardizedFileURL
+    }
+
+    @MainActor
+    private func writeRender<Content: View>(_ content: Content, size: CGSize, name: String) throws {
+        let renderer = ImageRenderer(content: content.frame(width: size.width, height: size.height))
+        renderer.scale = 2
+        let image = try XCTUnwrap(renderer.uiImage, "render failed for \(name)")
+        let dir = artefactsDirectory()
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let data = try XCTUnwrap(image.pngData(), "PNG encoding failed for \(name)")
+        try data.write(to: dir.appendingPathComponent(name))
+        print("RW169LB-CAPTURE wrote \(name)")
+    }
+
+    private func writeTextArtefact(_ text: String, name: String) throws {
+        let dir = artefactsDirectory()
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try text.write(to: dir.appendingPathComponent(name), atomically: true, encoding: .utf8)
+        print("RW169LB-CAPTURE wrote \(name)")
+    }
+
+    private func registerGreatVibes() throws {
+        let url = try XCTUnwrap(
+            Bundle(for: RW169LoopbackTests.self)
+                .url(forResource: "GreatVibes-Regular", withExtension: "ttf"),
+            "GreatVibes-Regular.ttf is not in the test bundle")
+        var error: Unmanaged<CFError>?
+        _ = CTFontManagerRegisterFontsForURL(url as CFURL, .process, &error)
+    }
+
+    private func textWidth(_ text: String, font: UIFont) -> CGFloat {
+        (text as NSString).size(withAttributes: [.font: font]).width
+    }
+
+    private func measuredTextHeight(_ text: String, font: UIFont, width: CGFloat) -> CGFloat {
+        let rect = (text as NSString).boundingRect(
+            with: CGSize(width: width, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: [.font: font], context: nil)
+        return ceil(rect.height)
+    }
+
+    // MARK: - Fixtures (the approval fixtures, as the builder's)
+
+    private var fixtureDay: Date {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "America/New_York")!
+        return cal.date(from: DateComponents(year: 2026, month: 11, day: 12, hour: 9))!
+    }
+
+    private var fixtureItems: [String] {
+        ["Running Cap", "Short Sleeve Shirt", "Running Shorts (5-7\")", "Sunglasses"]
+    }
+
+    private func fixtureEntry(place: String, items: [String]? = nil) -> WearIveRunEntry {
+        let items = items ?? fixtureItems
+        return WearIveRunEntry(
+            dayStart: fixtureDay, placeName: place,
+            feelsLikeF: 58, actualF: 62, condition: "Clear sky",
+            itemNames: items,
+            itemKeys: items.map { _ in "ITEM" },
+            heroImageReference: "", sessionID: "s-rw169")
+    }
+
+    private var plannedState: WearIveRunState {
+        .planned(place: "Los Angeles, CA", dayLabel: "Tomorrow", moment: .now)
+    }
+
+    private func unifiedSurface(
+        progress: Double, state: WearIveRunState, entry: WearIveRunEntry
+    ) -> AnyView {
+        AnyView(WearIveRunUnifiedSurfaceView(
+            state: state, entry: entry, formattedFeelsLike: "58°",
+            cueCount: 0, viewportHeight: 852,
+            heroURLResolver: nil, expansionProgress: progress,
+            onToggle: {}, onOpenCollection: {}, onOpenShareEntry: nil, onTrash: {}))
+    }
+
+    /// Production rest heights for the fixture at 369 pt, via
+    /// the same formulas the builder's captures used.
+    private func fixtureRestHeights(surfaceWidth: CGFloat, entry: WearIveRunEntry) throws -> (mini: CGFloat, expanded: CGFloat) {
+        try registerGreatVibes()
+        let wordmarkW = textWidth(
+            WearIveRunMiniBarModel.wordmark,
+            font: try XCTUnwrap(UIFont(name: "GreatVibes-Regular", size: 17)))
+        let line = try XCTUnwrap(WearIveRunNarration.line(for: plannedState))
+        let miniColumn = surfaceWidth - 32 - (wordmarkW + 8) - 96
+        let miniNarrH = measuredTextHeight(line, font: .systemFont(ofSize: 12), width: miniColumn)
+        let mini = max(16 + max(44, miniNarrH), 26 + miniNarrH)
+        let expNarrH = measuredTextHeight(line, font: .systemFont(ofSize: 15), width: surfaceWidth - 32)
+        let entryLine = WearIveRunNarration.expandedLine(for: entry, formattedFeelsLike: "58°")
+        let entryH = measuredTextHeight(entryLine, font: .systemFont(ofSize: 14.5), width: surfaceWidth - 32 - 56 - 10)
+        let expanded = 20 + 44 + 12 + expNarrH + 12 + entryH + 12 + 24 + 20
+        return (mini, expanded)
+    }
+
+    private func composition(
+        presentation: PersonalCellPresentation,
+        pillState: HeroPillState,
+        dockProgress: Double, dockHeight: CGFloat,
+        scrollOffset: CGFloat = 0,
+        entry: WearIveRunEntry
+    ) -> RW169CompositionView {
+        RW169CompositionView(
+            presentation: presentation, pillState: pillState,
+            dockProgress: dockProgress, dockHeight: dockHeight,
+            scrollOffset: scrollOffset, entry: entry, state: plannedState,
+            unified: { [self] p, s, e in unifiedSurface(progress: p, state: s, entry: e) })
+    }
+
+    // MARK: - 1 · Full compositions (D8/D9) + 3 · mid-scroll (D7)
+
+    @MainActor
+    func testRW169LB_Captures_FullCompositions() throws {
+        try registerGreatVibes()
+        let entry = fixtureEntry(place: "Los Angeles, CA")
+        let rests = try fixtureRestHeights(surfaceWidth: 369, entry: entry)
+
+        // The agreed values, resolved through the PRODUCTION
+        // resolver from cell facts — the same single value every
+        // surface in the composition reads (D9).
+        let serving = PersonalCellPresentation.resolve(
+            lookState: .ready,
+            pillState: HeroPill.resolve(
+                optedIn: true, lookState: .ready, personalPhotoDisplayed: true,
+                isSubscribed: false, freeGenerationsUsed: 3, freeAllowance: 10))
+        XCTAssertEqual(serving, .serving)
+        let servingPill = HeroPill.resolve(
+            optedIn: true, lookState: .ready, personalPhotoDisplayed: true,
+            isSubscribed: false, freeGenerationsUsed: 3, freeAllowance: 10)
+        XCTAssertEqual(servingPill, .freeLook(used: 3, allowance: 10))
+
+        // (a) Pill seated whole at the hero/sheet boundary, mini
+        // dock at rest — the full screen as the user sees it.
+        try writeRender(
+            composition(presentation: serving, pillState: servingPill,
+                        dockProgress: 0, dockHeight: rests.mini, entry: entry),
+            size: CGSize(width: 393, height: 852),
+            name: "RW169-ios-fullcomp-pill-mini-rest-phone.png")
+
+        // (b)+(D7) Mid-scroll: the page column offset 260 pt —
+        // the hero chrome has handed off (production fade), the
+        // pill still sits whole on the hero/sheet boundary (the
+        // boundary is still on screen), weather rows pass
+        // beneath the still, translucent mini dock, and the
+        // outfit cards + chart label row stand clear above it.
+        try writeRender(
+            composition(presentation: serving, pillState: servingPill,
+                        dockProgress: 0, dockHeight: rests.mini,
+                        scrollOffset: 260, entry: entry),
+            size: CGSize(width: 393, height: 852),
+            name: "RW169-ios-fullcomp-pill-midscroll-phone.png")
+
+        // (c) The Wear I've Run panel EXPANDED over the same
+        // composition — pill whole at the boundary above it.
+        try writeRender(
+            composition(presentation: serving, pillState: servingPill,
+                        dockProgress: 1, dockHeight: rests.expanded, entry: entry),
+            size: CGSize(width: 393, height: 852),
+            name: "RW169-ios-fullcomp-pill-expanded-phone.png")
+
+        // (e) MAKING: one cell, one state — the straddle pill
+        // carries "Making this you… / Get it instantly next
+        // time"; the hero carries NO failure wording; the
+        // agreed value is .making.
+        let making = PersonalCellPresentation.resolve(
+            lookState: .making,
+            pillState: HeroPill.resolve(
+                optedIn: true, lookState: .making, personalPhotoDisplayed: false,
+                isSubscribed: false, freeGenerationsUsed: 3, freeAllowance: 10))
+        XCTAssertEqual(making, .making)
+        let makingPill = HeroPill.resolve(
+            optedIn: true, lookState: .making, personalPhotoDisplayed: false,
+            isSubscribed: false, freeGenerationsUsed: 3, freeAllowance: 10)
+        XCTAssertEqual(makingPill, .makingWithUpsell)
+        try writeRender(
+            composition(presentation: making, pillState: makingPill,
+                        dockProgress: 0, dockHeight: rests.mini, entry: entry),
+            size: CGSize(width: 393, height: 852),
+            name: "RW169-ios-fullcomp-state-making-phone.png")
+
+        // (d) FAILED: the agreed value is .failed even though a
+        // pill derivation, taken alone, would say MAKING — the
+        // D9 contradiction of build 29. In the composition the
+        // straddle pill is HIDDEN (production heroPillState
+        // rule), the hero carries the failure wording in the
+        // pill's eye line (production HeroImageView seat), and
+        // nothing anywhere claims MAKING.
+        let failed = PersonalCellPresentation.resolve(
+            lookState: .failed(reason: .error), pillState: .makingWithUpsell)
+        XCTAssertEqual(failed, .failed,
+                       "FAILED outranks any pill derivation — one cell, one state (D9)")
+        try writeRender(
+            composition(presentation: failed, pillState: .hidden,
+                        dockProgress: 0, dockHeight: rests.mini, entry: entry),
+            size: CGSize(width: 393, height: 852),
+            name: "RW169-ios-fullcomp-state-failed-phone.png")
+    }
+
+    // MARK: - 2 · Dense morph sampling (D3) — no crossfade
+
+    @MainActor
+    func testRW169LB_Captures_MorphDenseSamples() throws {
+        try registerGreatVibes()
+        let entry = fixtureEntry(place: "Los Angeles, CA")
+        let rests = try fixtureRestHeights(surfaceWidth: 369, entry: entry)
+        // Seventeen individually rendered samples, p = 0, 1/16,
+        // …, 1 — each its own ImageRenderer pass of the unified
+        // surface at that progress, heights interpolated between
+        // the two REST heights (the production container's law).
+        // Assembled downstream WITHOUT blending (hard cuts), so
+        // no frame double-exposes two forms by construction.
+        for i in 0...16 {
+            let p = Double(i) / 16.0
+            XCTAssertEqual(WearIveRunMorphProbe.legibleNarrationCount(progress: p), 1,
+                           "p=\(p): exactly one legible narration")
+            let h = rests.mini + (rests.expanded - rests.mini) * CGFloat(p)
+            try writeRender(
+                ZStack {
+                    AppTheme.background
+                    VStack { Spacer(); unifiedSurface(progress: p, state: plannedState, entry: entry)
+                        .frame(width: 369, height: h) }
+                        .padding(.horizontal, 12).padding(.bottom, 14)
+                },
+                size: CGSize(width: 393, height: 400),
+                name: String(format: "RW169-ios-morphdense-p%03d-phone.png", Int(p * 1000)))
+        }
+    }
+
+    // MARK: - 4 · The height cap, binding
+
+    @MainActor
+    func testRW169LB_Captures_HeightCapBinding() throws {
+        try registerGreatVibes()
+        // Content far taller than the cap: a 24-item kit whose
+        // entry line wraps to many lines at the panel's column.
+        let tallItems = (1...24).map { "Item \($0) Long Garment Name" }
+        let tallEntry = fixtureEntry(place: "Los Angeles, CA", items: tallItems)
+        let rests = try fixtureRestHeights(surfaceWidth: 369, entry: tallEntry)
+        let viewport: CGFloat = 480
+        let cap = WearIveRunOverlayPolicy.expandedCap(viewportHeight: viewport)
+        XCTAssertEqual(cap, 364, accuracy: 0.001)
+        XCTAssertGreaterThan(rests.expanded, cap,
+                             "fixture check: the tall content's rest height (\(rests.expanded)) exceeds the cap (\(cap)) — the cap BINDS here, unlike the round-1 capture")
+        XCTAssertTrue(WearIveRunOverlayPolicy.entryRegionScrolls(
+            contentHeight: rests.expanded, viewportHeight: viewport),
+            "the policy's own verdict: the entry region must scroll internally at this viewport")
+        XCTAssertEqual(WearIveRunOverlayPolicy.panelHeight(
+            contentHeight: rests.expanded, viewportHeight: viewport), cap, accuracy: 0.001,
+            "the panel stands AT the cap — never over the hero's top chrome zone (116 pt)")
+
+        var probe = "RW-169 iOS LOOP-BACK — height-cap probe (harness, ImageRenderer)\n"
+        probe += "viewport=\(viewport) cap=\(cap) topChromeZone=\(WearIveRunOverlayPolicy.topChromeZoneHeight)\n"
+        probe += "tall entry: 24 items; fixture expanded rest height=\(rests.expanded) (> cap, binds)\n"
+        probe += "entryRegionScrolls=\(WearIveRunOverlayPolicy.entryRegionScrolls(contentHeight: rests.expanded, viewportHeight: viewport))\n"
+        probe += "entryRegionMaxHeight=\(WearIveRunOverlayPolicy.entryRegionMaxHeight(viewportHeight: viewport))\n"
+        probe += "panelHeight=\(WearIveRunOverlayPolicy.panelHeight(contentHeight: rests.expanded, viewportHeight: viewport))\n"
+        try writeTextArtefact(probe, name: "RW169-ios-heightcap-probe.txt")
+
+        // The composition at the binding cap: top chrome at the
+        // hero's head, the panel bottom-anchored standing at
+        // exactly the cap height (480 − 116), framed as the
+        // production overlay container frames it.
+        try writeRender(
+            ZStack {
+                LinearGradient(colors: [Color(hex: "7A6A53"), Color(hex: "2E2A24")],
+                               startPoint: .top, endPoint: .bottom)
+                VStack {
+                    HeroTopChromeView(
+                        placeName: "Overland Park, KS", luminance: 0.5,
+                        onPlaceTapped: {}, onSettingsTapped: {}, onShareTapped: {})
+                        .padding(.horizontal, 16).padding(.top, 10)
+                    Spacer()
+                }
+                VStack { Spacer(); unifiedSurface(progress: 1, state: plannedState, entry: tallEntry)
+                    .frame(width: 369, height: min(rests.expanded, cap)).clipped() }
+                    .padding(.horizontal, 12).padding(.bottom, 14)
+            },
+            size: CGSize(width: 393, height: 480),
+            name: "RW169-ios-expanded-capbinding-phone.png")
+    }
+
+    // MARK: - 5 · The §7G.3 settle probe, with a staged trace (D12)
+
+    func testRW169LB_SettleProbe_StagedTrace() throws {
+        var gate = WearIveRunSettleGate()
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        let a = WearIveRunEntry(
+            dayStart: fixtureDay, placeName: "Overland Park, KS",
+            feelsLikeF: 58, actualF: 62, condition: "Clear sky",
+            itemNames: fixtureItems, itemKeys: ["CAP", "SHORT_SLEEVE", "SHORTS", "SUNGLASSES"],
+            heroImageReference: "personal-a", sessionID: "s-rw169")
+        let snapshotA = WearIveRunPresentedSnapshot(
+            entry: a,
+            state: WearIveRunMiniBarModel.state(
+                todaysEntry: a, moment: a.momentReading, wasUpdatedThisSession: false),
+            formattedFeelsLike: "58°")
+        let lineA = WearIveRunNarration.expandedLine(for: a, formattedFeelsLike: "58°")
+        let b = WearIveRunEntry(
+            dayStart: fixtureDay, placeName: "Kansas City, KS",
+            feelsLikeF: 57, actualF: 61, condition: "Light rain",
+            itemNames: ["Rain Jacket", "Running Tights"],
+            itemKeys: ["RAIN_JACKET", "TIGHTS"],
+            heroImageReference: "personal-b", sessionID: "s-rw169")
+
+        var trace = "RW-169 iOS LOOP-BACK — §7G.3 settle probe trace (WearIveRunSettleGate, harness)\n"
+        trace += "t0: footer OPEN on presented snapshot A (place=\(a.placeName), items=\(a.itemNames.count), hero=\(a.heroImageReference))\n"
+        trace += "t0: rendered entry line A = \"\(lineA)\"\n"
+        gate.offer(b, at: t0)
+        trace += "t0: forced re-settle offered (place=\(b.placeName), items=\(b.itemNames.count), hero=\(b.heroImageReference), feelsLike=\(b.feelsLikeF))\n"
+        let parked = gate.stableCandidate(at: t0.addingTimeInterval(1.0))
+        XCTAssertNil(parked, "inside the ≈2 s window the re-settle parks — nothing commits")
+        trace += "t0+1.0s: stableCandidate=nil (parked); presented entry still A; entry line byte-identical: \(WearIveRunNarration.expandedLine(for: snapshotA.entry, formattedFeelsLike: "58°") == lineA)\n"
+        XCTAssertEqual(snapshotA.entry, a)
+        XCTAssertEqual(
+            WearIveRunNarration.expandedLine(for: snapshotA.entry, formattedFeelsLike: "58°"), lineA,
+            "while the re-settle parks, the visible entry is byte-identical (§7G.3)")
+        let committed = gate.stableCandidate(at: t0.addingTimeInterval(2.0))
+        XCTAssertEqual(committed, b, "at the window's end the flip is atomic — the whole frame at once")
+        trace += "t0+2.0s: stableCandidate=B — atomic flip (place, kit, weather, hero together; no piecemeal intermediate was ever presented)\n"
+        trace += "RESULT: PASS — parked byte-identical inside the window, single-step atomic landing at its end.\n"
+        print(trace)
+        try writeTextArtefact(trace, name: "RW169-ios-settle-probe.txt")
+    }
+
+    // MARK: - 6 · §8 check 4 (flick speed), harness-grade
+
+    func testRW169LB_S8Check4_FlickSpeedProbe_HarnessGrade() throws {
+        // HARNESS-GRADE ONLY (§8 check 4 is a device-frame
+        // check; this probe does not close it). A flick traverses
+        // the morph in a few large steps: at every coarse step
+        // the single-hierarchy invariants hold — one legible
+        // narration, the wordmark at its interpolated rest
+        // width, the container height the rest-height
+        // interpolation. The dense rendered samples are in
+        // testRW169LB_Captures_MorphDenseSamples.
+        var trace = "RW-169 iOS LOOP-BACK — §8 check 4 flick-speed probe (HARNESS-GRADE; device check remains UNPROVEN)\n"
+        let miniW = 96.0, expW = 176.0
+        for p in [0.0, 0.34, 0.67, 1.0] {
+            XCTAssertEqual(WearIveRunMorphProbe.legibleNarrationCount(progress: p), 1)
+            let w = WearIveRunMorphProbe.wordmarkWidth(progress: p, miniRestWidth: miniW, expandedRestWidth: expW)
+            XCTAssertGreaterThanOrEqual(w, miniW)
+            let h = WearIveRunMorphProbe.containerHeight(miniRest: 60, expandedRest: 264, progress: p)
+            XCTAssertEqual(h, 60 + (264 - 60) * p, accuracy: 0.001)
+            trace += "flick step p=\(p): legibleNarrations=1 wordmarkWidth=\(w) containerHeight=\(h)\n"
+        }
+        trace += "RESULT: invariants hold at flick-coarse steps; the device-frame check itself is NOT closed by this probe.\n"
+        print(trace)
+        try writeTextArtefact(trace, name: "RW169-ios-s8-check4-flick-probe.txt")
+    }
+
+    // MARK: - 6 · §8 check 6 (delete anchoring), harness-grade
+
+    func testRW169LB_S8Check6_DeleteAnchoringProbe_HarnessGrade() throws {
+        // HARNESS-GRADE ONLY (§8 check 6 is a device-frame
+        // check; this probe does not close it). The model-level
+        // anchoring invariant a delete-at-end relies on:
+        // removing the LAST entry leaves every earlier entry
+        // byte-identical and in place (the content above the
+        // deletion point does not move or rewrite).
+        let defaults = UserDefaults(suiteName: "rw169lb-\(UUID().uuidString)")!
+        let store = WearIveRunStore(defaults: defaults)
+        var entries: [WearIveRunEntry] = []
+        for i in 0..<5 {
+            let day = Calendar(identifier: .gregorian).date(
+                byAdding: .day, value: -i, to: fixtureDay)!
+            let e = WearIveRunEntry(
+                dayStart: day, placeName: "Place \(i)",
+                feelsLikeF: 50 + i, actualF: 55 + i, condition: "Clear sky",
+                itemNames: fixtureItems, itemKeys: ["CAP", "SHORT_SLEEVE", "SHORTS", "SUNGLASSES"],
+                heroImageReference: "h\(i)", sessionID: "s-\(i)")
+            entries.append(e)
+            store.record(e)
+        }
+        let before = store.entries
+        XCTAssertEqual(before.count, 5)
+        let lastID = try XCTUnwrap(before.last?.id)
+        store.remove(id: lastID)
+        let after = store.entries
+        XCTAssertEqual(after.count, 4)
+        XCTAssertEqual(after, Array(before.dropLast()),
+                       "delete-at-end: the surviving entries are byte-identical, in order — nothing above the deletion point moved")
+        var trace = "RW-169 iOS LOOP-BACK — §8 check 6 delete-anchoring probe (HARNESS-GRADE, model level; device check remains UNPROVEN)\n"
+        trace += "recorded 5 entries; removed the list-end entry (\(lastID))\n"
+        trace += "survivors byte-identical & order-preserved: \(after == Array(before.dropLast()))\n"
+        trace += "NOTE: no scroll-anchoring mechanism (ScrollViewReader / scrollPosition) exists in the iOS collection or home code — the on-screen anchoring behaviour at delete-at-end can only be evidenced on device.\n"
+        trace += "RESULT: model invariant holds; the device-frame check itself is NOT closed by this probe.\n"
+        print(trace)
+        try writeTextArtefact(trace, name: "RW169-ios-s8-check6-delete-probe.txt")
+    }
+}
