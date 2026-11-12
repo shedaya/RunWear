@@ -384,8 +384,15 @@ final class RW135RebuildTests: XCTestCase {
         // harness limitation RW-169 documented; in
         // production the surface only ever renders at a real
         // width.) The painted dock's span is then measured
-        // off the PNG's centre column: rows that differ from
-        // the page ground are the card (+ its soft shadow).
+        // off the PNG's centre column. The backdrop is a
+        // SOLID DARK ground: in production the dock always
+        // stands over the hero photo, never over the plain
+        // page — and over the cream page the light material
+        // sits within a few code points of the ground in
+        // every channel (run 4's probe read a 14.5 pt span
+        // on a visually perfect 49 pt dock, because only the
+        // text and shadow rows separate there). Over the
+        // dark ground the light card differs by ~200.
         let overlay = WearIveRunOverlayView(
             state: miamiState,
             entry: miamiEntry(), formattedFeelsLike: "82°F",
@@ -393,7 +400,7 @@ final class RW135RebuildTests: XCTestCase {
             onOpenCollection: {}, onTrash: {})
         let data = try writeRenderSettled(
             ZStack {
-                AppTheme.background
+                Color(hex: "2E2A24")
                 VStack {
                     Spacer()
                     overlay.padding(.horizontal, 12)
@@ -407,32 +414,36 @@ final class RW135RebuildTests: XCTestCase {
         let cfData = try XCTUnwrap(image.dataProvider?.data, "overlay probe pixels unreadable")
         let bytes = cfData as Data
         let bytesPerRow = image.bytesPerRow
-        func centrePixelRed(_ y: Int) -> Int {
+        func centrePixel(_ y: Int) -> (Int, Int, Int) {
             let x = width / 2
             let offset = y * bytesPerRow + x * 4
-            return Int(bytes[offset])
+            return (Int(bytes[offset]), Int(bytes[offset + 1]), Int(bytes[offset + 2]))
         }
-        // The page ground, sampled well above the dock.
-        let ground = centrePixelRed(100)
+        // The backdrop ground, sampled well above the dock.
+        let ground = centrePixel(100)
+        func differsFromGround(_ y: Int) -> Bool {
+            let px = centrePixel(y)
+            return max(abs(px.0 - ground.0), abs(px.1 - ground.1), abs(px.2 - ground.2)) > 8
+        }
         var cardRows = 0
         var y = heightPx - 1
         var trailingGround = 0
         while y >= 0 {
-            let differs = abs(centrePixelRed(y) - ground) > 5
-            if differs { cardRows += 1; trailingGround = 0 }
+            if differsFromGround(y) { cardRows += 1; trailingGround = 0 }
             else {
                 trailingGround += 1
-                // Below the dock: the 14 pt bottom padding +
-                // shadow fringe of ground rows comes FIRST
-                // (scanning upward) — only stop once card rows
-                // have been seen and a sustained ground run
-                // follows above the card's top edge.
+                // Below the dock: the 14 pt bottom padding of
+                // ground rows comes FIRST (scanning upward) —
+                // only stop once card rows have been seen and
+                // a sustained ground run follows above the
+                // card's top edge.
                 if cardRows > 0 && trailingGround > 12 { break }
             }
             y -= 1
         }
         // The span includes the card's soft shadow fringe
-        // (~4 pt); scale 2 → points = rows / 2.
+        // (a few points, more visible over the dark ground);
+        // scale 2 → points = rows / 2.
         let spanPoints = Double(cardRows) / 2.0
         let probeDir = artefactsDirectory()
         try FileManager.default.createDirectory(at: probeDir, withIntermediateDirectories: true)
@@ -441,8 +452,8 @@ final class RW135RebuildTests: XCTestCase {
                    atomically: true, encoding: .utf8)
         XCTAssertGreaterThanOrEqual(spanPoints, 45,
                                     "the overlay's painted MINI dock stands at the measured footprint (span \(spanPoints) pt incl. shadow)")
-        XCTAssertLessThanOrEqual(spanPoints, 58,
-                                 "the overlay's painted MINI dock is ≈49 pt of card, not the old ≈60 and not a polluted read (span \(spanPoints) pt incl. shadow)")
+        XCTAssertLessThanOrEqual(spanPoints, 62,
+                                 "the overlay's painted MINI dock is ≈49 pt of card + shadow fringe, not the old ≈60 pt card and not a polluted read (span \(spanPoints) pt incl. shadow)")
     }
 
     func testRB04_ExpandedHeight_EqualsContentFormula() {
