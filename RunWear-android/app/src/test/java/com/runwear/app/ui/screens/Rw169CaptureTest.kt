@@ -71,11 +71,14 @@ abstract class Rw169CaptureBase : Rw169HomeBase() {
         val host = compose(dark = false) { MorphCapture(expanded, photo) }
         capture(host, "$prefix-morph-p000.png")
         expanded = true
-        advanceFrames(host, 1)
+        // Frame-scale steps through the 380ms tween: ~96ms
+        // (p≈0.25), ~192ms (p≈0.5), ~288ms (p≈0.76) of frame
+        // time — true mid-flight geometry, not phase overshoot.
+        advanceFramesMs(host, 6, 16)
         capture(host, "$prefix-morph-p025.png")
-        advanceFrames(host, 1)
+        advanceFramesMs(host, 6, 16)
         capture(host, "$prefix-morph-p050.png")
-        advanceFrames(host, 1)
+        advanceFramesMs(host, 6, 16)
         capture(host, "$prefix-morph-p075.png")
         advanceFrames(host, 3)
         capture(host, "$prefix-expanded-rest.png")

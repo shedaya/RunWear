@@ -112,6 +112,31 @@ abstract class Rw169Base : Rw156Base() {
         )
     }
 
+    /** Fine-grained frame steps: advance the scheduler [stepMs]
+     * at a time (the morph's 380ms tween resolves into true
+     * mid-flight geometry only at frame-scale steps — 100ms
+     * steps overshoot whole phases of it). */
+    protected fun advanceFramesMs(host: Host, steps: Int, stepMs: Long) {
+        val scheduler = Robolectric.getForegroundThreadScheduler()
+        val view = host.composeView
+        val w = view.resources.displayMetrics.widthPixels
+        val h = view.resources.displayMetrics.heightPixels
+        repeat(steps) {
+            scheduler.advanceBy(stepMs, TimeUnit.MILLISECONDS)
+            shadowOf(Looper.getMainLooper()).idle()
+            view.measure(
+                View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY)
+            )
+            view.layout(0, 0, w, h)
+            val frame = android.graphics.Bitmap.createBitmap(
+                w, h, android.graphics.Bitmap.Config.ARGB_8888
+            )
+            view.draw(android.graphics.Canvas(frame))
+            frame.recycle()
+        }
+    }
+
     /** Advance the paused scheduler [steps] x 100ms with a draw
      * per step (the settleReveal idiom, bounded for mid-flight
      * morph samples). */
@@ -257,10 +282,11 @@ class Rw169MorphMidFlightRenderTest : Rw169Base() {
         }
         assertEquals(1, narrationNodes(host).size)
         expanded = true
-        // 380ms morph: samples after ~100/200/300ms of frame time.
+        // 380ms morph at frame-scale steps: samples at ~96/192/
+        // 288ms of frame time (p≈0.25 / 0.5 / 0.76).
         val labels = listOf("p025", "p050", "p075")
         for ((i, label) in labels.withIndex()) {
-            advanceFrames(host, 1)
+            advanceFramesMs(host, 6, 16)
             capture(host, "rw169-morph-$label.png")
             assertEquals(
                 "sample $label: exactly one narration instance",
