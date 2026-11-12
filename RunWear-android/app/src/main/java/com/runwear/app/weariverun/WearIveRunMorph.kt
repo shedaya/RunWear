@@ -459,6 +459,11 @@ fun WearIveRunMorphSurface(
                     }
                 },
                 doorway = {
+                    // Always measurable (a Layout slot must emit
+                    // exactly one measurable at every progress);
+                    // the doorway CONTENT exists only once the
+                    // morph is under way, like the entry region.
+                    Box(Modifier.fillMaxWidth()) {
                     if (p > 0f) {
                         Text(
                             text = "Open the collection ›",
@@ -472,6 +477,7 @@ fun WearIveRunMorphSurface(
                                 .clickable { onOpenCollection() }
                                 .padding(vertical = 4.dp)
                         )
+                    }
                     }
                 }
             )
