@@ -222,7 +222,7 @@ class Rw169ResettleProbeTest : Rw169HomeBase() {
         var entryAfter = entryLineText(host)
         var rounds = 0
         while (entryAfter == entryBefore && rounds < 40) {
-            Robolectric.getBackgroundThreadScheduler().idle()
+            Robolectric.flushBackgroundThreadScheduler()
             settleReveal(host)
             entryAfter = entryLineText(host)
             rounds++
