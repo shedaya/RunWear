@@ -1235,7 +1235,7 @@ final class RW169LoopbackTests: XCTestCase {
                 byAdding: .day, value: -i, to: fixtureDay)!
             let e = WearIveRunEntry(
                 dayStart: day, placeName: "Place \(i)",
-                feelsLikeF: 50 + i, actualF: 55 + i, condition: "Clear sky",
+                feelsLikeF: Double(50 + i), actualF: Double(55 + i), condition: "Clear sky",
                 itemNames: fixtureItems, itemKeys: ["CAP", "SHORT_SLEEVE", "SHORTS", "SUNGLASSES"],
                 heroImageReference: "h\(i)", sessionID: "s-\(i)")
             entries.append(e)
