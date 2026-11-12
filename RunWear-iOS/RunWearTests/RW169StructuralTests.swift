@@ -671,98 +671,10 @@ final class RW169StructuralTests: XCTestCase {
 // harness has no photo asset for the fixture cell, and no claim
 // here depends on the photograph itself.
 
-private struct RW169CompositionView: View {
-    /// The ONE agreed per-cell value (D9): every surface below
-    /// derives from it and nothing else.
-    let presentation: PersonalCellPresentation
-    /// The straddle pill's state — resolved exactly as Home
-    /// resolves it: under FAILED the pill is .hidden (it carries
-    /// no making/serving claim); otherwise HeroPill's value.
+private struct RW169SheetView: View {
     let pillState: HeroPillState
-    let dockProgress: Double
-    let dockHeight: CGFloat
-    /// Simulated scroll offset of the page column (the production
-    /// page is a ScrollView; a static offset is the harness form
-    /// of a mid-scroll position, labelled as such).
-    var scrollOffset: CGFloat = 0
-    let entry: WearIveRunEntry
-    let state: WearIveRunState
-    let unified: (Double, WearIveRunState, WearIveRunEntry) -> AnyView
-
-    private var heroHeight: CGFloat {
-        HeroHeightPolicy.stackedHeight(viewportHeight: 852)
-    }
 
     var body: some View {
-        ZStack {
-            AppTheme.background
-            // The page column: hero, then the sheet overlapping
-            // its foot by the production 28 pt, exactly as
-            // WeatherOutfitView's stacked layout composes them.
-            VStack(spacing: 0) {
-                hero
-                sheet
-            }
-            .offset(y: -scrollOffset)
-            // The dock: fixed overlay at the bottom inset,
-            // unmoved by the page's scroll (production: the
-            // miniBarDock overlay host).
-            VStack {
-                Spacer()
-                unified(dockProgress, state, entry)
-                    .frame(width: 369, height: dockHeight)
-            }
-            .padding(.horizontal, DockResidence.horizontalInset)
-            .padding(.bottom, DockResidence.bottomInset)
-        }
-        .frame(width: 393, height: 852)
-        .clipped()
-    }
-
-    private var hero: some View {
-        ZStack {
-            // Photograph stand-in: a warm gradient under the
-            // production tint layer HeroImageView itself paints.
-            LinearGradient(
-                colors: [Color(hex: "7A6A53"), Color(hex: "2E2A24")],
-                startPoint: .top, endPoint: .bottom)
-            HeroImageView(
-                locationName: "Overland Park, KS",
-                temperature: 58, actualTemperature: 62,
-                weatherCondition: .clear,
-                date: Date(timeIntervalSince1970: 1_763_568_000),
-                hour: 9, tempBracket: .MILD,
-                fallbackImageUrl: "", aiImageUrl: nil,
-                pillState: .hidden,
-                lookFailed: presentation == .failed,
-                heroHeightOverride: heroHeight,
-                showsTopControls: false)
-            HeroChromeOverlayView(
-                placeName: "Overland Park, KS",
-                dateText: "Wed, Nov 12", timeText: "Now", isNow: true,
-                formattedFeelsLike: "58°", formattedActual: "Actual 62°",
-                feelsLikeF: 58,
-                topLuminance: 0.5, chipLuminance: 0.5, footLuminance: 0.5,
-                onPlaceTapped: {}, onSettingsTapped: {}, onShareTapped: {},
-                onDateTapped: {}, onTimeTapped: {}, onNowTapped: {},
-                windMph: 11, rainPercent: 10, humidityPercent: 44, uvIndex: 3,
-                weatherLuminance: 0.5,
-                pillHeight: HeroPillMetrics.height(for: pillState),
-                pillBottomOffset: HeroVerticalLayout.straddleDip)
-                .opacity(scrollOffset > 0
-                    ? Double(HomeHandoffGeometry.chromeOpacity(
-                        progress: HomeHandoffGeometry.progress(forScrollOffset: scrollOffset)))
-                    : 1)
-        }
-        .frame(height: heroHeight)
-        .scaleEffect(scrollOffset > 0
-            ? HomeHandoffGeometry.scale(
-                progress: HomeHandoffGeometry.progress(forScrollOffset: scrollOffset))
-            : 1)
-        .clipped()
-    }
-
-    private var sheet: some View {
         VStack(spacing: 0) {
             // The straddle reserve (production sheetContainer):
             // while a pill renders, the sheet's first content
@@ -838,7 +750,6 @@ private struct RW169CompositionView: View {
                 topTrailing: HomeHandoffGeometry.sheetCornerRadius))
                 .fill(AppTheme.sheet)
         }
-        .padding(.top, -HomeHandoffGeometry.sheetOverlap)
         // The straddle pill, seated EXACTLY as production seats
         // it: an overlay on the sheet container's top edge, its
         // top alignment guide fed by its own measured height
@@ -855,6 +766,126 @@ private struct RW169CompositionView: View {
                     }
             }
         }
+    }
+}
+
+/// The full composition, structured as the RW147 harness's
+/// proven full-screen pattern (ZStack(alignment: .bottom); the
+/// page a VStack of hard-framed hero + filling sheet; the dock
+/// a bottom child) — the round-1 loop-back attempt's flexible
+/// hero/dock sizing collapsed under ImageRenderer (hero shrank
+/// to ≈226 pt and the dock never painted), which is why this
+/// structure hard-frames every surface.
+private struct RW169CompositionView: View {
+    /// The ONE agreed per-cell value (D9): every surface below
+    /// derives from it and nothing else.
+    let presentation: PersonalCellPresentation
+    /// The straddle pill's state — resolved exactly as Home
+    /// resolves it: under FAILED the pill is .hidden (it carries
+    /// no making/serving claim); otherwise HeroPill's value.
+    let pillState: HeroPillState
+    let dockProgress: Double
+    let dockHeight: CGFloat
+    /// Simulated scroll offset of the page column (the production
+    /// page is a ScrollView; a static offset is the harness form
+    /// of a mid-scroll position, labelled as such).
+    var scrollOffset: CGFloat = 0
+    let entry: WearIveRunEntry
+    let state: WearIveRunState
+    let unified: (Double, WearIveRunState, WearIveRunEntry) -> AnyView
+
+    private var heroHeight: CGFloat {
+        HeroHeightPolicy.stackedHeight(viewportHeight: 852)
+    }
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            if scrollOffset > 0 {
+                // Mid-scroll: the natural-height page, offset —
+                // the hero has handed off (its chrome faded per
+                // HomeHandoffGeometry), the sheet's boundary is
+                // still on screen, rows pass under the dock.
+                page
+                    .offset(y: -scrollOffset)
+            } else {
+                page
+            }
+            // The dock: a bottom child of the screen stack,
+            // unmoved by the page's scroll (production: the
+            // miniBarDock overlay host).
+            unified(dockProgress, state, entry)
+                .frame(width: 369, height: dockHeight)
+                .padding(.horizontal, DockResidence.horizontalInset)
+                .padding(.bottom, DockResidence.bottomInset)
+        }
+        .background(AppTheme.background)
+        .environment(\.colorScheme, .light)
+        .frame(width: 393, height: 852)
+        .clipped()
+    }
+
+    private var page: some View {
+        VStack(spacing: 0) {
+            hero
+            if scrollOffset > 0 {
+                sheet
+                    .padding(.top, -HomeHandoffGeometry.sheetOverlap)
+            } else {
+                sheet
+                    .padding(.top, -HomeHandoffGeometry.sheetOverlap)
+                    .frame(maxHeight: .infinity)
+            }
+        }
+    }
+
+    private var hero: some View {
+        ZStack {
+            // Photograph stand-in: a warm gradient under the
+            // production tint layer HeroImageView itself paints.
+            LinearGradient(
+                colors: [Color(hex: "7A6A53"), Color(hex: "2E2A24")],
+                startPoint: .top, endPoint: .bottom)
+                .frame(width: 393, height: heroHeight)
+            HeroImageView(
+                locationName: "Overland Park, KS",
+                temperature: 58, actualTemperature: 62,
+                weatherCondition: .clear,
+                date: Date(timeIntervalSince1970: 1_763_568_000),
+                hour: 9, tempBracket: .MILD,
+                fallbackImageUrl: "", aiImageUrl: nil,
+                pillState: .hidden,
+                lookFailed: presentation == .failed,
+                heroHeightOverride: heroHeight,
+                showsTopControls: false)
+                .frame(width: 393, height: heroHeight)
+            HeroChromeOverlayView(
+                placeName: "Overland Park, KS",
+                dateText: "Wed, Nov 12", timeText: "Now", isNow: true,
+                formattedFeelsLike: "58°", formattedActual: "62°",
+                feelsLikeF: 58,
+                topLuminance: 0.5, chipLuminance: 0.5, footLuminance: 0.5,
+                onPlaceTapped: {}, onSettingsTapped: {}, onShareTapped: {},
+                onDateTapped: {}, onTimeTapped: {}, onNowTapped: {},
+                windMph: 11, rainPercent: 10, humidityPercent: 44, uvIndex: 3,
+                weatherLuminance: 0.5,
+                pillHeight: HeroPillMetrics.height(for: pillState),
+                pillBottomOffset: HeroVerticalLayout.straddleDip)
+                .frame(width: 393, height: heroHeight)
+                .opacity(scrollOffset > 0
+                    ? Double(HomeHandoffGeometry.chromeOpacity(
+                        progress: HomeHandoffGeometry.progress(forScrollOffset: scrollOffset)))
+                    : 1)
+        }
+        .frame(width: 393, height: heroHeight)
+        .scaleEffect(scrollOffset > 0
+            ? HomeHandoffGeometry.scale(
+                progress: HomeHandoffGeometry.progress(forScrollOffset: scrollOffset))
+            : 1)
+        .clipped()
+    }
+
+    private var sheet: some View {
+        RW169SheetView(pillState: pillState)
     }
 }
 
@@ -1064,6 +1095,27 @@ final class RW169LoopbackTests: XCTestCase {
                         dockProgress: 0, dockHeight: rests.mini, entry: entry),
             size: CGSize(width: 393, height: 852),
             name: "RW169-ios-fullcomp-state-failed-phone.png")
+
+        // Seat probe: the sheet alone on a known top edge
+        // (y = 300, red line) with the design anchor marked
+        // (sheet top + 42 = hero foot + straddleDip, second red
+        // line). The pill's bottom must land ON the anchor line
+        // — the measured seat (StraddleSeatGuide), judged to
+        // the pixel.
+        try writeRender(
+            ZStack(alignment: .top) {
+                AppTheme.background
+                RW169SheetView(pillState: servingPill)
+                    .frame(width: 393, height: 280)
+                    .offset(y: 300)
+                Rectangle().fill(Color.red)
+                    .frame(width: 393, height: 1).offset(y: 300)
+                Rectangle().fill(Color.red)
+                    .frame(width: 393, height: 1)
+                    .offset(y: 300 + StraddleSeatGuide.anchorFromSheetTop)
+            },
+            size: CGSize(width: 393, height: 852),
+            name: "RW169-ios-seatprobe-phone.png")
     }
 
     // MARK: - 2 · Dense morph sampling (D3) — no crossfade
@@ -1117,6 +1169,25 @@ final class RW169LoopbackTests: XCTestCase {
         XCTAssertEqual(WearIveRunOverlayPolicy.panelHeight(
             contentHeight: rests.expanded, viewportHeight: viewport), cap, accuracy: 0.001,
             "the panel stands AT the cap — never over the hero's top chrome zone (116 pt)")
+        // Production pin (loop-back fix): the unified surface
+        // itself carries the cap behaviour — an entry region
+        // budget, an internal ScrollView when it binds, and the
+        // doorway seated from the CAPPED height. (Round 1's
+        // surface had none of these: the binding-cap capture
+        // showed the entry overflowing the panel's bottom edge
+        // and the doorway pushed out of the surface entirely.)
+        let barSource = try String(contentsOf: URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../RunWear/Views/WearIveRunMiniBar.swift")
+            .standardizedFileURL, encoding: .utf8)
+        let unifiedStart = try XCTUnwrap(barSource.range(of: "struct WearIveRunUnifiedSurfaceView"))
+        let unified = barSource[unifiedStart.lowerBound..<barSource.endIndex]
+        XCTAssertTrue(unified.contains("entryRegionBudget"),
+                      "the unified surface computes the RW-152 §2 entry-region budget")
+        XCTAssertTrue(unified.contains("lerp(expandedEntryHeight, cappedEntryHeight)"),
+                      "the doorway seats from the capped entry height — pinned under a binding cap")
+        XCTAssertTrue(unified.contains("ScrollView(.vertical, showsIndicators: false)"),
+                      "the entry region scrolls internally when the cap binds")
 
         var probe = "RW-169 iOS LOOP-BACK — height-cap probe (harness, ImageRenderer)\n"
         probe += "viewport=\(viewport) cap=\(cap) topChromeZone=\(WearIveRunOverlayPolicy.topChromeZoneHeight)\n"

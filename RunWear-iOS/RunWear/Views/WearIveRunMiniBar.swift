@@ -2377,6 +2377,40 @@ struct WearIveRunUnifiedSurfaceView: View {
             + expandedEntryHeight + 12 + 24 + 20
     }
 
+    /// RW-152 §2 height cap, inside the one surface (RW-169
+    /// loop-back, Nov 12, 2026): when the expanded rest height
+    /// exceeds the viewport cap, the ENTRY REGION is the one
+    /// flexible element — it stands at this budget and scrolls
+    /// internally, while the header, narration and doorway stay
+    /// pinned and fully visible. The budget is the cap minus
+    /// everything that is not the entry region (top pad 20 +
+    /// header 44 + spacing 12 + narration + spacing 12 +
+    /// spacing 12 + doorway 24 + bottom pad 20 = 144 +
+    /// narration), floored at the 56 pt thumbnail cell — the
+    /// same floor the overlay policy uses. (The unified surface
+    /// originally carried NO cap behaviour at all: at a binding
+    /// cap the entry text simply overflowed the panel's bottom
+    /// edge and the doorway was pushed out of the surface —
+    /// the loop-back's binding-cap capture is the evidence.)
+    var entryRegionBudget: CGFloat {
+        let cap = WearIveRunOverlayPolicy.expandedCap(
+            viewportHeight: viewportHeight)
+        return max(56, cap - (144 + expandedNarrationHeight))
+    }
+
+    /// The entry region's standing height at expanded rest:
+    /// its full measured height, or the budget when the cap
+    /// binds.
+    var cappedEntryHeight: CGFloat {
+        min(expandedEntryHeight, entryRegionBudget)
+    }
+
+    /// True exactly when the cap binds at expanded rest and
+    /// the entry region must scroll internally.
+    var capBinds: Bool {
+        expandedEntryHeight > entryRegionBudget + 0.5
+    }
+
     private var thumbURLString: String? {
         HeroRefResolver.stableDisplayReference(for: shownEntry) ?? resolvedHeroURL
     }
@@ -2389,7 +2423,14 @@ struct WearIveRunUnifiedSurfaceView: View {
             let narrationY = topPad + lerp(10, 56)
             let narrationWidth = max(40, width - 32 - narrationX - (1 - CGFloat(p)) * 96)
             let entryY = narrationY + liveNarrationHeight + 12
-            let doorwayY = entryY + expandedEntryHeight + 12
+            // RW-152 §2 (RW-169 loop-back): the doorway seats
+            // below the entry REGION's standing height — the
+            // full entry height interpolated toward the capped
+            // region height across the same travel, so at
+            // expanded rest under a binding cap the doorway is
+            // pinned inside the surface, never pushed past
+            // its bottom edge by the overflowing entry.
+            let doorwayY = entryY + lerp(expandedEntryHeight, cappedEntryHeight) + 12
             ZStack(alignment: .topLeading) {
                 // The wordmark — the same view at every progress
                 // value; its size interpolates 17 → 31 pt and it
@@ -2409,11 +2450,14 @@ struct WearIveRunUnifiedSurfaceView: View {
                         .frame(width: narrationWidth, alignment: .leading)
                         .offset(x: 16 + narrationX, y: narrationY)
                 }
-                // The entry row — the same row throughout; it
-                // rides below the narration and fades in with
-                // progress (below the mini rest height at p = 0,
-                // so the mini form never shows it).
-                entryRow
+                // The entry region — the same row throughout;
+                // it rides below the narration and fades in
+                // with progress (below the mini rest height at
+                // p = 0, so the mini form never shows it). At
+                // expanded rest under a binding cap the region
+                // stands at its budget inside a ScrollView —
+                // the row scrolls internally (RW-152 §2).
+                entryRegion
                     .frame(width: width - 32, alignment: .leading)
                     .offset(x: 16, y: entryY)
                     .opacity(p)
@@ -2599,6 +2643,26 @@ struct WearIveRunUnifiedSurfaceView: View {
                     }
                 }
             }
+    }
+
+    /// The entry region (RW-152 §2, RW-169 loop-back): the
+    /// entry row at its natural height — or, only at expanded
+    /// rest when the height cap binds, the same row inside a
+    /// vertical ScrollView standing at exactly the region
+    /// budget, so the header, narration and doorway stay
+    /// pinned while the entry scrolls internally. The row's
+    /// own geometry read (inside `entryRow`) still measures
+    /// its FULL content height inside the ScrollView, so the
+    /// budget comparison never feeds on the clipped height.
+    @ViewBuilder private var entryRegion: some View {
+        if p >= 1, capBinds {
+            ScrollView(.vertical, showsIndicators: false) {
+                entryRow
+            }
+            .frame(height: entryRegionBudget)
+        } else {
+            entryRow
+        }
     }
 
     private var entryRow: some View {
