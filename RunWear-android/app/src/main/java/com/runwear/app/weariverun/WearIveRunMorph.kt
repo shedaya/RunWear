@@ -10,12 +10,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -27,8 +25,6 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Fullscreen
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -45,6 +41,9 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.invisibleToUser
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
@@ -55,74 +54,137 @@ import com.runwear.app.ui.theme.RunWearColors
 import kotlin.math.roundToInt
 
 /**
- * RW-169 §7A (Nov 11, 2026): ONE element, two geometries.
+ * RW-135 REBUILD (Phase 2, Nov 12, 2026): ONE element, two
+ * geometries — conformance map §§3–5 as reconciled by R-1 and
+ * RW-152 §§1–2.
  *
- * The pre-fix home overlay arbitrated TWO complete layouts — an
- * AnimatedContent crossfade between WearIveRunDock and
- * WearIveRunFooterSection with a SizeTransform — the construction
- * RW-152 §1.3's acceptance ("one element transforming, never two
- * elements swapping") was written against, and the class behind
- * diagnosis D3/D4.
+ * The choreography is the design's DISSOLVE morph (RW-152
+ * §1.3: height + content cross-fade), not a diagonal slide:
  *
- * This surface is a SINGLE layout of the record's content — one
- * wordmark instance, one narration instance, one controls slot,
- * one entry row, one doorway — whose GEOMETRY interpolates
- * between the mini and expanded rest geometries:
+ * - the container height interpolates between the two REST
+ *   heights, both read from this one layout's own measure;
+ * - the wordmark is ONE instance, top-left anchored in both
+ *   forms, its font size lerping 17sp -> 31sp in place
+ *   (fixed-claim: never wraps/shrinks);
+ * - the narration exists in TWO placements of the same
+ *   string — the mini slot (beside the wordmark, 12sp) and
+ *   the expanded slot (below the header row, full width,
+ *   15sp) — with DISJOINT dissolve windows (mini out over
+ *   p in [0, 0.35], expanded in over p in [0.55, 1], a dead
+ *   zone between), so at no progress value are both legible
+ *   (the legibility invariant, map §5). The sub-0.5-alpha
+ *   placement is removed from the semantics/accessibility
+ *   tree (invisibleToUser), mirroring the handoff hit rule;
+ * - the expanded-only content (entry row + doorway) fades in
+ *   over the back window [0.45, 1], laid out at expanded
+ *   geometry inside the growing, clipped container;
+ * - the container material cross-fades mini-translucent ->
+ *   expanded ground; the radius is a CONSTANT 16dp at every
+ *   progress value (map §3.1: "16pt — never animates");
+ * - padding tokens (RB-04, prototype-measured): MINI rest =
+ *   top 11dp / bottom 12dp around a 26dp content row
+ *   (≈49dp total); EXPANDED = top 20dp / sides 16dp /
+ *   bottom 12dp after the doorway — the panel ends where
+ *   the doorway ends (RW-152 §2.1). Controls are 26dp
+ *   visual boxes; the bar body itself is the hit target, so
+ *   no 48dp button drives the mini height.
  *
- * - the wordmark's font size lerps 17sp -> 31sp in place (its
- *   width is fixed-claim at every progress value, §7B);
- * - the narration's slot lerps from beside the wordmark (mini) to
- *   the full width below it (expanded), wrapping as it goes — the
- *   bar grows, the payload never truncates (§7B / spec §4.3);
- * - the container height is the interpolation of the two REST
- *   heights, both read from this one layout's own measure (the
- *   header block's height and the full content height) — no
- *   second layout is ever composed to be measured, and no height
- *   is seeded from a measurement pass that runs during the morph;
- * - the expanded-only region (entry row + doorway) fades in over
- *   the back half of the progress (the RW-152 dissolve window:
- *   alpha = clamp((p - 0.45) / 0.55)) — at every progress value
- *   exactly one narration exists in the hierarchy, so the
- *   legibility invariant holds by construction;
- * - the container material lerps mini-translucent -> expanded
- *   ground, and the radius lerps 16 -> 24, in the dock's own
- *   overlay residence (seat unchanged from RW-152/RW-156).
+ * RB-02 (structural fix): the expand/collapse control is ONE
+ * clickable 26dp slot whose glyph cross-fades (Fullscreen <->
+ * ExpandMore drawn as two Icons with complementary alpha
+ * INSIDE the one clickable). The pre-fix construction stacked
+ * two 48dp IconButtons in one Box — the invisible
+ * (alpha = p) collapse button sat on top of the expand
+ * button, intercepted every real pointer hit at mini rest
+ * while disabled, and fired nothing: the icon was a dead tap
+ * on device while every semantics-OnClick harness test
+ * passed. No alpha-0 clickable sits over another control
+ * anywhere in this surface now; the container body click
+ * remains the second path to the SAME action (spec §4.4:
+ * icon tap == body tap).
  *
- * Height cap (§7A / RW-152 §2): the expanded height never exceeds
- * [maxExpandedHeightDp] (viewport minus the top-chrome zone);
- * when the cap binds at rest, the ENTRY region scrolls internally
- * while header, narration and doorway stay pinned — the doorway
- * is a sibling of the scroll region, never inside it (diagnosis
- * §2.4's cap clause, made structural in the RW-169 loop-back:
- * previously entry + doorway shared one scroll column).
+ * Height cap (RW-152 §2): the expanded height never exceeds
+ * [maxExpandedHeightDp] (viewport minus the top-chrome
+ * zone); when the cap binds at rest, the ENTRY region
+ * scrolls internally while header, narration and doorway
+ * stay pinned — the doorway is a sibling of the scroll
+ * region, never inside it.
  */
 object WearIveRunMorphPolicy {
 
     /** Morph duration (spec §4: 380ms morph curve). */
     const val MORPH_MS = 380
 
+    /** Radius (map §3.1): 16dp, NEVER animates. */
+    const val RADIUS_DP = 16f
+
+    /** Padding / control tokens (RB-04). */
+    const val MINI_TOP_DP = 11f
+    const val MINI_BOTTOM_DP = 12f
+    const val MINI_SIDE_DP = 12f
+    const val EXPANDED_TOP_DP = 20f
+    const val EXPANDED_BOTTOM_DP = 12f
+    const val EXPANDED_SIDE_DP = 16f
+    const val CONTROL_DP = 26f
+
+    private fun smoothstep(t: Float): Float {
+        val x = t.coerceIn(0f, 1f)
+        return x * x * (3f - 2f * x)
+    }
+
     /** The expanded region's dissolve window (RW-152 §1.3). */
     fun expandedAlpha(progress: Float): Float =
         ((progress - 0.45f) / 0.55f).coerceIn(0f, 1f)
+
+    /** Mini narration dissolve: out over p in [0, 0.35]. */
+    fun miniNarrationAlpha(progress: Float): Float =
+        1f - smoothstep(progress / 0.35f)
+
+    /** Expanded narration dissolve: in over p in [0.55, 1]. */
+    fun expandedNarrationAlpha(progress: Float): Float =
+        smoothstep((progress - 0.55f) / 0.45f)
+
+    /** The legibility invariant (map §5): both narrations
+     * legible at once iff both alphas exceed 0.25 — the
+     * disjoint windows make that unreachable by construction;
+     * the policy tests sample p and assert it. */
+    fun bothNarrationsLegible(progress: Float): Boolean =
+        miniNarrationAlpha(progress) > 0.25f &&
+            expandedNarrationAlpha(progress) > 0.25f
+
+    /** Legible-narration count at [progress]: the count of
+     * placements whose alpha exceeds 0.25 (0 inside the
+     * dissolve's dead zone, 1 everywhere else). */
+    fun legibleNarrationCount(progress: Float): Int =
+        (if (miniNarrationAlpha(progress) > 0.25f) 1 else 0) +
+            (if (expandedNarrationAlpha(progress) > 0.25f) 1 else 0)
 
     /** Geometry interpolation between the two rest geometries. */
     fun lerp(start: Float, end: Float, progress: Float): Float =
         start + (end - start) * progress
 
     fun wordmarkSp(progress: Float): Float = lerp(17f, 31f, progress)
-    fun narrationSp(progress: Float): Float = lerp(12f, 15f, progress)
-    fun radiusDp(progress: Float): Float = lerp(16f, 24f, progress)
-    fun topPaddingDp(progress: Float): Float = lerp(0f, 20f, progress)
-    fun bottomPaddingDp(progress: Float): Float = lerp(0f, 32f, progress)
 
-    /**
-     * The single-legible-narration probe (§7A acceptance): at any
-     * morph progress, the surface contains exactly ONE narration
-     * instance — this policy's construction guarantee, asserted
-     * structurally by the morph's render tests (the semantics
-     * tree's narration-node count is 1 at p = 0, .25, .5, .75, 1).
-     */
-    fun narrationInstanceCount(progress: Float): Int = 1
+    /** Radius is constant 16dp at every progress (RB-05). */
+    fun radiusDp(progress: Float): Float = RADIUS_DP
+
+    fun topPaddingDp(progress: Float): Float =
+        lerp(MINI_TOP_DP, EXPANDED_TOP_DP, progress)
+
+    /** Bottom padding is 12dp in BOTH forms (RB-04): the
+     * panel ends where the doorway ends. */
+    fun bottomPaddingDp(progress: Float): Float =
+        lerp(MINI_BOTTOM_DP, EXPANDED_BOTTOM_DP, progress)
+
+    fun sidePaddingDp(progress: Float): Float =
+        lerp(MINI_SIDE_DP, EXPANDED_SIDE_DP, progress)
+
+    /** The MINI rest height for a content row of
+     * [contentRowDp]: top pad + row + bottom pad. For the
+     * 26dp control row and a one-line narration this is the
+     * prototype-measured ≈49dp. */
+    fun miniRestHeightDp(contentRowDp: Float = CONTROL_DP): Float =
+        MINI_TOP_DP + contentRowDp + MINI_BOTTOM_DP
 }
 
 @Composable
@@ -150,14 +212,18 @@ fun WearIveRunMorphSurface(
     modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
-    val darkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val darkTheme = androidx.compose.material3.MaterialTheme
+        .colorScheme.background.luminance() < 0.5f
 
     // The morph progress: ONE animated value drives every
-    // geometric interpolation below. Reduce Motion: snap.
+    // geometric interpolation below. The token is 380ms with
+    // the morph easing cubic-bezier(0.32, 0.72, 0, 1) (S1
+    // §4). Reduce Motion: an opacity-class crossfade of
+    // <=150ms, no travel (map §6.2 / spec §5).
     val progress by animateFloatAsState(
         targetValue = if (expanded) 1f else 0f,
         animationSpec = if (reduceMotion) {
-            tween(durationMillis = 1)
+            tween(durationMillis = 150)
         } else {
             tween(
                 durationMillis = WearIveRunMorphPolicy.MORPH_MS,
@@ -168,9 +234,9 @@ fun WearIveRunMorphSurface(
     )
     val p = progress
 
-    // ---- Settle-flip narration fade (spec §4.3: opacity only) --
-    // The displayed narration swaps at the fade's midpoint; the
-    // single Text instance below renders only [displayedNarration].
+    // ---- Settle-flip narration fade (spec §4.3: opacity only,
+    // out 95ms / swap / in 115ms) — both placements render the
+    // SAME displayed narration, so the record flips atomically.
     var displayedNarration by remember { mutableStateOf(narration) }
     val narrationAlpha = remember { Animatable(1f) }
     LaunchedEffect(narration) {
@@ -211,7 +277,8 @@ fun WearIveRunMorphSurface(
         }
     }
 
-    // ---- Creation entrance (spec §4.1) --------------------------
+    // ---- Creation entrance (spec §4.1: rise +160% of height
+    // with a fade, 520ms enter; Reduce Motion 220ms fade) ------
     val entrance = remember { Animatable(if (entranceKey > 0) 0f else 1f) }
     var surfaceHeightPx by remember { mutableStateOf(0) }
     LaunchedEffect(entranceKey) {
@@ -254,7 +321,8 @@ fun WearIveRunMorphSurface(
         onExitFinished()
     }
 
-    // Press (spec §4.4): the mini form scales to 0.97 while pressed.
+    // Press (spec §4.4): the mini form scales to 0.97 over
+    // 120ms while pressed.
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     val pressScale by animateFloatAsState(
@@ -273,6 +341,9 @@ fun WearIveRunMorphSurface(
     val containerColor = androidx.compose.ui.graphics.lerp(
         miniColor, RunWearColors.FooterGround, p
     )
+
+    val miniNarrAlpha = WearIveRunMorphPolicy.miniNarrationAlpha(p)
+    val expNarrAlpha = WearIveRunMorphPolicy.expandedNarrationAlpha(p)
 
     Box(
         modifier = modifier
@@ -317,7 +388,9 @@ fun WearIveRunMorphSurface(
                 foldFraction = foldFraction.value,
                 onSizeChanged = { surfaceHeightPx = it },
                 wordmark = {
-                    // §7B: fixed-claim at EVERY progress value.
+                    // Fixed-claim at EVERY progress value: one
+                    // instance, top-left anchored, size lerps
+                    // in place — never wraps/shrinks.
                     Text(
                         text = WearIveRunNarrationFormatter.WORDMARK,
                         fontFamily = GreatVibesFontFamily,
@@ -327,60 +400,112 @@ fun WearIveRunMorphSurface(
                         softWrap = false
                     )
                 },
-                narrationContent = {
-                    Box(modifier = Modifier.graphicsLayer {
-                        alpha = narrationAlpha.value
-                    }) {
+                narrationMini = {
+                    Box(
+                        modifier = Modifier
+                            .graphicsLayer {
+                                alpha = miniNarrAlpha * narrationAlpha.value
+                            }
+                            .then(
+                                if (miniNarrAlpha < 0.5f) {
+                                    Modifier.semantics { invisibleToUser() }
+                                } else {
+                                    Modifier
+                                }
+                            )
+                    ) {
                         DockNarrationTextPublic(
                             narration = displayedNarration,
-                            fontSizeSp = WearIveRunMorphPolicy.narrationSp(p)
+                            fontSizeSp = 12f
+                        )
+                    }
+                },
+                narrationExpanded = {
+                    Box(
+                        modifier = Modifier
+                            .graphicsLayer {
+                                alpha = expNarrAlpha * narrationAlpha.value
+                            }
+                            .then(
+                                if (expNarrAlpha < 0.5f) {
+                                    Modifier.semantics { invisibleToUser() }
+                                } else {
+                                    Modifier
+                                }
+                            )
+                    ) {
+                        DockNarrationTextPublic(
+                            narration = displayedNarration,
+                            fontSizeSp = 15f
                         )
                     }
                 },
                 controls = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        // ONE control slot whose glyph morphs:
-                        // corners-out (mini, go to expanded) fades
-                        // to chevron-down (expanded, collapse).
-                        Box(modifier = Modifier.size(48.dp)) {
-                            IconButton(
-                                onClick = {
-                                    haptic.performHapticFeedback(HapticSpec.LIGHT_TICK)
-                                    onExpand()
+                        // RB-02: ONE control slot — a single
+                        // clickable 26dp box whose glyph
+                        // cross-fades inside it. onClick
+                        // dispatches expand when collapsed /
+                        // collapse when expanded: the same
+                        // action as the body tap (spec §4.4).
+                        Box(
+                            modifier = Modifier
+                                .size(WearIveRunMorphPolicy.CONTROL_DP.dp)
+                                .semantics {
+                                    contentDescription = if (p < 0.5f) {
+                                        "Expand Wear I've Run"
+                                    } else {
+                                        "Collapse Wear I've Run"
+                                    }
+                                }
+                                .clickable {
+                                    haptic.performHapticFeedback(
+                                        HapticSpec.LIGHT_TICK
+                                    )
+                                    if (p < 0.5f) onExpand() else onCollapse()
                                 },
-                                enabled = p < 0.5f,
-                                modifier = Modifier.graphicsLayer { alpha = 1f - p }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Fullscreen,
-                                    contentDescription = "Expand Wear I've Run",
-                                    tint = RunWearColors.TextSecondary,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                            IconButton(
-                                onClick = {
-                                    haptic.performHapticFeedback(HapticSpec.LIGHT_TICK)
-                                    onCollapse()
-                                },
-                                enabled = p >= 0.5f,
-                                modifier = Modifier.graphicsLayer { alpha = p }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.ExpandMore,
-                                    contentDescription = "Collapse Wear I've Run",
-                                    tint = RunWearColors.TextPrimary,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Fullscreen,
+                                contentDescription = null,
+                                tint = RunWearColors.TextSecondary,
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .graphicsLayer { alpha = 1f - p }
+                            )
+                            Icon(
+                                imageVector = Icons.Outlined.ExpandMore,
+                                contentDescription = null,
+                                tint = RunWearColors.TextPrimary,
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .graphicsLayer { alpha = p }
+                            )
                         }
-                        IconButton(onClick = {
-                            haptic.performHapticFeedback(HapticSpec.LIGHT_TICK)
-                            onDelete()
-                        }) {
+                        Spacer(Modifier.width(2.dp))
+                        // Delete: the same 26dp visual box —
+                        // no 48dp button may drive the mini
+                        // height (RB-04). One tap, no
+                        // confirmation (spec §4.7).
+                        Box(
+                            modifier = Modifier
+                                .size(WearIveRunMorphPolicy.CONTROL_DP.dp)
+                                .semantics {
+                                    contentDescription =
+                                        "Remove from Wear I've Run"
+                                }
+                                .clickable {
+                                    haptic.performHapticFeedback(
+                                        HapticSpec.LIGHT_TICK
+                                    )
+                                    onDelete()
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
                             Icon(
                                 imageVector = Icons.Outlined.Delete,
-                                contentDescription = "Remove from Wear I've Run",
+                                contentDescription = null,
                                 tint = if (p > 0.5f) {
                                     RunWearColors.TextPrimary
                                 } else {
@@ -396,11 +521,7 @@ fun WearIveRunMorphSurface(
                 entryRegion = {
                     // Composed only once the morph is under way
                     // (p > 0): at mini rest the expanded content
-                    // does not exist in the tree at all — the
-                    // doorway's first appearance is the expansion
-                    // itself (RW-152's rest-state pin), and no
-                    // unplaced semantics leak from a region the
-                    // layout has not seated.
+                    // does not exist in the tree at all.
                     if (p > 0f) {
                     Box(
                         modifier = Modifier
@@ -408,6 +529,13 @@ fun WearIveRunMorphSurface(
                             .graphicsLayer {
                                 alpha = WearIveRunMorphPolicy.expandedAlpha(p)
                             }
+                            .then(
+                                if (WearIveRunMorphPolicy.expandedAlpha(p) < 0.5f) {
+                                    Modifier.semantics { invisibleToUser() }
+                                } else {
+                                    Modifier
+                                }
+                            )
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -463,6 +591,8 @@ fun WearIveRunMorphSurface(
                     // exactly one measurable at every progress);
                     // the doorway CONTENT exists only once the
                     // morph is under way, like the entry region.
+                    // The doorway is ALWAYS present in the
+                    // expanded form (map §4.1).
                     Box(Modifier.fillMaxWidth()) {
                     if (p > 0f) {
                         Text(
@@ -474,6 +604,15 @@ fun WearIveRunMorphSurface(
                                 .graphicsLayer {
                                     alpha = WearIveRunMorphPolicy.expandedAlpha(p)
                                 }
+                                .then(
+                                    if (WearIveRunMorphPolicy
+                                            .expandedAlpha(p) < 0.5f
+                                    ) {
+                                        Modifier.semantics { invisibleToUser() }
+                                    } else {
+                                        Modifier
+                                    }
+                                )
                                 .clickable { onOpenCollection() }
                                 .padding(vertical = 4.dp)
                         )
@@ -487,12 +626,18 @@ fun WearIveRunMorphSurface(
 
 /**
  * The single-layout measure/place pass. Children: [wordmark,
- * narration, controls, entryRegion, doorway] — measured ONCE each, in
- * this one hierarchy, per frame. Rest heights are read from this
- * same measure: the mini height is the header block's height at
- * p = 0 geometry; the expanded height is the full content height
- * at p = 1 geometry (capped). The container's height at progress
- * p is their interpolation — geometry, not arbitration.
+ * narrationMini, narrationExpanded, controls, entryRegion,
+ * doorway] — measured ONCE each, in this one hierarchy, per
+ * frame. Rest heights are read from this same measure: the
+ * mini height is the header block's height at p = 0 geometry
+ * (top pad 11 + the one content row + bottom pad 12); the
+ * expanded height is the full content height at p = 1
+ * geometry. The container's height at progress p is their
+ * interpolation — geometry, not arbitration. Neither
+ * narration placement ever travels diagonally: each sits at
+ * its own rest geometry for the whole morph and only its
+ * alpha (plus the shared settle fade) changes — the
+ * dissolve, not a slide.
  */
 @Composable
 private fun MorphLayout(
@@ -501,7 +646,8 @@ private fun MorphLayout(
     foldFraction: Float,
     onSizeChanged: (Int) -> Unit,
     wordmark: @Composable () -> Unit,
-    narrationContent: @Composable () -> Unit,
+    narrationMini: @Composable () -> Unit,
+    narrationExpanded: @Composable () -> Unit,
     controls: @Composable () -> Unit,
     entryRegion: @Composable () -> Unit,
     doorway: @Composable () -> Unit
@@ -510,7 +656,8 @@ private fun MorphLayout(
     Layout(
         content = {
             wordmark()
-            narrationContent()
+            narrationMini()
+            narrationExpanded()
             controls()
             val expandedScrollState = rememberScrollState()
             Box(
@@ -524,41 +671,9 @@ private fun MorphLayout(
     ) { measurables, constraints ->
         val p = progress
         val maxW = constraints.maxWidth
-        val sidePadPx = with(density) { 16.dp.roundToPx() }
-        val controlsMeasurable = measurables[2]
-        val wordmarkPlaceable = measurables[0].measure(
-            Constraints(maxWidth = maxW)
-        )
-        val controlsPlaceable = controlsMeasurable.measure(
-            Constraints(maxWidth = maxW)
-        )
-        val availW = (maxW - sidePadPx * 2).coerceAtLeast(0)
-        // Narration slot: beside the wordmark in mini geometry,
-        // the full content width in expanded geometry.
-        val miniNarrW = (availW - wordmarkPlaceable.width -
-            controlsPlaceable.width - with(density) { 10.dp.roundToPx() })
-            .coerceAtLeast(0)
-        val narrW = WearIveRunMorphPolicy.lerp(
-            miniNarrW.toFloat(), availW.toFloat(), p
-        ).roundToInt().coerceAtLeast(0)
-        val narrationPlaceable = measurables[1].measure(
-            Constraints(minWidth = narrW, maxWidth = narrW)
-        )
-        // Header heights at the two rest geometries, from THIS
-        // measure: mini = tallest of the one row's elements;
-        // expanded = controls row + narration below it.
-        val miniHeaderH = maxOf(
-            wordmarkPlaceable.height,
-            narrationPlaceable.height,
-            controlsPlaceable.height
-        )
-        val expandedHeaderH = controlsPlaceable.height +
-            with(density) { 4.dp.roundToPx() } + narrationPlaceable.height
-        val headerH = WearIveRunMorphPolicy.lerp(
-            miniHeaderH.toFloat(), expandedHeaderH.toFloat(), p
-        ).roundToInt()
-        // Expanded region: measured at its natural height, capped
-        // by the panel cap's remainder at the expanded geometry.
+        val sidePadPx = with(density) {
+            WearIveRunMorphPolicy.sidePaddingDp(p).dp.roundToPx()
+        }
         val topPadPx = with(density) {
             WearIveRunMorphPolicy.topPaddingDp(p).dp.roundToPx()
         }
@@ -566,6 +681,43 @@ private fun MorphLayout(
             WearIveRunMorphPolicy.bottomPaddingDp(p).dp.roundToPx()
         }
         val gapPx = with(density) { 10.dp.roundToPx() }
+        val wordmarkPlaceable = measurables[0].measure(
+            Constraints(maxWidth = maxW)
+        )
+        val controlsPlaceable = measurables[3].measure(
+            Constraints(maxWidth = maxW)
+        )
+        val availW = (maxW - sidePadPx * 2).coerceAtLeast(0)
+        // Mini narration slot: beside the wordmark, flexing —
+        // it wraps and the bar grows (spec §4.3); the payload
+        // never truncates.
+        val miniNarrW = (availW - wordmarkPlaceable.width -
+            controlsPlaceable.width - gapPx).coerceAtLeast(0)
+        val narrationMiniPlaceable = measurables[1].measure(
+            Constraints(minWidth = miniNarrW, maxWidth = miniNarrW)
+        )
+        // Expanded narration slot: full width below the header.
+        val narrationExpandedPlaceable = measurables[2].measure(
+            Constraints(minWidth = availW, maxWidth = availW)
+        )
+        // Header heights at the two rest geometries, from THIS
+        // measure: mini = tallest of the one row's elements;
+        // expanded = header row + narration below it.
+        val miniHeaderH = maxOf(
+            wordmarkPlaceable.height,
+            narrationMiniPlaceable.height,
+            controlsPlaceable.height
+        )
+        val expandedRowH = maxOf(
+            wordmarkPlaceable.height,
+            controlsPlaceable.height
+        )
+        val expandedHeaderH = expandedRowH +
+            with(density) { 4.dp.roundToPx() } +
+            narrationExpandedPlaceable.height
+        val headerH = WearIveRunMorphPolicy.lerp(
+            miniHeaderH.toFloat(), expandedHeaderH.toFloat(), p
+        ).roundToInt()
         val capPx = if (maxExpandedHeightDp == Float.MAX_VALUE) {
             Constraints.Infinity
         } else {
@@ -574,10 +726,10 @@ private fun MorphLayout(
         // The doorway is measured at its natural height FIRST:
         // it is pinned at the panel's foot whenever the panel is
         // expanded, so the entry region's scroll budget is what
-        // the cap leaves after header + doorway (§2.4 cap
-        // clause: header, narration and doorway pinned; the
-        // entry region scrolls internally).
-        val doorwayPlaceable = measurables[4].measure(
+        // the cap leaves after header + doorway (RW-152 §2:
+        // header, narration and doorway pinned; the entry
+        // region scrolls internally).
+        val doorwayPlaceable = measurables[5].measure(
             Constraints(maxWidth = availW)
         )
         val doorwayGapPx = with(density) { 10.dp.roundToPx() }
@@ -588,7 +740,7 @@ private fun MorphLayout(
                 doorwayPlaceable.height - doorwayGapPx)
                 .coerceAtLeast(0)
         }
-        val expandedPlaceable = measurables[3].measure(
+        val expandedPlaceable = measurables[4].measure(
             Constraints(
                 minWidth = availW, maxWidth = availW,
                 maxHeight = expandedMaxH
@@ -611,6 +763,9 @@ private fun MorphLayout(
         val totalH = (cappedH * foldFraction).roundToInt().coerceAtLeast(0)
         layout(maxW, totalH) {
             onSizeChanged(totalH)
+            // Wordmark: top-left anchored in BOTH forms —
+            // centred in the mini row, top-aligned in the
+            // expanded header row; it never travels.
             val wordmarkY = WearIveRunMorphPolicy.lerp(
                 topPadPx + (miniHeaderH - wordmarkPlaceable.height) / 2f,
                 topPadPx.toFloat(), p
@@ -623,17 +778,19 @@ private fun MorphLayout(
             controlsPlaceable.placeRelative(
                 maxW - sidePadPx - controlsPlaceable.width, controlsY
             )
-            val narrX = WearIveRunMorphPolicy.lerp(
-                (sidePadPx + wordmarkPlaceable.width +
-                    with(density) { 10.dp.roundToPx() }).toFloat(),
-                sidePadPx.toFloat(), p
-            ).roundToInt()
-            val narrY = WearIveRunMorphPolicy.lerp(
-                topPadPx + (miniHeaderH - narrationPlaceable.height) / 2f,
-                (topPadPx + controlsPlaceable.height +
-                    with(density) { 4.dp.roundToPx() }).toFloat(), p
-            ).roundToInt()
-            narrationPlaceable.placeRelative(narrX, narrY)
+            // Mini narration: beside the wordmark, centred in
+            // the mini row — its rest geometry at every p.
+            narrationMiniPlaceable.placeRelative(
+                sidePadPx + wordmarkPlaceable.width + gapPx,
+                topPadPx + (miniHeaderH - narrationMiniPlaceable.height) / 2
+            )
+            // Expanded narration: below the header row, full
+            // width — its rest geometry at every p.
+            narrationExpandedPlaceable.placeRelative(
+                sidePadPx,
+                topPadPx + expandedRowH +
+                    with(density) { 4.dp.roundToPx() }
+            )
             if (p > 0f) {
                 expandedPlaceable.placeRelative(
                     sidePadPx, topPadPx + headerH + gapPx
@@ -649,8 +806,8 @@ private fun MorphLayout(
 }
 
 /** The narration's annotated display text (the dock's renderer,
- * shared so the morph's single narration instance carries the
- * identical pine-payload form). */
+ * shared so both morph placements carry the identical
+ * pine-payload form). */
 @Composable
 fun DockNarrationTextPublic(
     narration: WearIveRunNarration,
