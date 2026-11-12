@@ -826,6 +826,14 @@ private struct RW169CompositionView: View {
             }
             .padding(.horizontal, DockResidence.horizontalInset)
             .padding(.bottom, DockResidence.bottomInset)
+            // The spacer column must stand at the CANVAS height,
+            // not the stack's: the sheet sibling is ~1,250 pt
+            // tall, which inflates the ZStack, and an unframed
+            // spacer column stretches with it — rounds 1–3
+            // rendered the dock below the canvas for exactly
+            // this reason (diagA/B, over an 852 pt page, paint
+            // it correctly).
+            .frame(width: 393, height: 852)
         }
         .background(AppTheme.background)
         .environment(\.colorScheme, .light)
