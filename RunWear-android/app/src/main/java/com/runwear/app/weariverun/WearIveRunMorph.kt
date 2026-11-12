@@ -44,6 +44,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
@@ -89,9 +90,11 @@ import kotlin.math.roundToInt
  *
  * Height cap (§7A / RW-152 §2): the expanded height never exceeds
  * [maxExpandedHeightDp] (viewport minus the top-chrome zone);
- * when the cap binds at rest, the expanded-only region scrolls
- * internally with header, narration and doorway reachable — the
- * entry region scrolls, the panel never grows past the cap.
+ * when the cap binds at rest, the ENTRY region scrolls internally
+ * while header, narration and doorway stay pinned — the doorway
+ * is a sibling of the scroll region, never inside it (diagnosis
+ * §2.4's cap clause, made structural in the RW-169 loop-back:
+ * previously entry + doorway shared one scroll column).
  */
 object WearIveRunMorphPolicy {
 
@@ -273,6 +276,7 @@ fun WearIveRunMorphSurface(
 
     Box(
         modifier = modifier
+            .testTag("rw169MorphSurface")
             .graphicsLayer {
                 alpha = entrance.value
                 if (!reduceMotion) {
@@ -389,7 +393,7 @@ fun WearIveRunMorphSurface(
                         }
                     }
                 },
-                expandedRegion = {
+                entryRegion = {
                     // Composed only once the morph is under way
                     // (p > 0): at mini rest the expanded content
                     // does not exist in the tree at all — the
@@ -398,7 +402,7 @@ fun WearIveRunMorphSurface(
                     // unplaced semantics leak from a region the
                     // layout has not seated.
                     if (p > 0f) {
-                    Column(
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .graphicsLayer {
@@ -451,17 +455,23 @@ fun WearIveRunMorphSurface(
                                 modifier = Modifier.weight(1f)
                             )
                         }
-                        Spacer(Modifier.height(10.dp))
+                    }
+                    }
+                },
+                doorway = {
+                    if (p > 0f) {
                         Text(
                             text = "Open the collection ›",
                             fontSize = 15.5.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = RunWearColors.PineAccent,
                             modifier = Modifier
+                                .graphicsLayer {
+                                    alpha = WearIveRunMorphPolicy.expandedAlpha(p)
+                                }
                                 .clickable { onOpenCollection() }
                                 .padding(vertical = 4.dp)
                         )
-                    }
                     }
                 }
             )
@@ -471,7 +481,7 @@ fun WearIveRunMorphSurface(
 
 /**
  * The single-layout measure/place pass. Children: [wordmark,
- * narration, controls, expandedRegion] — measured ONCE each, in
+ * narration, controls, entryRegion, doorway] — measured ONCE each, in
  * this one hierarchy, per frame. Rest heights are read from this
  * same measure: the mini height is the header block's height at
  * p = 0 geometry; the expanded height is the full content height
@@ -487,7 +497,8 @@ private fun MorphLayout(
     wordmark: @Composable () -> Unit,
     narrationContent: @Composable () -> Unit,
     controls: @Composable () -> Unit,
-    expandedRegion: @Composable () -> Unit
+    entryRegion: @Composable () -> Unit,
+    doorway: @Composable () -> Unit
 ) {
     val density = androidx.compose.ui.platform.LocalDensity.current
     Layout(
@@ -501,7 +512,8 @@ private fun MorphLayout(
                     expandedScrollState,
                     enabled = progress > 0.99f
                 )
-            ) { expandedRegion() }
+            ) { entryRegion() }
+            doorway()
         }
     ) { measurables, constraints ->
         val p = progress
@@ -553,10 +565,21 @@ private fun MorphLayout(
         } else {
             with(density) { maxExpandedHeightDp.dp.roundToPx() }
         }
+        // The doorway is measured at its natural height FIRST:
+        // it is pinned at the panel's foot whenever the panel is
+        // expanded, so the entry region's scroll budget is what
+        // the cap leaves after header + doorway (§2.4 cap
+        // clause: header, narration and doorway pinned; the
+        // entry region scrolls internally).
+        val doorwayPlaceable = measurables[4].measure(
+            Constraints(maxWidth = availW)
+        )
+        val doorwayGapPx = with(density) { 10.dp.roundToPx() }
         val expandedMaxH = if (capPx == Constraints.Infinity) {
             Constraints.Infinity
         } else {
-            (capPx - topPadPx - bottomPadPx - expandedHeaderH - gapPx)
+            (capPx - topPadPx - bottomPadPx - expandedHeaderH - gapPx -
+                doorwayPlaceable.height - doorwayGapPx)
                 .coerceAtLeast(0)
         }
         val expandedPlaceable = measurables[3].measure(
@@ -565,7 +588,13 @@ private fun MorphLayout(
                 maxHeight = expandedMaxH
             )
         )
-        val expandedRegionH = (expandedPlaceable.height * p).roundToInt()
+        val expandedRegionH = (expandedPlaceable.height * p).roundToInt() +
+            if (p > 0f) {
+                (doorwayGapPx * p).roundToInt() +
+                    (doorwayPlaceable.height * p).roundToInt()
+            } else {
+                0
+            }
         val naturalH = topPadPx + headerH +
             (if (p > 0f) gapPx + expandedRegionH else 0) + bottomPadPx
         val cappedH = if (capPx == Constraints.Infinity) {
@@ -602,6 +631,11 @@ private fun MorphLayout(
             if (p > 0f) {
                 expandedPlaceable.placeRelative(
                     sidePadPx, topPadPx + headerH + gapPx
+                )
+                doorwayPlaceable.placeRelative(
+                    sidePadPx,
+                    topPadPx + headerH + gapPx +
+                        expandedPlaceable.height + doorwayGapPx
                 )
             }
         }

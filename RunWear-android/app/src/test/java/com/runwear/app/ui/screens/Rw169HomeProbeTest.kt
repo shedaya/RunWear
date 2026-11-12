@@ -55,6 +55,13 @@ abstract class Rw169HomeBase : Rw169Base() {
             it.text.contains("feels like") && it.text.contains("·")
         }?.text
 
+    protected fun overlayPillCopies(host: Host): Int =
+        allNodes(host).count {
+            it.config.contains(SemanticsProperties.TestTag) &&
+                it.config[SemanticsProperties.TestTag] ==
+                "rw169PillOverlayCopy"
+        }
+
     protected fun narrationText(host: Host): String? =
         nodeBoxes(host).firstOrNull {
             it.text.startsWith("Updated to") || it.text.startsWith("Planned for")
@@ -244,39 +251,92 @@ class Rw169ResettleProbeTest : Rw169HomeBase() {
     }
 }
 
-@Config(qualifiers = "w390dp-h844dp-xhdpi")
+@Config(qualifiers = "w390dp-h740dp-xhdpi")
 class Rw169PillSeatProbeTest : Rw169HomeBase() {
 
     @Test
-    fun `rw169 D - with the panel expanded the pill renders whole in the overlay host at its measured seat`() {
+    fun `rw169 D8 loop-back - expanded panel header whole, pill absent-by-design, in the folded class`() {
         val photo = heroPhotoUrl("cool_clear_male.webp")
         val state = nyState(photo)
         seedExactEntry(state)
         val host = compose(dark = false) { Home(state, exhaustedMim()) }
         val pillText = MakeItMeStrings.HERO_PILL_EXHAUSTED_COUNT
-        val before = nodeBoxes(host).filter { it.text == pillText }
-        assertEquals("pill present at rest", 1, before.size)
-        val seat = before.single()
+        assertEquals(
+            "pill present at rest",
+            1, nodeBoxes(host).count { it.text == pillText }
+        )
+        assertEquals(
+            "no overlay pill copy at rest",
+            0, overlayPillCopies(host)
+        )
 
         clickDescription(host, "Expand Wear I've Run")
-        advanceFrames(host, 5)
+        advanceFrames(host, 12)
+        settleReveal(host)
         capture(host, "rw169-pill-over-panel.png")
-        val after = nodeBoxes(host).filter { it.text == pillText }
-        // The in-list copy yields (alpha 0) and the overlay-host
-        // copy renders at the SAME measured bounds — two copies of
-        // the one pill value, both at the seat; the visible one is
-        // the overlay copy above the panel.
+
+        // The blocking defect was the overlay copy rendering
+        // OVER the expanded panel's header wordmark. The
+        // loop-back rule (diagnosis sections 2.4 + 2.6): while
+        // expanded, NO pill copy renders over the panel — the
+        // overlay copy exists only for the mini state.
         assertEquals(
-            "in-list copy + overlay-host copy at the seat",
-            2, after.size
+            "no overlay pill copy while the panel is expanded",
+            0, overlayPillCopies(host)
         )
+        // The panel's header wordmark: exactly one instance,
+        // rendered WHOLE inside the panel's bounds — its full
+        // glyph box inside the morph surface, clipped by
+        // nothing.
+        val surface = allNodes(host).firstOrNull {
+            it.config.contains(SemanticsProperties.TestTag) &&
+                it.config[SemanticsProperties.TestTag] ==
+                "rw169MorphSurface"
+        }?.boundsInRoot
+        assertTrue("morph surface composed", surface != null)
+        val wordmarks = wordmarkNodes(host).filter {
+            it.bottom - it.top < 200f
+        }
+        assertEquals(
+            "exactly one wordmark glyph strip in the expanded state",
+            1, wordmarks.size
+        )
+        val wm = wordmarks.single()
         assertTrue(
-            "both copies at the measured seat",
-            after.all {
-                kotlin.math.abs(it.left - seat.left) <= 4f &&
-                    kotlin.math.abs(it.top - seat.top) <= 4f &&
-                    kotlin.math.abs(it.right - seat.right) <= 4f
-            }
+            "panel header wordmark whole inside the panel " +
+                "(wm ${wm.top}..${wm.bottom}, panel " +
+                "${surface!!.top}..${surface.bottom})",
+            wm.top >= surface.top - 1f &&
+                wm.bottom <= surface.bottom + 1f &&
+                wm.left >= surface.left - 1f &&
+                wm.right <= surface.right + 1f
+        )
+        host.controller.pause().stop().destroy()
+    }
+}
+
+@Config(qualifiers = "w1000dp-h800dp-xhdpi")
+class Rw169PillSeatWideProbeTest : Rw169HomeBase() {
+
+    @Test
+    fun `rw169 D8 loop-back - expanded panel header whole, pill absent-by-design, in the wide class`() {
+        val photo = heroPhotoUrl("cool_clear_male.webp")
+        val state = nyState(photo)
+        seedExactEntry(state)
+        val host = compose(dark = false) { Home(state, exhaustedMim()) }
+        clickDescription(host, "Expand Wear I've Run")
+        advanceFrames(host, 12)
+        settleReveal(host)
+        assertEquals(
+            "no overlay pill copy while the panel is expanded (wide)",
+            0, overlayPillCopies(host)
+        )
+        val wordmarks = wordmarkNodes(host).filter {
+            it.bottom - it.top < 200f
+        }
+        assertEquals(
+            "exactly one wordmark glyph strip in the expanded state (wide)",
+            1, wordmarks.size
         )
         host.controller.pause().stop().destroy()
     }

@@ -128,17 +128,6 @@ class Rw169CapFoldedExpanded : Rw169CaptureBase() {
     }
 }
 
-@Config(qualifiers = "w390dp-h400dp-xhdpi")
-class Rw169CapFoldedExpandedCap : Rw169CaptureBase() {
-    @Test
-    fun `capture folded expanded at the height cap`() {
-        val host = homeHost()
-        clickDescription(host, "Expand Wear I've Run")
-        capture(host, "rw169-folded-expanded-cap.png")
-        host.controller.pause().stop().destroy()
-    }
-}
-
 // ---------------- Wide / unfolded (w1000dp-h800dp) ----------------
 
 @Config(qualifiers = "w1000dp-h800dp-xhdpi")
@@ -181,13 +170,31 @@ class Rw169CapWideExpanded : Rw169CaptureBase() {
     }
 }
 
-@Config(qualifiers = "w1000dp-h400dp-xhdpi")
-class Rw169CapWideExpandedCap : Rw169CaptureBase() {
+
+// ---------------- Delete state (RW-135 section 8 check 6) ----
+
+@Config(qualifiers = "w390dp-h740dp-xhdpi")
+class Rw169CapFoldedDelete : Rw169CaptureBase() {
     @Test
-    fun `capture wide expanded at the height cap`() {
+    fun `capture folded delete fold in flight and at end of scroll`() {
         val host = homeHost()
-        clickDescription(host, "Expand Wear I've Run")
-        capture(host, "rw169-wide-expanded-cap.png")
+        // The fold in flight: delete from the mini at rest and
+        // sample the exit (content fade 160ms + height fold
+        // 400ms) at fine frame steps.
+        clickDescription(host, "Remove from Wear I've Run")
+        advanceFramesMs(host, 2, 60)
+        capture(host, "rw169-folded-delete-midfold.png")
+        advanceFramesMs(host, 4, 60)
+        capture(host, "rw169-folded-delete-latefold.png")
         host.controller.pause().stop().destroy()
+
+        // Anchoring at the end of scroll: the reading window
+        // does not move when the record is deleted over it.
+        val host2 = homeHost()
+        flickToEnd(host2)
+        clickDescription(host2, "Remove from Wear I've Run")
+        settleReveal(host2)
+        capture(host2, "rw169-folded-delete-at-end.png")
+        host2.controller.pause().stop().destroy()
     }
 }

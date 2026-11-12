@@ -90,6 +90,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -273,16 +274,23 @@ fun HeroMainScreen(
     // resolved once from the look/serve/entitlement state and handed
     // to every layout's hero (see HeroPillPolicy for the states).
     // RW-169 §7D: the straddle pill's measured seat. HeroStackedUnit
-    // reports its in-list pill's window bounds here; while the WIR
-    // panel is expanded (or morphing), the pill is ALSO rendered in
-    // this screen's overlay host at those measured bounds, z-ordered
-    // ABOVE the panel, so no surface can bisect it (diagnosis D8:
-    // the panel's top edge sliced the pill at frame-31.6 s). Both
-    // copies render the SAME single heroPill value below — one
-    // agreed per-cell presentation state, never a second source.
+    // reports its in-list pill's window bounds here; the pill rule
+    // at the overlay host below (corrected by the conformance
+    // loop-back — see its comment) decides which copy, if any,
+    // renders from the measured overlap with the WIR surface.
     var wirPillAnchorBounds by remember {
         mutableStateOf<androidx.compose.ui.geometry.Rect?>(null)
     }
+    // RW-169 loop-back (D8, victim swapped): the WIR overlay
+    // host's own window bounds, so the pill rule below is
+    // GEOMETRIC — driven by whether the two approved surfaces
+    // actually overlap on screen, in any viewport class.
+    var wirPanelBounds by remember {
+        mutableStateOf<androidx.compose.ui.geometry.Rect?>(null)
+    }
+    val pillOverlapsPanel = wirPillAnchorBounds != null &&
+        wirPanelBounds != null &&
+        wirPillAnchorBounds!!.overlaps(wirPanelBounds!!)
     val heroPill = com.runwear.app.ui.components.HeroPillPolicy.resolve(
         lookStatus = uiState.personalLookStatus,
         serveKind = uiState.heroServeKind,
@@ -1407,7 +1415,7 @@ fun HeroMainScreen(
                                             onPillBounds = { rect ->
                                                 wirPillAnchorBounds = rect
                                             },
-                                            pillOverlayActive = wirExpanded,
+                                            pillOverlayActive = pillOverlapsPanel,
                                             onHeroPhotoClick = {
                                                 if (uiState.effectiveHeroUrl != null) {
                                                     showHeroViewer = true
@@ -1538,7 +1546,7 @@ fun HeroMainScreen(
                                             onPillBounds = { rect ->
                                                 wirPillAnchorBounds = rect
                                             },
-                                            pillOverlayActive = wirExpanded,
+                                            pillOverlayActive = pillOverlapsPanel,
                                             onHeroPhotoClick = {
                                                 if (uiState.effectiveHeroUrl != null) {
                                                     showHeroViewer = true
@@ -1894,6 +1902,10 @@ fun HeroMainScreen(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .onGloballyPositioned { coords ->
+                                        wirPanelBounds =
+                                            coords.boundsInWindow()
+                                    }
                                     .pointerInput(Unit) {
                                         detectVerticalDragGestures(
                                             onDragStart = {
@@ -1935,13 +1947,30 @@ fun HeroMainScreen(
             )
         }
 
-        // RW-169 §7D: the straddle pill's overlay-host copy — while
-        // the WIR panel is expanded, the pill renders HERE (above
-        // the panel in composition order and z), seated from the
-        // in-list pill's MEASURED window bounds, whole and
-        // unbisected. Same single heroPill value as the in-list
-        // copy, which yields (alpha 0) while this copy is active.
-        if (wirExpanded && heroPill != null &&
+        // RW-169 §7D, as corrected by the conformance loop-back
+        // (D8 — the victim had swapped): the pill's residence of
+        // record is the hero/sheet boundary IN THE HOME
+        // COMPOSITION (diagnosis §2.6: "straddles the hero/sheet
+        // boundary centred, whole, floating above the sheet's
+        // top edge — bisecting nothing and bisected by
+        // nothing"). The expanded panel's anatomy of record
+        // (§2.4) is header wordmark, narration, entry row,
+        // doorway — the pill is not in it, and the panel is a
+        // user-summoned replacement state of the dock residence
+        // after which "the page is exactly as it was." So:
+        //  - MINI states: when the dock's measured bounds would
+        //    cross the pill's seat during scroll, this
+        //    overlay-host copy carries the pill ABOVE the dock
+        //    at its measured seat (§7D's z-above prescription),
+        //    and the in-list copy yields — the pill is whole.
+        //  - EXPANDED state: NO copy renders. Where the panel
+        //    overlaps the seat the pill is absent-by-design
+        //    (§2.4 anatomy; §2.6 residence), and the panel's
+        //    header wordmark renders whole — neither surface
+        //    bisects the other in any viewport class.
+        // Both copies render the SAME single heroPill value —
+        // one agreed per-cell presentation state (§7D).
+        if (!wirExpanded && pillOverlapsPanel && heroPill != null &&
             wirPillAnchorBounds != null
         ) {
             val anchorRect = wirPillAnchorBounds!!
@@ -1950,6 +1979,7 @@ fun HeroMainScreen(
             val pillHeightDp = with(pillDensity) { anchorRect.height.toDp() }
             Box(
                 modifier = Modifier
+                    .testTag("rw169PillOverlayCopy")
                     .offset {
                         androidx.compose.ui.unit.IntOffset(
                             anchorRect.left.roundToInt(),
