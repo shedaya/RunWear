@@ -441,9 +441,20 @@ final class RW135RebuildTests: XCTestCase {
             }
             y -= 1
         }
-        // The span includes the card's soft shadow fringe
-        // (a few points, more visible over the dark ground);
-        // scale 2 → points = rows / 2.
+        // Scale 2 → points = rows / 2. The phase-3 gate
+        // re-measured this render independently (Nov 12,
+        // 2026): the painted span is exactly the card —
+        // 49.0 pt at difference thresholds 8/20/40/80, the
+        // top-most and bottom-most card rows identical at
+        // every threshold, i.e. the soft shadow fringe
+        // contributes 0 pt beyond the card on this render.
+        // The band below is therefore set on the card
+        // itself: floor 45 admits render noise; ceiling 55
+        // EXCLUDES the old ≈60 pt card this probe exists
+        // to catch (a 60 pt card paints a ≈60 pt span and
+        // must fail). An earlier widening of the ceiling
+        // to 62 on a shadow-fringe rationale was refuted
+        // by that measurement and is reverted here.
         let spanPoints = Double(cardRows) / 2.0
         let probeDir = artefactsDirectory()
         try FileManager.default.createDirectory(at: probeDir, withIntermediateDirectories: true)
@@ -451,9 +462,9 @@ final class RW135RebuildTests: XCTestCase {
             .write(to: probeDir.appendingPathComponent("RW135-rb04-overlay-probe.txt"),
                    atomically: true, encoding: .utf8)
         XCTAssertGreaterThanOrEqual(spanPoints, 45,
-                                    "the overlay's painted MINI dock stands at the measured footprint (span \(spanPoints) pt incl. shadow)")
-        XCTAssertLessThanOrEqual(spanPoints, 62,
-                                 "the overlay's painted MINI dock is ≈49 pt of card + shadow fringe, not the old ≈60 pt card and not a polluted read (span \(spanPoints) pt incl. shadow)")
+                                    "the overlay's painted MINI dock stands at the measured footprint (span \(spanPoints) pt)")
+        XCTAssertLessThanOrEqual(spanPoints, 55,
+                                 "the overlay's painted MINI dock is ≈49 pt of card, not the old ≈60 pt card (span \(spanPoints) pt)")
     }
 
     func testRB04_ExpandedHeight_EqualsContentFormula() {
