@@ -767,10 +767,75 @@ fun HeroMainScreen(
     val wirShownLine: WearIveRunNarration? = wirPresented?.narration
     // RW-152 §1 (Nov 10, 2026): the expanded footer is a STATE of
     // the dock's overlay surface, not an in-flow list section.
-    // wirExpanded is the one surface's expanded state: summoned by
-    // the dock's expand control, dismissed by the panel's chevron,
-    // a glide-up on the panel, or Back. It is never the rest state.
-    var wirExpanded by remember { mutableStateOf(false) }
+    // R-1 (Sol's ruling, Nov 12, 2026 — RW-135 rebuild): the
+    // presented state is the pure function in
+    // WearIveRunExpansionTrigger —
+    //   expanded = userSummoned || (atFooter && !footerSuppressed)
+    // Reaching the page end presents the expanded form;
+    // scrolling away re-docks it to MINI. A tap-summoned
+    // expansion persists until an explicit collapse (chevron /
+    // glide-up / Back); a collapse AT the footer sets the
+    // suppression latch until the scroll position leaves the
+    // footer zone. The scroll facts come from the ACTIVE
+    // container (the compact layout's LazyColumn; the grid in
+    // every other layout) — its layoutInfo, never a retired
+    // in-flow footer item.
+    var wirTriggerState by remember {
+        mutableStateOf(
+            com.runwear.app.weariverun.WearIveRunExpansionTrigger.State()
+        )
+    }
+    // The ACTIVE container's scroll facts as one triple —
+    // extracted per container type (list/grid layoutInfo share
+    // no common type), consumed by the pure trigger below.
+    val wirScrollFacts: Triple<Int, Int?, Boolean> by remember {
+        derivedStateOf {
+            if (layout == AdaptiveLayout.COMPACT) {
+                Triple(
+                    listState.layoutInfo.totalItemsCount,
+                    listState.layoutInfo.visibleItemsInfo
+                        .lastOrNull()?.index,
+                    listState.canScrollForward
+                )
+            } else {
+                Triple(
+                    gridState.layoutInfo.totalItemsCount,
+                    gridState.layoutInfo.visibleItemsInfo
+                        .lastOrNull()?.index,
+                    gridState.canScrollForward
+                )
+            }
+        }
+    }
+    val wirInFooterZone by remember {
+        derivedStateOf {
+            com.runwear.app.weariverun.WearIveRunExpansionTrigger
+                .inFooterZone(wirScrollFacts.first, wirScrollFacts.second)
+        }
+    }
+    val wirAtFooter by remember {
+        derivedStateOf {
+            com.runwear.app.weariverun.WearIveRunExpansionTrigger
+                .atFooter(
+                    wirScrollFacts.first,
+                    wirScrollFacts.second,
+                    wirScrollFacts.third
+                )
+        }
+    }
+    val wirExpanded by remember {
+        derivedStateOf {
+            com.runwear.app.weariverun.WearIveRunExpansionTrigger
+                .expanded(wirTriggerState, wirAtFooter)
+        }
+    }
+    // The suppression latch clears when the scroll position
+    // leaves the footer zone (R-1).
+    LaunchedEffect(wirInFooterZone) {
+        wirTriggerState =
+            com.runwear.app.weariverun.WearIveRunExpansionTrigger
+                .onScroll(wirTriggerState, wirInFooterZone)
+    }
     // Reduce Motion (spec section 5) = animator duration scale 0.
     val wirReduceMotion = remember {
         Settings.Global.getFloat(
@@ -814,8 +879,11 @@ fun HeroMainScreen(
             wirExit = null
             // RW-152 §1: an exit leaves the ONE surface in its
             // mini (rest) state — the expanded state is never a
-            // rest state, including after a delete.
-            wirExpanded = false
+            // rest state, including after a delete. R-1: the
+            // trigger resets with it (no summon, no latch).
+            wirTriggerState =
+                com.runwear.app.weariverun.WearIveRunExpansionTrigger
+                    .reset(wirTriggerState)
             if (exit.fromTrash) {
                 wirExitFromTrashDone = true
                 wearIveRunHolder.onEvent(WearIveRunElementEvent.TRASH)
@@ -833,6 +901,18 @@ fun HeroMainScreen(
     // takes the holder Absent before the exit plays — spec
     // section 4.8).
     val wirSurfacesPresent = wirPresent || wirExit != null
+
+    // RB-09 hygiene: the panel's measured bounds are reported
+    // only while the surface is composed. When it leaves, the
+    // last reported bounds are stale — if they were the
+    // expanded panel's, they could keep the pill rule in its
+    // overlap branch (in-list copy suppressed) after the
+    // surface is gone. Clear them on absence.
+    LaunchedEffect(wirSurfacesPresent) {
+        if (!wirSurfacesPresent) {
+            wirPanelBounds = null
+        }
+    }
 
     // RW-168: the direct save's execution — renders + verifies
     // today's card in the tracked selection through the Share
@@ -958,18 +1038,16 @@ fun HeroMainScreen(
     // recomposition that a fling can coalesce away (the vc41
     // defect: the dissolve existed as a function but its
     // intermediate values never reached the display).
-    // RW-152 §1: the layout-position handoff is RETIRED for this
-    // element — the expanded state no longer lives in the scroll
-    // content, so there is no footer position to derive a fade
-    // from. The dock surface morphs in place in its overlay (see
-    // the overlay below); the fade the legacy graphicsLayer math
-    // reads is therefore the constant rest value 0. (The pure
-    // WearIveRunDockPolicy fade functions remain for the RW-140
-    // harness, which builds its own host.)
-    val wirFooterFadeState = remember {
-        derivedStateOf { 0f }
-    }
-    val wirFooterFade by wirFooterFadeState
+    // RW-135 REBUILD (Nov 12, 2026): the layout-position
+    // handoff is RETIRED for this element and its last host
+    // remnant — a constant-0 fade state feeding a graphicsLayer
+    // dissolve that could only ever render the rest value —
+    // is removed from the Home path entirely. Scroll position
+    // now reaches this surface through exactly one channel:
+    // the R-1 trigger's layoutInfo facts above (footer zone /
+    // at-footer). (The pure WearIveRunDockPolicy fade functions
+    // remain for the RW-140 harness, which builds its own
+    // host; nothing on the Home path reads them.)
     // Whether the footer item is among the active host's visible
     // items (its content is composed and on screen) — the delete
     // choreography branches on this (spec section 4.7).
@@ -1136,13 +1214,28 @@ fun HeroMainScreen(
     // (scroll position is never touched). The names are kept
     // because every control wired to them (dock expand, panel
     // chevron) means the same thing it always meant.
-    val wirGlideToFooter: () -> Unit = { wirExpanded = true }
-    val wirGlideFromFooter: () -> Unit = { wirExpanded = false }
+    // R-1: the dock's tap (body or expand control — the same
+    // action) SUMMONS the expanded state; it then persists
+    // until an explicit collapse. The panel's chevron, a
+    // glide-up on the panel, and Back all collapse through the
+    // same transition — a collapse at the footer sets the
+    // suppression latch so the footer presentation does not
+    // re-fire in the same frame.
+    val wirGlideToFooter: () -> Unit = {
+        wirTriggerState =
+            com.runwear.app.weariverun.WearIveRunExpansionTrigger
+                .summon(wirTriggerState)
+    }
+    val wirGlideFromFooter: () -> Unit = {
+        wirTriggerState =
+            com.runwear.app.weariverun.WearIveRunExpansionTrigger
+                .collapse(wirTriggerState, wirAtFooter)
+    }
     // Back dismisses the expanded state (never the page).
     androidx.activity.compose.BackHandler(
         enabled = wirExpanded && wirExit == null
     ) {
-        wirExpanded = false
+        wirGlideFromFooter()
     }
 
     // One tap, NO confirmation (the settled delete rule). The
@@ -1781,29 +1874,18 @@ fun HeroMainScreen(
                 // RW-135: the MINI dock overlay — inset 12,
                 // lifted 14 above the bottom safe edge (over the
                 // bottom navigation), radius 16, translucent card,
-                // soft shadow. Driven CONTINUOUSLY by the handoff
-                // fade (spec section 3): graphicsLayer alpha /
-                // translationY / scale are pure functions of the
-                // footer's scroll position, evaluated in the draw
-                // phase (RW-140) — no binary visibility,
-                // no AnimatedVisibility. Hit-testing is off at
-                // fade >= 0.5; at fade >= 1 the dock leaves the
-                // semantics tree. Reduce Motion (spec section 5):
-                // the handoff steps at the window's midpoint with
-                // a single 160ms crossfade, no sink/scale. During
-                // an exit (sections 4.7/4.8) the snapshot's line
-                // renders and the dock's own exit (fade + 26dp
-                // sink, 300ms exit) multiplies in.
+                // soft shadow. RW-135 REBUILD: the one surface
+                // morphs in place inside this residence; scroll
+                // position reaches it ONLY through the R-1
+                // trigger (footer presentation), never as a
+                // fade/sink/scale on this wrapper. During an exit
+                // (sections 4.7/4.8) the snapshot's line renders
+                // and the surface's own exit (fade + 26dp sink,
+                // 300ms exit) multiplies in.
                 if (wirSurfacesPresent) {
                     val exitSnap = wirExit
                     val line = exitSnap?.line ?: wirShownLine
                     if (line != null) {
-                        val fade = wirFooterFade
-                        val steppedOpacity = animateFloatAsState(
-                            targetValue = if (fade < 0.5f) 1f else 0f,
-                            animationSpec = tween(160),
-                            label = "wirDockHandoffStep"
-                        )
                         Box(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
@@ -1827,50 +1909,24 @@ fun HeroMainScreen(
                                         Modifier
                                     }
                                 )
-                                .then(
-                                    if (fade >= 1f && exitSnap == null) {
-                                        Modifier.clearAndSetSemantics {}
-                                    } else {
-                                        Modifier
-                                    }
-                                )
                                 .graphicsLayer {
-                                    // RW-140: the handoff transform
-                                    // is evaluated HERE, in the draw
-                                    // phase, reading the fade state
-                                    // directly — every scroll frame
-                                    // draws its own alpha / sink /
-                                    // scale in the same frame the
-                                    // list moves. (In vc41 these were
-                                    // composition locals captured by
-                                    // this block; a coalesced
-                                    // recomposition during a fling
-                                    // dropped the dissolve's
-                                    // intermediate values wholesale,
-                                    // and the dock and footer read as
-                                    // two distinct elements — Sol's
-                                    // Nov 8, 2026 device finding.)
-                                    val drawFade = wirFooterFadeState.value
+                                    // RW-135 REBUILD: the retired
+                                    // handoff transform is gone
+                                    // from this layer — the ONE
+                                    // surface morphs in place, so
+                                    // scroll position never fades,
+                                    // sinks or scales it. All that
+                                    // remains here is the exit
+                                    // choreography's own term
+                                    // (spec §4.7: fade + 26dp sink
+                                    // over the dock exit, driven
+                                    // by wirDockExit).
                                     val exitP = wirDockExit.value
-                                    val handoffAlpha = if (wirReduceMotion) {
-                                        steppedOpacity.value
-                                    } else {
-                                        WearIveRunDockPolicy
-                                            .dockOpacity(drawFade)
-                                    }
-                                    alpha = handoffAlpha * (1f - exitP)
+                                    alpha = 1f - exitP
                                     translationY =
-                                        ((if (wirReduceMotion) 0f
-                                        else WearIveRunDockPolicy
-                                            .dockSinkDp(drawFade)) +
-                                            WearIveRunDockPolicy
-                                                .DELETE_DOCK_SINK_DP * exitP) *
+                                        WearIveRunDockPolicy
+                                            .DELETE_DOCK_SINK_DP * exitP *
                                             wirDensity.density
-                                    val s = (if (wirReduceMotion) 1f
-                                    else WearIveRunDockPolicy
-                                        .dockScale(drawFade))
-                                    scaleX = s
-                                    scaleY = s
                                 }
                         ) {
                             // RW-152 §1+§2 (Nov 10, 2026): ONE
@@ -1963,14 +2019,21 @@ fun HeroMainScreen(
         //    overlay-host copy carries the pill ABOVE the dock
         //    at its measured seat (§7D's z-above prescription),
         //    and the in-list copy yields — the pill is whole.
-        //  - EXPANDED state: NO copy renders. Where the panel
-        //    overlaps the seat the pill is absent-by-design
-        //    (§2.4 anatomy; §2.6 residence), and the panel's
-        //    header wordmark renders whole — neither surface
-        //    bisects the other in any viewport class.
+        //  - EXPANDED state: RB-09 (RW-135 rebuild, Nov 12,
+        //    2026) supersedes the loop-back's absent-by-design
+        //    reading — conformance map §7's invariant governs:
+        //    the pill is whole and unbisected in EVERY Home
+        //    state and is never removed while expanded. So
+        //    the overlay copy renders in the expanded state
+        //    too, under the same measured-overlap rule: the
+        //    pill renders exactly once, whole, above the
+        //    surface. (Previously this branch rendered NO
+        //    copy while the in-list copy was alpha-0 under
+        //    the same overlap — the pill vanished outright
+        //    whenever the expanded panel reached its seat.)
         // Both copies render the SAME single heroPill value —
         // one agreed per-cell presentation state (§7D).
-        if (!wirExpanded && pillOverlapsPanel && heroPill != null &&
+        if (pillOverlapsPanel && heroPill != null &&
             wirPillAnchorBounds != null
         ) {
             val anchorRect = wirPillAnchorBounds!!
