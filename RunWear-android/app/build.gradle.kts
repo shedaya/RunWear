@@ -53,8 +53,8 @@ android {
         // line takes vc20 for its half of the 1.2.5 train.
         // GEN-5 Android release 2026-11-05 (RW-28): 1.2.21 / vc36.
         // GEN-6: 1.2.22 / vc37. FOLLOWING BUILD 2026-11-06: 1.2.23 / vc38.
-        versionCode = 49
-        versionName = "1.2.34"
+        versionCode = 50
+        versionName = "1.2.35"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
