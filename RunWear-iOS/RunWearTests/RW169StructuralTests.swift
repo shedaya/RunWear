@@ -884,6 +884,8 @@ private struct RW169CompositionView: View {
         .clipped()
     }
 
+    var heroOnlyForDiagnostics: some View { hero }
+
     private var sheet: some View {
         RW169SheetView(pillState: pillState)
     }
@@ -1218,6 +1220,97 @@ final class RW169LoopbackTests: XCTestCase {
             },
             size: CGSize(width: 393, height: 480),
             name: "RW169-ios-expanded-capbinding-phone.png")
+    }
+
+
+    // MARK: - Diagnostics (loop-back round 3 — bisecting the
+    // ImageRenderer composition behaviour; NOT evidence)
+
+    /// Renders the same content twice on ONE renderer host,
+    /// spinning the run loop between passes so geometry-driven
+    /// @State updates apply before the snapshot.
+    @MainActor
+    private func writeRenderSettled<Content: View>(_ content: Content, size: CGSize, name: String) throws {
+        let renderer = ImageRenderer(content: content.frame(width: size.width, height: size.height))
+        renderer.scale = 2
+        _ = renderer.uiImage
+        let until = Date().addingTimeInterval(0.6)
+        while Date() < until {
+            RunLoop.main.run(mode: .default, before: Date().addingTimeInterval(0.05))
+        }
+        let image = try XCTUnwrap(renderer.uiImage, "settled render failed for \(name)")
+        let dir = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../render-artefacts", isDirectory: true)
+            .standardizedFileURL
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try XCTUnwrap(image.pngData()).write(to: dir.appendingPathComponent(name))
+        print("RW169LB wrote settled \(name)")
+    }
+
+    @MainActor
+    func testRW169LB_Diagnostics() throws {
+        let entry = approvalEntry(itemNames: approvalKit)
+        let rests = try surfaceRestHeights(entry: entry)
+        // D-A: the unified surface as a DIRECT bottom child of a
+        // ZStack over a plain page block (no page VStack).
+        try writeRender(
+            ZStack(alignment: .bottom) {
+                AppTheme.sheet
+                unified(rests, 0, .planned(.brooklyn), entry)
+                    .frame(width: 369, height: rests.mini)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 14)
+            },
+            size: CGSize(width: 393, height: 852),
+            name: "RW169-ios-diagA-dock-direct.png")
+        // D-B: the same, but the dock inside VStack{Spacer}.
+        try writeRender(
+            ZStack {
+                AppTheme.sheet
+                VStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    unified(rests, 0, .planned(.brooklyn), entry)
+                        .frame(width: 369, height: rests.mini)
+                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 14)
+            },
+            size: CGSize(width: 393, height: 852),
+            name: "RW169-ios-diagB-dock-vstack.png")
+        // D-C: the composition's hero ALONE in the canvas.
+        let comp = RW169CompositionView(
+            presentation: .serving,
+            pillState: .freeLook(used: 3, allowance: 10),
+            dockProgress: 0, dockHeight: rests.mini,
+            entry: entry, state: .planned(.brooklyn),
+            unified: { p, s, e in AnyView(self.unified(rests, p, s, e)) })
+        try writeRender(comp.heroOnlyForDiagnostics,
+            size: CGSize(width: 393, height: 852),
+            name: "RW169-ios-diagC-hero.png")
+        // D-D: the cap surface, SETTLED render (two passes).
+        let tallEntry = WearIveRunEntry(
+            dayStart: Date(timeIntervalSince1970: 1_763_568_000),
+            placeName: "Los Angeles, CA", feelsLikeF: 58, actualF: 62,
+            condition: "Clear",
+            itemNames: (1...24).map { "Item \($0) Long Garment Name" },
+            itemKeys: [], heroImageReference: "", windMph: 5,
+            dayLowF: 55, dayHighF: 66, faceAnchor: nil)
+        let tallRests = try surfaceRestHeights(entry: tallEntry)
+        let cap: CGFloat = 480 - 116
+        try writeRenderSettled(
+            ZStack {
+                AppTheme.background
+                VStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    unified(tallRests, 1, .planned(.brooklyn), tallEntry, viewportHeight: 480)
+                        .frame(width: 369, height: min(tallRests.expanded, cap))
+                }
+                .padding(.horizontal, 12)
+            },
+            size: CGSize(width: 393, height: 480),
+            name: "RW169-ios-diagD-cap-settled.png")
+        print("RW169LB diag tallRests expanded=\(tallRests.expanded) mini=\(tallRests.mini)")
     }
 
     // MARK: - 5 · The §7G.3 settle probe, with a staged trace (D12)
