@@ -900,21 +900,24 @@ final class RW135RebuildTests: XCTestCase {
         }
         let cardTop = 852 - 14 - Int(rests.mini)
         let cardBottom = 852 - 14
-        func spill(from start: Int, step: Int, sample: (Int) -> (Int, Int, Int)) -> Int {
+        // Bounded scan: a spill that reaches the canvas edge
+        // stops AT the edge (an earlier unbounded form ran
+        // off the pixel buffer and crashed the probe).
+        func spill(from start: Int, step: Int, limit: Int, sample: (Int) -> (Int, Int, Int)) -> Int {
             var count = 0
             var v = start
-            while count < 40 {
+            while count < 40 && (step > 0 ? v <= limit : v >= limit) {
                 if darkening(sample(v)) > 6 { count += 1; v += step } else { break }
             }
             return count
         }
         // Centre column x=196 pt (px 392), scanning outward
         // (each step is 2 px = 1 pt, so the count IS points).
-        let aboveSpill = spill(from: (cardTop - 1) * 2, step: -2) { y in light.pixel(392, y) }
-        let belowSpill = spill(from: (cardBottom + 1) * 2, step: 2) { y in light.pixel(392, y) }
+        let aboveSpill = spill(from: (cardTop - 1) * 2, step: -2, limit: 0) { y in light.pixel(392, y) }
+        let belowSpill = spill(from: (cardBottom + 1) * 2, step: 2, limit: light.height - 1) { y in light.pixel(392, y) }
         let midY = (cardTop + cardBottom) / 2 * 2
-        let leftSpill = spill(from: 11 * 2, step: -2) { x in light.pixel(x, midY) }
-        let rightSpill = spill(from: 382 * 2, step: 2) { x in light.pixel(x, midY) }
+        let leftSpill = spill(from: 11 * 2, step: -2, limit: 0) { x in light.pixel(x, midY) }
+        let rightSpill = spill(from: 382 * 2, step: 2, limit: light.width - 1) { x in light.pixel(x, midY) }
         try rw170WriteProbe(
             "RW170 shadow spill (light, mini rest, pt): above=\(aboveSpill) below=\(belowSpill) left=\(leftSpill) right=\(rightSpill)\n",
             name: "RW170-probe-shadow-spill.txt")
@@ -1082,7 +1085,7 @@ final class RW135RebuildTests: XCTestCase {
             // The surface's bottom edge: canvas 400 − lift 14.
             var count = 0
             var yy = (400 - 14 + 1) * 2
-            while count < 40 {
+            while count < 40 && yy <= reader.height - 1 {
                 let px = reader.pixel(196 * 2, yy)
                 let darkening = Double((ground.0 - px.0) + (ground.1 - px.1) + (ground.2 - px.2)) / 3.0
                 if darkening > 6 { count += 1; yy += 2 } else { break }
