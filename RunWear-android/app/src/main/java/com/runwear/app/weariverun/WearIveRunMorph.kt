@@ -368,7 +368,13 @@ fun WearIveRunMorphSurface(
     // animation (mini translucency -> 1.0). This surface never
     // reads MiniBarContainer — the two-token colour lerp is
     // deleted.
-    val containerColor = RunWearColors.FooterGround.copy(
+    // SCRATCH (ci/rw170-disc-tokens): the pre-RW-170 defect —
+    // the two-token colour lerp restored.
+    val containerColor = androidx.compose.ui.graphics.lerp(
+        RunWearColors.MiniBarContainer,
+        RunWearColors.FooterGround,
+        p
+    ).copy(
         alpha = WearIveRunMorphPolicy.surfaceAlpha(p, darkTheme)
     )
 
