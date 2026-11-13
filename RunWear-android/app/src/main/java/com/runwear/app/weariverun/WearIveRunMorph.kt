@@ -36,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.nativeCanvas
@@ -388,52 +389,19 @@ fun WearIveRunMorphSurface(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .drawBehind {
-                    // RW-170 Move 3 — ONE SHADOW (spec §2.1):
-                    // shape-following, drawn UNDER the surface:
-                    // offset (0, +6dp), blur 24dp, black at
-                    // 14%, constant across p and appearances.
-                    // The shape's own fill is cleared after the
-                    // shadow is cast, so the surface's
-                    // background composites directly over the
-                    // page (a filled shape under a translucent
-                    // background would darken the token).
-                    val radiusPx =
-                        WearIveRunMorphPolicy.RADIUS_DP.dp.toPx()
-                    val paint = androidx.compose.ui.graphics.Paint()
-                        .asFrameworkPaint()
-                    paint.isAntiAlias = true
-                    paint.color = android.graphics.Color.BLACK
-                    paint.setShadowLayer(
-                        WearIveRunMorphPolicy.SHADOW_BLUR_DP.dp.toPx(),
-                        0f,
-                        WearIveRunMorphPolicy.SHADOW_OFFSET_Y_DP.dp.toPx(),
-                        android.graphics.Color.argb(
-                            (WearIveRunMorphPolicy.SHADOW_ALPHA * 255)
-                                .roundToInt(),
-                            0, 0, 0
-                        )
-                    )
-                    val canvas = drawContext.canvas.nativeCanvas
-                    val rect = android.graphics.RectF(
-                        0f, 0f, size.width, size.height
-                    )
-                    canvas.drawRoundRect(rect, radiusPx, radiusPx, paint)
-                    paint.setShadowLayer(0f, 0f, 0f, 0)
-                    paint.xfermode = android.graphics.PorterDuffXfermode(
-                        android.graphics.PorterDuff.Mode.CLEAR
-                    )
-                    canvas.drawRoundRect(rect, radiusPx, radiusPx, paint)
-                    paint.xfermode = null
-                }
+                .shadow(
+                    // SCRATCH (ci/rw170-disc-shadow): the
+                    // pre-RW-170 defect — the stock elevation
+                    // shadow restored.
+                    elevation = WearIveRunMorphPolicy.lerp(6f, 16f, p).dp,
+                    shape = shape
+                )
                 .clip(shape)
                 .background(containerColor)
                 .border(
-                    // Spec §2.1 hairline: 1 physical px at ink 5%.
-                    width = androidx.compose.ui.unit.Dp.Hairline,
-                    color = RunWearColors.TextPrimary.copy(
-                        alpha = WearIveRunMorphPolicy.HAIRLINE_ALPHA
-                    ),
+                    // SCRATCH: pre-RW-170 hairline (1dp at 9%).
+                    width = 1.dp,
+                    color = RunWearColors.TextPrimary.copy(alpha = 0.09f),
                     shape = shape
                 )
                 .graphicsLayer { alpha = contentAlpha.value }
