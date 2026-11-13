@@ -43,7 +43,13 @@ class Rw144AFirstOpenRenderTest : Rw144RenderTestBase() {
             boxes.any { it.text == "6 of 10 looks" }
         )
         if (dockWordmark != null) {
-            val dockTop = dockWordmark.top - 14 * density // dock's own top padding zone
+            // RW-170: the band top IS the painted card top (band
+            // = lift + presented mini height), so the dock's top
+            // is the surface node's own top. The pre-RW-170
+            // "-14dp" fudge was calibrated to the old 102dp
+            // band's air gap; the list now legitimately ends
+            // flush at the card top.
+            val dockTop = dockWordmark.top
             // The RW-144 acceptance (task item 8, closing RW-140 Audit
             // item B): the dock's band vs the bottom of the lowest
             // readable SHEET element it could overlap — the sheet

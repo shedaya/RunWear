@@ -49,7 +49,10 @@ class Rw145FoldedRenderTest : Rw145RenderTestBase() {
         // must end at or above the band's top.
         val dockMark = boxes.firstOrNull { it.text.contains("Wear I've Run") }
         assertTrue("dock must be present at rest", dockMark != null)
-        val dockTop = (dockMark!!.top / density) - 14f // the dock's own top padding zone
+        // RW-170: the band top IS the painted card top (band =
+        // lift + presented mini height), so the dock's top is
+        // the surface node's own top — see Rw145StandardRenderTest.
+        val dockTop = dockMark!!.top / density
         val dockTexts = boxes.filter { it.top >= dockMark.top - 1f }
         val offenders = boxes.filter { box ->
             box !in dockTexts && box.bottom / density > dockTop + 2f
