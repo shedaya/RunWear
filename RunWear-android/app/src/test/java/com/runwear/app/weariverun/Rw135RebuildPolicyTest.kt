@@ -11,6 +11,15 @@ import org.junit.Test
  * legibility invariant, RB-04 the padding/control tokens and
  * rest heights, RB-05 the constant radius, and R-1 the
  * footer-presentation trigger decision function.
+ *
+ * RW-170 (Nov 12, 2026): the RB-03 pins are rewritten to the
+ * single-narration law — the narration is ONE composition
+ * whose slot migrates (font 12sp -> 15sp); the two-placement
+ * window functions (miniNarrationAlpha /
+ * expandedNarrationAlpha / bothNarrationsLegible /
+ * legibleNarrationCount) are deleted with the construction
+ * they encoded. Move 1's alpha-only surface law is pinned
+ * here too.
  */
 class Rw135RebuildPolicyTest {
 
@@ -25,58 +34,74 @@ class Rw135RebuildPolicyTest {
         }
     }
 
-    // ---- RB-03: narration dissolve windows --------------------
+    // ---- RB-03 / RW-170 Move 4: ONE narration, migrating ----
 
     @Test
-    fun `narration windows - endpoints and dead zone`() {
-        assertEquals(1f, WearIveRunMorphPolicy.miniNarrationAlpha(0f), 0.001f)
-        assertEquals(
-            0f, WearIveRunMorphPolicy.miniNarrationAlpha(0.35f), 0.001f
-        )
-        assertEquals(
-            0f, WearIveRunMorphPolicy.miniNarrationAlpha(1f), 0.001f
-        )
-        assertEquals(
-            0f, WearIveRunMorphPolicy.expandedNarrationAlpha(0f), 0.001f
-        )
-        assertEquals(
-            0f, WearIveRunMorphPolicy.expandedNarrationAlpha(0.55f), 0.001f
-        )
-        assertEquals(
-            1f, WearIveRunMorphPolicy.expandedNarrationAlpha(1f), 0.001f
-        )
-        // The dead zone: at the midpoint NEITHER placement is
-        // visible at all.
-        assertEquals(
-            0f, WearIveRunMorphPolicy.miniNarrationAlpha(0.45f), 0.001f
-        )
-        assertEquals(
-            0f, WearIveRunMorphPolicy.expandedNarrationAlpha(0.45f), 0.001f
-        )
+    fun `single narration law - exactly one narration node at every p`() {
+        var p = 0f
+        while (p <= 1.0001f) {
+            assertEquals(
+                "exactly one narration node at p=$p",
+                1, WearIveRunMorphPolicy.narrationNodeCount(p)
+            )
+            p += 0.05f
+        }
     }
 
     @Test
-    fun `legibility invariant - never both narrations legible at sampled p`() {
+    fun `narration font lerps 12sp mini to 15sp expanded`() {
+        assertEquals(12f, WearIveRunMorphPolicy.narrationSp(0f), 0.001f)
+        assertEquals(13.5f, WearIveRunMorphPolicy.narrationSp(0.5f), 0.001f)
+        assertEquals(15f, WearIveRunMorphPolicy.narrationSp(1f), 0.001f)
+        // Monotonic across the travel.
+        var prev = -1f
         var p = 0f
         while (p <= 1.0001f) {
-            assertFalse(
-                "both legible at p=$p (mini=" +
-                    "${WearIveRunMorphPolicy.miniNarrationAlpha(p)}, exp=" +
-                    "${WearIveRunMorphPolicy.expandedNarrationAlpha(p)})",
-                WearIveRunMorphPolicy.bothNarrationsLegible(p)
-            )
-            assertTrue(
-                "at most one legible narration at p=$p",
-                WearIveRunMorphPolicy.legibleNarrationCount(p) <= 1
-            )
+            val v = WearIveRunMorphPolicy.narrationSp(p)
+            assertTrue("narrationSp monotonic at p=$p", v >= prev)
+            prev = v
             p += 0.1f
         }
-        // Exactly one legible narration at both rest states.
-        assertEquals(1, WearIveRunMorphPolicy.legibleNarrationCount(0f))
-        assertEquals(1, WearIveRunMorphPolicy.legibleNarrationCount(1f))
         // The wordmark still lerps in place 17 -> 31.
         assertEquals(17f, WearIveRunMorphPolicy.wordmarkSp(0f), 0.001f)
         assertEquals(31f, WearIveRunMorphPolicy.wordmarkSp(1f), 0.001f)
+    }
+
+    // ---- RW-170 Move 1: ONE surface, alpha-only animation ----
+
+    @Test
+    fun `surface alpha - mini translucency to opaque, token constant`() {
+        // Light: 0.85 -> 1.0. Dark: 0.82 -> 1.0.
+        assertEquals(
+            0.85f, WearIveRunMorphPolicy.surfaceAlpha(0f, darkTheme = false),
+            0.001f
+        )
+        assertEquals(
+            1f, WearIveRunMorphPolicy.surfaceAlpha(1f, darkTheme = false),
+            0.001f
+        )
+        assertEquals(
+            0.82f, WearIveRunMorphPolicy.surfaceAlpha(0f, darkTheme = true),
+            0.001f
+        )
+        assertEquals(
+            1f, WearIveRunMorphPolicy.surfaceAlpha(1f, darkTheme = true),
+            0.001f
+        )
+        assertEquals(
+            0.925f, WearIveRunMorphPolicy.surfaceAlpha(0.5f, darkTheme = false),
+            0.001f
+        )
+    }
+
+    // ---- RW-170 Move 3: shadow + hairline tokens -------------
+
+    @Test
+    fun `shadow of record - offset 6, blur 24, black 14, hairline ink 5`() {
+        assertEquals(6f, WearIveRunMorphPolicy.SHADOW_OFFSET_Y_DP, 0.001f)
+        assertEquals(24f, WearIveRunMorphPolicy.SHADOW_BLUR_DP, 0.001f)
+        assertEquals(0.14f, WearIveRunMorphPolicy.SHADOW_ALPHA, 0.001f)
+        assertEquals(0.05f, WearIveRunMorphPolicy.HAIRLINE_ALPHA, 0.001f)
     }
 
     @Test

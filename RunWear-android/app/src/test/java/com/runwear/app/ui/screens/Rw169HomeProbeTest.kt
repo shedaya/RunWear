@@ -146,8 +146,20 @@ class Rw169DeleteAnchorProbeTest : Rw169HomeBase() {
                 .value()
         }
         val valueBefore = scrollValue()
+        // PLACED nodes only (RW-170 note): the LazyColumn keeps
+        // a composed-but-never-placed precomposition copy of
+        // off-window items in the tree at zero bounds (the
+        // weather-detail row among them). A zero-bounds node is
+        // definitionally not "what the user is reading", and
+        // keying the map by text alone lets the phantom copy
+        // (top 0.0) shadow the placed node depending on walk
+        // order — the RW-170 band change (102dp -> 63dp-class)
+        // shifted the flick's landing so the detail item is
+        // precomposed here, which exposed the collision. The
+        // §8.6 invariant is about placed content; it is
+        // unchanged (scroll 600 -> 600, placed tops identical).
         val topsBefore = nodeBoxes(host)
-            .filter { it.text.isNotBlank() }
+            .filter { it.text.isNotBlank() && it.bottom > it.top }
             .associate { it.text to it.top }
         assertTrue(
             "reading window composed at end of scroll",
@@ -164,8 +176,9 @@ class Rw169DeleteAnchorProbeTest : Rw169HomeBase() {
         )
         var stillChecked = 0
         for ((text, top) in topsBefore) {
-            val now = nodeBoxes(host).firstOrNull { it.text == text }
-                ?: continue
+            val now = nodeBoxes(host).firstOrNull {
+                it.text == text && it.bottom > it.top
+            } ?: continue
             assertTrue(
                 "node '$text' unmoved by the delete " +
                     "($top -> ${now.top})",

@@ -219,21 +219,20 @@ class Rw169PolicyTest {
 
     @Test
     fun `morph policy - exactly one narration at every progress sample`() {
-        // RW-135 REBUILD (Nov 12, 2026): the morph is now the
-        // dissolve — TWO placements of the same string with
-        // disjoint alpha windows. The invariant that survives
-        // is legibility: at most one placement is legible at
-        // any progress, and exactly one at both rest states.
-        // (The full sampled sweep lives in
+        // RW-170 (Nov 12, 2026): the narration is ONE
+        // composition whose slot migrates — exactly one
+        // narration node exists at every progress value, by
+        // construction. (The pre-RW-170 two-placement dissolve
+        // pinned a legibility count over disjoint alpha
+        // windows; that construction and its policy functions
+        // are deleted. The full sampled sweep lives in
         // Rw135RebuildPolicyTest.)
         for (p in listOf(0f, 0.25f, 0.5f, 0.75f, 1f)) {
-            assertTrue(
-                "at most one legible narration at p=$p",
-                WearIveRunMorphPolicy.legibleNarrationCount(p) <= 1
+            assertEquals(
+                "exactly one narration node at p=$p",
+                1, WearIveRunMorphPolicy.narrationNodeCount(p)
             )
         }
-        assertEquals(1, WearIveRunMorphPolicy.legibleNarrationCount(0f))
-        assertEquals(1, WearIveRunMorphPolicy.legibleNarrationCount(1f))
     }
 
     @Test
@@ -248,14 +247,12 @@ class Rw169PolicyTest {
     fun `morph policy - geometry endpoints are the two rest geometries`() {
         assertEquals(17f, WearIveRunMorphPolicy.wordmarkSp(0f), 0.001f)
         assertEquals(31f, WearIveRunMorphPolicy.wordmarkSp(1f), 0.001f)
-        // RW-135 REBUILD: the narration no longer lerps its
-        // size along a diagonal — the mini placement is a
-        // fixed 12sp and the expanded placement a fixed 15sp,
-        // cross-faded by the disjoint dissolve windows.
-        assertEquals(1f, WearIveRunMorphPolicy.miniNarrationAlpha(0f), 0.001f)
-        assertEquals(0f, WearIveRunMorphPolicy.miniNarrationAlpha(1f), 0.001f)
-        assertEquals(0f, WearIveRunMorphPolicy.expandedNarrationAlpha(0f), 0.001f)
-        assertEquals(1f, WearIveRunMorphPolicy.expandedNarrationAlpha(1f), 0.001f)
+        // RW-170 Move 4: the ONE narration's font size lerps
+        // 12sp -> 15sp as its slot migrates (the pre-RW-170
+        // two fixed placements, cross-faded by disjoint
+        // dissolve windows, are deleted).
+        assertEquals(12f, WearIveRunMorphPolicy.narrationSp(0f), 0.001f)
+        assertEquals(15f, WearIveRunMorphPolicy.narrationSp(1f), 0.001f)
         // RB-05: radius is a constant 16dp — it never animates
         // (the pre-rebuild policy lerped 16 -> 24).
         assertEquals(16f, WearIveRunMorphPolicy.radiusDp(0f), 0.001f)

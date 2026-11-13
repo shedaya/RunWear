@@ -288,6 +288,19 @@ fun HeroMainScreen(
     var wirPanelBounds by remember {
         mutableStateOf<androidx.compose.ui.geometry.Rect?>(null)
     }
+    // RW-170 Move 2: the PRESENTED (mini) form's measured
+    // height, reported by the morph surface at p = 0 geometry.
+    // Every dock-band consumer below prices from this one
+    // quantity. Default = the one-line policy estimate (49dp),
+    // so the band is 63dp from first composition; a wrapped
+    // two-line narration reports its grown height and the band
+    // follows. Expansion never reports, so expansion never
+    // moves the band.
+    var wirPresentedMiniHeightDp by remember {
+        mutableFloatStateOf(
+            DockClearancePolicy.DEFAULT_PRESENTED_MINI_HEIGHT_DP
+        )
+    }
     val pillOverlapsPanel = wirPillAnchorBounds != null &&
         wirPanelBounds != null &&
         wirPillAnchorBounds!!.overlaps(wirPanelBounds!!)
@@ -1328,6 +1341,11 @@ fun HeroMainScreen(
                     .maxPanelHeightDp(
                         LocalConfiguration.current.screenHeightDp.toFloat()
                     ),
+                // RW-170 Move 2: the presented mini height —
+                // the band below prices from it.
+                onMiniHeightChanged = { presentedDp ->
+                    wirPresentedMiniHeightDp = presentedDp
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(
@@ -1419,7 +1437,7 @@ fun HeroMainScreen(
                                 }
                             )
                             .height(
-                                (DockClearancePolicy.dockBandDp() +
+                                (DockClearancePolicy.dockBandDp(wirPresentedMiniHeightDp) +
                                     wirScaffoldBottomInsetDp).dp
                             )
                             .background(RunWearColors.Surface)
@@ -1446,7 +1464,7 @@ fun HeroMainScreen(
                             if (wirSurfacesPresent) {
                                 Modifier.padding(
                                     bottom = (
-                                        DockClearancePolicy.dockBandDp() +
+                                        DockClearancePolicy.dockBandDp(wirPresentedMiniHeightDp) +
                                             wirScaffoldBottomInsetDp
                                         ).dp
                                 )
@@ -1856,7 +1874,7 @@ fun HeroMainScreen(
                             .fillMaxWidth()
                             .padding(
                                 bottom = (
-                                    DockClearancePolicy.dockBandDp() +
+                                    DockClearancePolicy.dockBandDp(wirPresentedMiniHeightDp) +
                                         wirScaffoldBottomInsetDp
                                     ).dp
                             )
@@ -2072,7 +2090,7 @@ fun HeroMainScreen(
                 // rests above the dock's band, not beneath it.
                 .padding(
                     bottom = if (wirSurfacesPresent) {
-                        (DockClearancePolicy.dockBandDp() + 8f).dp
+                        (DockClearancePolicy.dockBandDp(wirPresentedMiniHeightDp) + 8f).dp
                     } else {
                         24.dp
                     }

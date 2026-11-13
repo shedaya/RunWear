@@ -151,13 +151,27 @@ class Rw156ExpandedPanelRenderTest : Rw156Base() {
         }
         assertTrue("expanded panel composed (FooterGround found)", panelTop >= 0)
         val midY = (panelTop + panelBottom) / 2
-        // Panel's horizontal extent at its middle row.
+        // Panel's horizontal extent at its middle row: the
+        // LONGEST contiguous FooterGround run (RW-170: the
+        // spec shadow's far blur tail can darken the sheet a
+        // few units INTO this colour window near the screen
+        // edges — a first-match scan would call the tail the
+        // panel; the panel is the one long unbroken run, the
+        // same rule the column scan above already uses).
         var panelLeft = -1
         var panelRight = -1
-        for (x in 0 until bitmap.width) {
-            if (isFooterGround(bitmap.getPixel(x, midY))) {
-                if (panelLeft < 0) panelLeft = x
-                panelRight = x
+        var rowRunStart = -1
+        var rowBestLen = 0
+        for (x in 0..bitmap.width) {
+            val ground = x < bitmap.width && isFooterGround(bitmap.getPixel(x, midY))
+            if (ground && rowRunStart < 0) rowRunStart = x
+            if (!ground && rowRunStart >= 0) {
+                if (x - rowRunStart > rowBestLen) {
+                    rowBestLen = x - rowRunStart
+                    panelLeft = rowRunStart
+                    panelRight = x - 1
+                }
+                rowRunStart = -1
             }
         }
         println(

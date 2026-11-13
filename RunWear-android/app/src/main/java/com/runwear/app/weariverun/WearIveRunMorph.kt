@@ -35,9 +35,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
@@ -66,21 +67,37 @@ import kotlin.math.roundToInt
  * - the wordmark is ONE instance, top-left anchored in both
  *   forms, its font size lerping 17sp -> 31sp in place
  *   (fixed-claim: never wraps/shrinks);
- * - the narration exists in TWO placements of the same
- *   string — the mini slot (beside the wordmark, 12sp) and
- *   the expanded slot (below the header row, full width,
- *   15sp) — with DISJOINT dissolve windows (mini out over
- *   p in [0, 0.35], expanded in over p in [0.55, 1], a dead
- *   zone between), so at no progress value are both legible
- *   (the legibility invariant, map §5). The sub-0.5-alpha
- *   placement is removed from the semantics/accessibility
- *   tree (invisibleToUser), mirroring the handoff hit rule;
+ * - RW-170 Move 4 (Nov 12, 2026): the narration is ONE
+ *   composition whose slot MIGRATES with p, the way the
+ *   wordmark already does — font size lerps 12sp -> 15sp,
+ *   x lerps from the mini slot (beside the wordmark) to the
+ *   expanded slot (side pad), y lerps from centred-in-mini-row
+ *   to below the header row, width lerps mini slot -> full
+ *   width. Exactly ONE narration node exists at every p, so
+ *   the legibility invariant (map §5) holds by construction
+ *   — there is never a second copy to ghost. (The pre-RW-170
+ *   construction composed the narration TWICE with disjoint
+ *   alpha windows [0,.35]/[.55,1] and a dead zone; Sol's
+ *   device pass showed the ghosted double text.)
  * - the expanded-only content (entry row + doorway) fades in
  *   over the back window [0.45, 1], laid out at expanded
  *   geometry inside the growing, clipped container;
- * - the container material cross-fades mini-translucent ->
- *   expanded ground; the radius is a CONSTANT 16dp at every
- *   progress value (map §3.1: "16pt — never animates");
+ * - RW-170 Move 1 (Nov 12, 2026): the container paints ONE
+ *   token — FooterGround in both appearances (Sol's ruling:
+ *   the EXPANDED state's darker warm tone is the unified
+ *   surface token; the MINI #FDFBF6 MiniBarContainer token
+ *   is superseded for this surface and this surface never
+ *   reads it). ALPHA is the only background animation: the
+ *   mini translucency (0.85 light / 0.82 dark, per
+ *   WearIveRunMiniBarPolicy) -> 1.0 expanded. No colour
+ *   lerp. The radius is a CONSTANT 16dp at every progress
+ *   value (map §3.1: "16pt — never animates");
+ * - RW-170 Move 3: the shadow is the spec §2.1 custom
+ *   shadow — shape-following, drawn UNDER the surface,
+ *   offset (0, +6dp), blur 24dp, black at 14%, constant
+ *   across p and appearances — plus the 1px hairline at
+ *   ink 5%. The stock elevation shadow (an ambient+spot
+ *   halo on every side) is gone.
  * - padding tokens (RB-04, prototype-measured): MINI rest =
  *   top 11dp / bottom 12dp around a 26dp content row
  *   (≈49dp total); EXPANDED = top 20dp / sides 16dp /
@@ -127,37 +144,45 @@ object WearIveRunMorphPolicy {
     const val EXPANDED_SIDE_DP = 16f
     const val CONTROL_DP = 26f
 
-    private fun smoothstep(t: Float): Float {
-        val x = t.coerceIn(0f, 1f)
-        return x * x * (3f - 2f * x)
-    }
+    /** Shadow of record (spec §2.1; RW-170 Move 3): offset
+     * (0, +6dp), blur 24dp, black at 14% — constant across
+     * progress and appearances. */
+    const val SHADOW_OFFSET_Y_DP = 6f
+    const val SHADOW_BLUR_DP = 24f
+    const val SHADOW_ALPHA = 0.14f
+
+    /** Hairline (spec §2.1): 1 physical px at ink 5%. */
+    const val HAIRLINE_ALPHA = 0.05f
 
     /** The expanded region's dissolve window (RW-152 §1.3). */
     fun expandedAlpha(progress: Float): Float =
         ((progress - 0.45f) / 0.55f).coerceIn(0f, 1f)
 
-    /** Mini narration dissolve: out over p in [0, 0.35]. */
-    fun miniNarrationAlpha(progress: Float): Float =
-        1f - smoothstep(progress / 0.35f)
+    /** The ONE narration's font size (RW-170 Move 4): lerps
+     * 12sp at the mini slot -> 15sp at the expanded slot. */
+    fun narrationSp(progress: Float): Float = lerp(12f, 15f, progress)
 
-    /** Expanded narration dissolve: in over p in [0.55, 1]. */
-    fun expandedNarrationAlpha(progress: Float): Float =
-        smoothstep((progress - 0.55f) / 0.45f)
+    /** RW-170 Move 1 — the surface's background alpha: the
+     * mini translucency (WearIveRunMiniBarPolicy: 0.85 light
+     * / 0.82 dark) lerping to fully opaque at expanded. The
+     * TOKEN never changes (FooterGround, both appearances);
+     * alpha is the only background animation. */
+    fun surfaceAlpha(progress: Float, darkTheme: Boolean): Float =
+        lerp(
+            WearIveRunMiniBarPolicy.backgroundAlpha(
+                isFullExpression = false,
+                darkTheme = darkTheme
+            ),
+            WearIveRunMiniBarPolicy.FULL_ALPHA,
+            progress
+        )
 
-    /** The legibility invariant (map §5): both narrations
-     * legible at once iff both alphas exceed 0.25 — the
-     * disjoint windows make that unreachable by construction;
-     * the policy tests sample p and assert it. */
-    fun bothNarrationsLegible(progress: Float): Boolean =
-        miniNarrationAlpha(progress) > 0.25f &&
-            expandedNarrationAlpha(progress) > 0.25f
-
-    /** Legible-narration count at [progress]: the count of
-     * placements whose alpha exceeds 0.25 (0 inside the
-     * dissolve's dead zone, 1 everywhere else). */
-    fun legibleNarrationCount(progress: Float): Int =
-        (if (miniNarrationAlpha(progress) > 0.25f) 1 else 0) +
-            (if (expandedNarrationAlpha(progress) > 0.25f) 1 else 0)
+    /** The single-narration law (RW-170 Move 4): exactly ONE
+     * narration node exists at every progress value — the
+     * narration is composed once and its slot migrates. The
+     * legibility invariant (map §5: never two legible
+     * narrations) holds by construction. */
+    fun narrationNodeCount(progress: Float): Int = 1
 
     /** Geometry interpolation between the two rest geometries. */
     fun lerp(start: Float, end: Float, progress: Float): Float =
@@ -209,6 +234,12 @@ fun WearIveRunMorphSurface(
     reduceMotion: Boolean = false,
     onExitFinished: () -> Unit = {},
     maxExpandedHeightDp: Float = Float.MAX_VALUE,
+    /** RW-170 Move 2: reports the PRESENTED (mini) form's
+     * measured rest height in dp (top pad + mini header +
+     * bottom pad, at p = 0 geometry) so the host prices the
+     * dock band from what is on screen. Fires only at p = 0 —
+     * expansion never changes the reported quantity. */
+    onMiniHeightChanged: (Float) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
@@ -235,7 +266,7 @@ fun WearIveRunMorphSurface(
     val p = progress
 
     // ---- Settle-flip narration fade (spec §4.3: opacity only,
-    // out 95ms / swap / in 115ms) — both placements render the
+    // out 95ms / swap / in 115ms) — the one narration renders the
     // SAME displayed narration, so the record flips atomically.
     var displayedNarration by remember { mutableStateOf(narration) }
     val narrationAlpha = remember { Animatable(1f) }
@@ -332,18 +363,14 @@ fun WearIveRunMorphSurface(
     )
 
     val shape = RoundedCornerShape(WearIveRunMorphPolicy.radiusDp(p).dp)
-    val miniColor = RunWearColors.MiniBarContainer.copy(
-        alpha = WearIveRunMiniBarPolicy.backgroundAlpha(
-            isFullExpression = false,
-            darkTheme = darkTheme
-        )
+    // RW-170 Move 1 — ONE SURFACE: FooterGround in both
+    // appearances (Sol's ruling); ALPHA is the only background
+    // animation (mini translucency -> 1.0). This surface never
+    // reads MiniBarContainer — the two-token colour lerp is
+    // deleted.
+    val containerColor = RunWearColors.FooterGround.copy(
+        alpha = WearIveRunMorphPolicy.surfaceAlpha(p, darkTheme)
     )
-    val containerColor = androidx.compose.ui.graphics.lerp(
-        miniColor, RunWearColors.FooterGround, p
-    )
-
-    val miniNarrAlpha = WearIveRunMorphPolicy.miniNarrationAlpha(p)
-    val expNarrAlpha = WearIveRunMorphPolicy.expandedNarrationAlpha(p)
 
     Box(
         modifier = modifier
@@ -361,15 +388,52 @@ fun WearIveRunMorphSurface(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .shadow(
-                    elevation = WearIveRunMorphPolicy.lerp(6f, 16f, p).dp,
-                    shape = shape
-                )
+                .drawBehind {
+                    // RW-170 Move 3 — ONE SHADOW (spec §2.1):
+                    // shape-following, drawn UNDER the surface:
+                    // offset (0, +6dp), blur 24dp, black at
+                    // 14%, constant across p and appearances.
+                    // The shape's own fill is cleared after the
+                    // shadow is cast, so the surface's
+                    // background composites directly over the
+                    // page (a filled shape under a translucent
+                    // background would darken the token).
+                    val radiusPx =
+                        WearIveRunMorphPolicy.RADIUS_DP.dp.toPx()
+                    val paint = androidx.compose.ui.graphics.Paint()
+                        .asFrameworkPaint()
+                    paint.isAntiAlias = true
+                    paint.color = android.graphics.Color.BLACK
+                    paint.setShadowLayer(
+                        WearIveRunMorphPolicy.SHADOW_BLUR_DP.dp.toPx(),
+                        0f,
+                        WearIveRunMorphPolicy.SHADOW_OFFSET_Y_DP.dp.toPx(),
+                        android.graphics.Color.argb(
+                            (WearIveRunMorphPolicy.SHADOW_ALPHA * 255)
+                                .roundToInt(),
+                            0, 0, 0
+                        )
+                    )
+                    val canvas = drawContext.canvas.nativeCanvas
+                    val rect = android.graphics.RectF(
+                        0f, 0f, size.width, size.height
+                    )
+                    canvas.drawRoundRect(rect, radiusPx, radiusPx, paint)
+                    paint.setShadowLayer(0f, 0f, 0f, 0)
+                    paint.xfermode = android.graphics.PorterDuffXfermode(
+                        android.graphics.PorterDuff.Mode.CLEAR
+                    )
+                    canvas.drawRoundRect(rect, radiusPx, radiusPx, paint)
+                    paint.xfermode = null
+                }
                 .clip(shape)
                 .background(containerColor)
                 .border(
-                    width = 1.dp,
-                    color = RunWearColors.TextPrimary.copy(alpha = 0.09f),
+                    // Spec §2.1 hairline: 1 physical px at ink 5%.
+                    width = androidx.compose.ui.unit.Dp.Hairline,
+                    color = RunWearColors.TextPrimary.copy(
+                        alpha = WearIveRunMorphPolicy.HAIRLINE_ALPHA
+                    ),
                     shape = shape
                 )
                 .graphicsLayer { alpha = contentAlpha.value }
@@ -387,6 +451,7 @@ fun WearIveRunMorphSurface(
                 maxExpandedHeightDp = maxExpandedHeightDp,
                 foldFraction = foldFraction.value,
                 onSizeChanged = { surfaceHeightPx = it },
+                onMiniHeightChanged = onMiniHeightChanged,
                 wordmark = {
                     // Fixed-claim at EVERY progress value: one
                     // instance, top-left anchored, size lerps
@@ -400,43 +465,23 @@ fun WearIveRunMorphSurface(
                         softWrap = false
                     )
                 },
-                narrationMini = {
+                narration = {
+                    // RW-170 Move 4 — ONE narration composition.
+                    // Its slot migrates inside MorphLayout; the
+                    // only alpha on it is the shared settle-flip
+                    // fade (§4.3), which stays. No second
+                    // placement exists to ghost, and no
+                    // invisibleToUser swap is needed.
                     Box(
                         modifier = Modifier
                             .graphicsLayer {
-                                alpha = miniNarrAlpha * narrationAlpha.value
+                                alpha = narrationAlpha.value
                             }
-                            .then(
-                                if (miniNarrAlpha < 0.5f) {
-                                    Modifier.semantics { invisibleToUser() }
-                                } else {
-                                    Modifier
-                                }
-                            )
                     ) {
                         DockNarrationTextPublic(
                             narration = displayedNarration,
-                            fontSizeSp = 12f
-                        )
-                    }
-                },
-                narrationExpanded = {
-                    Box(
-                        modifier = Modifier
-                            .graphicsLayer {
-                                alpha = expNarrAlpha * narrationAlpha.value
-                            }
-                            .then(
-                                if (expNarrAlpha < 0.5f) {
-                                    Modifier.semantics { invisibleToUser() }
-                                } else {
-                                    Modifier
-                                }
-                            )
-                    ) {
-                        DockNarrationTextPublic(
-                            narration = displayedNarration,
-                            fontSizeSp = 15f
+                            fontSizeSp =
+                                WearIveRunMorphPolicy.narrationSp(p)
                         )
                     }
                 },
@@ -626,18 +671,32 @@ fun WearIveRunMorphSurface(
 
 /**
  * The single-layout measure/place pass. Children: [wordmark,
- * narrationMini, narrationExpanded, controls, entryRegion,
- * doorway] — measured ONCE each, in this one hierarchy, per
- * frame. Rest heights are read from this same measure: the
- * mini height is the header block's height at p = 0 geometry
- * (top pad 11 + the one content row + bottom pad 12); the
- * expanded height is the full content height at p = 1
- * geometry. The container's height at progress p is their
- * interpolation — geometry, not arbitration. Neither
- * narration placement ever travels diagonally: each sits at
- * its own rest geometry for the whole morph and only its
- * alpha (plus the shared settle fade) changes — the
- * dissolve, not a slide.
+ * narration, controls, entryRegion, doorway] — in this one
+ * hierarchy, per frame. Rest heights are read from this same
+ * measure: the mini height is the header block's height at
+ * p = 0 geometry (top pad 11 + the one content row + bottom
+ * pad 12); the expanded height is the full content height at
+ * p = 1 geometry. The container's height at progress p is
+ * their interpolation — geometry, not arbitration.
+ *
+ * RW-170 Move 4: the ONE narration measurable is measured
+ * ONCE per frame, at the migrated width for the current p;
+ * the two rest header heights are priced from its intrinsic
+ * heights at the two rest slot widths (exact at the rest
+ * states, where the lerped font size equals the slot's own
+ * size). The placed instance migrates: x lerps mini slot ->
+ * side pad, y lerps centred-in-mini-row -> below the header
+ * row, width lerps mini slot -> full width, and its font
+ * size lerps in the composition (12sp -> 15sp). At p = 0 the
+ * placement is exactly the old mini rest geometry; at p = 1
+ * exactly the old expanded rest geometry; the container
+ * height interpolates between the two rest heights
+ * throughout.
+ *
+ * RW-170 Move 2: at p = 0 (and only there — the presented
+ * form's geometry is exact only at its own rest), the mini
+ * rest height is reported via [onMiniHeightChanged] so the
+ * host prices the dock band from the PRESENTED form.
  */
 @Composable
 private fun MorphLayout(
@@ -645,9 +704,9 @@ private fun MorphLayout(
     maxExpandedHeightDp: Float,
     foldFraction: Float,
     onSizeChanged: (Int) -> Unit,
+    onMiniHeightChanged: (Float) -> Unit,
     wordmark: @Composable () -> Unit,
-    narrationMini: @Composable () -> Unit,
-    narrationExpanded: @Composable () -> Unit,
+    narration: @Composable () -> Unit,
     controls: @Composable () -> Unit,
     entryRegion: @Composable () -> Unit,
     doorway: @Composable () -> Unit
@@ -656,8 +715,7 @@ private fun MorphLayout(
     Layout(
         content = {
             wordmark()
-            narrationMini()
-            narrationExpanded()
+            narration()
             controls()
             val expandedScrollState = rememberScrollState()
             Box(
@@ -681,10 +739,11 @@ private fun MorphLayout(
             WearIveRunMorphPolicy.bottomPaddingDp(p).dp.roundToPx()
         }
         val gapPx = with(density) { 10.dp.roundToPx() }
+        val narrGapPx = with(density) { 4.dp.roundToPx() }
         val wordmarkPlaceable = measurables[0].measure(
             Constraints(maxWidth = maxW)
         )
-        val controlsPlaceable = measurables[3].measure(
+        val controlsPlaceable = measurables[2].measure(
             Constraints(maxWidth = maxW)
         )
         val availW = (maxW - sidePadPx * 2).coerceAtLeast(0)
@@ -693,28 +752,33 @@ private fun MorphLayout(
         // never truncates.
         val miniNarrW = (availW - wordmarkPlaceable.width -
             controlsPlaceable.width - gapPx).coerceAtLeast(0)
-        val narrationMiniPlaceable = measurables[1].measure(
-            Constraints(minWidth = miniNarrW, maxWidth = miniNarrW)
-        )
-        // Expanded narration slot: full width below the header.
-        val narrationExpandedPlaceable = measurables[2].measure(
-            Constraints(minWidth = availW, maxWidth = availW)
+        // The ONE narration: its heights in the two rest
+        // slots come from intrinsic measurement (a Measurable
+        // may be measured only once per pass); the placed
+        // instance is measured at the migrated width for
+        // this p.
+        val narrationMiniH = measurables[1].maxIntrinsicHeight(miniNarrW)
+        val narrationExpandedH = measurables[1].maxIntrinsicHeight(availW)
+        val narrW = WearIveRunMorphPolicy.lerp(
+            miniNarrW.toFloat(), availW.toFloat(), p
+        ).roundToInt().coerceAtLeast(0)
+        val narrationPlaceable = measurables[1].measure(
+            Constraints(minWidth = narrW, maxWidth = narrW)
         )
         // Header heights at the two rest geometries, from THIS
         // measure: mini = tallest of the one row's elements;
         // expanded = header row + narration below it.
         val miniHeaderH = maxOf(
             wordmarkPlaceable.height,
-            narrationMiniPlaceable.height,
+            narrationMiniH,
             controlsPlaceable.height
         )
         val expandedRowH = maxOf(
             wordmarkPlaceable.height,
             controlsPlaceable.height
         )
-        val expandedHeaderH = expandedRowH +
-            with(density) { 4.dp.roundToPx() } +
-            narrationExpandedPlaceable.height
+        val expandedHeaderH = expandedRowH + narrGapPx +
+            narrationExpandedH
         val headerH = WearIveRunMorphPolicy.lerp(
             miniHeaderH.toFloat(), expandedHeaderH.toFloat(), p
         ).roundToInt()
@@ -729,7 +793,7 @@ private fun MorphLayout(
         // the cap leaves after header + doorway (RW-152 §2:
         // header, narration and doorway pinned; the entry
         // region scrolls internally).
-        val doorwayPlaceable = measurables[5].measure(
+        val doorwayPlaceable = measurables[4].measure(
             Constraints(maxWidth = availW)
         )
         val doorwayGapPx = with(density) { 10.dp.roundToPx() }
@@ -740,7 +804,7 @@ private fun MorphLayout(
                 doorwayPlaceable.height - doorwayGapPx)
                 .coerceAtLeast(0)
         }
-        val expandedPlaceable = measurables[4].measure(
+        val expandedPlaceable = measurables[3].measure(
             Constraints(
                 minWidth = availW, maxWidth = availW,
                 maxHeight = expandedMaxH
@@ -763,6 +827,18 @@ private fun MorphLayout(
         val totalH = (cappedH * foldFraction).roundToInt().coerceAtLeast(0)
         layout(maxW, totalH) {
             onSizeChanged(totalH)
+            if (p == 0f) {
+                // RW-170 Move 2: the PRESENTED height — the
+                // p = 0 geometry's own measure (MINI_TOP +
+                // mini header + MINI_BOTTOM). Reported only
+                // at rest, so expansion can never move the
+                // host's band.
+                onMiniHeightChanged(
+                    WearIveRunMorphPolicy.MINI_TOP_DP +
+                        with(density) { miniHeaderH.toDp().value } +
+                        WearIveRunMorphPolicy.MINI_BOTTOM_DP
+                )
+            }
             // Wordmark: top-left anchored in BOTH forms —
             // centred in the mini row, top-aligned in the
             // expanded header row; it never travels.
@@ -778,19 +854,21 @@ private fun MorphLayout(
             controlsPlaceable.placeRelative(
                 maxW - sidePadPx - controlsPlaceable.width, controlsY
             )
-            // Mini narration: beside the wordmark, centred in
-            // the mini row — its rest geometry at every p.
-            narrationMiniPlaceable.placeRelative(
-                sidePadPx + wordmarkPlaceable.width + gapPx,
-                topPadPx + (miniHeaderH - narrationMiniPlaceable.height) / 2
-            )
-            // Expanded narration: below the header row, full
-            // width — its rest geometry at every p.
-            narrationExpandedPlaceable.placeRelative(
-                sidePadPx,
-                topPadPx + expandedRowH +
-                    with(density) { 4.dp.roundToPx() }
-            )
+            // The ONE narration MIGRATES with p (RW-170 Move
+            // 4): x from the mini slot (sidePad + wordmark +
+            // gap) to the expanded slot (sidePad); y from
+            // centred in the mini row to below the header row
+            // (topPad + expandedRowH + 4dp); its width was
+            // lerped at measure time above.
+            val narrationX = WearIveRunMorphPolicy.lerp(
+                (sidePadPx + wordmarkPlaceable.width + gapPx).toFloat(),
+                sidePadPx.toFloat(), p
+            ).roundToInt()
+            val narrationY = WearIveRunMorphPolicy.lerp(
+                topPadPx + (miniHeaderH - narrationPlaceable.height) / 2f,
+                (topPadPx + expandedRowH + narrGapPx).toFloat(), p
+            ).roundToInt()
+            narrationPlaceable.placeRelative(narrationX, narrationY)
             if (p > 0f) {
                 expandedPlaceable.placeRelative(
                     sidePadPx, topPadPx + headerH + gapPx
