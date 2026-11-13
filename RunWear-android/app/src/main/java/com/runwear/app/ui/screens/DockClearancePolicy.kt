@@ -63,8 +63,10 @@ object DockClearancePolicy {
     fun dockBandDp(
         presentedMiniHeightDp: Float = DEFAULT_PRESENTED_MINI_HEIGHT_DP
     ): Float =
-        com.runwear.app.weariverun.WearIveRunDockPolicy.DOCK_BOTTOM_DP +
-            presentedMiniHeightDp
+        // SCRATCH (ci/rw170-disc-band): the pre-RW-170 defect —
+        // the band priced as the flat 102dp tallest-state
+        // constant, ignoring the presented mini height.
+        102f
 
     /**
      * Trailing reserve (dp) a scroll host must carry while
