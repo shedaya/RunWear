@@ -1127,4 +1127,126 @@ final class RW135RebuildTests: XCTestCase {
             "RW170 node counts: surfacesInContainer=1 narrationCompositions=1 legibleNarrations=1 at every sampled progress (0…1 step 0.05)\n",
             name: "RW170-probe-nodes.txt")
     }
+
+    // MARK: RW-173 — the pill seat vs the expanded title (code-level geometry)
+
+    /// RW-173 (Nov 13, 2026): does the Make It Me straddle
+    /// pill reach the expanded panel's script title at home
+    /// rest on iOS? The capture harness does not render the
+    /// pill, so the verdict is arithmetic from the real
+    /// placement constants:
+    ///   pill bottom (at rest) = HeroHeightPolicy.stackedHeight(V)
+    ///       + HeroVerticalLayout.straddleDip (14 below hero foot)
+    ///   panel bottom          = V − DockResidence.bottomInset (14)
+    ///   panel height          = min(content, WearIveRunOverlayPolicy cap)
+    ///   title top             = panel top + expandedTopPadding (20)
+    /// with the §2 content anatomy (WearIveRunOverlayPolicy
+    /// .contentHeight): narration 1 line; entry 3 lines =
+    /// 219 pt, entry 4 lines = 240 pt (the Kansas City
+    /// fixture's entry wraps four lines in the panel).
+    ///
+    /// VERDICT on the pre-fix constants: the title CAN be
+    /// reached. Standard 852/844 pt clears both anatomies
+    /// (by 7.6/5.2 pt at 240), but 812 pt is crossed by the
+    /// four-line entry (pill 582.4 vs title 578.0) and the
+    /// short class is crossed outright — 667 pt: pill 454.2
+    /// vs title 454.0 (three-line entry) and 433.0
+    /// (four-line). The panel therefore yields on iOS as on
+    /// Android: WearIveRunOverlayPolicy.effectiveCap binds
+    /// the expanded height at the pill-title cap while the
+    /// pill is in its seat, and this test pins both the
+    /// pre-fix reachability (the discriminator) and the
+    /// post-fix clearance across the grid.
+    func testRW173_PillGeometry_TitleReachability() throws {
+        func pillBottom(viewport v: CGFloat, scrollOffset: CGFloat = 0) -> CGFloat {
+            HeroHeightPolicy.stackedHeight(viewportHeight: v)
+                + HeroVerticalLayout.straddleDip - scrollOffset
+        }
+        func titleTop(
+            viewport v: CGFloat, content: CGFloat, cap: CGFloat
+        ) -> CGFloat {
+            let panel = min(content, cap)
+            return v - DockResidence.bottomInset - panel
+                + WearIveRunOverlayPolicy.expandedTopPadding
+        }
+        let content3 = WearIveRunOverlayPolicy.contentHeight(
+            narrationLineCount: 1, entryLineCount: 3, textScale: 1)
+        let content4 = WearIveRunOverlayPolicy.contentHeight(
+            narrationLineCount: 1, entryLineCount: 4, textScale: 1)
+        XCTAssertEqual(content3, 219, accuracy: 0.001)
+        XCTAssertEqual(content4, 240, accuracy: 0.001)
+
+        // — Pre-fix reachability (the §2 cap alone): the
+        // standard tall class clears; 812 (four-line) and
+        // the short class are crossed. These equalities are
+        // the measured geometry of record; if a constant of
+        // record changes, they must be re-derived, not edited
+        // to fit.
+        let chrome = { (v: CGFloat) in
+            WearIveRunOverlayPolicy.expandedCap(viewportHeight: v)
+        }
+        XCTAssertGreaterThan(
+            titleTop(viewport: 852, content: content4, cap: chrome(852)),
+            pillBottom(viewport: 852),
+            "852 pt, four-line entry: title clears the pill at rest")
+        XCTAssertLessThan(
+            titleTop(viewport: 812, content: content4, cap: chrome(812)),
+            pillBottom(viewport: 812),
+            "812 pt, four-line entry: the pill REACHES the title (582.4 vs 578.0)")
+        XCTAssertLessThan(
+            titleTop(viewport: 667, content: content3, cap: chrome(667)),
+            pillBottom(viewport: 667),
+            "667 pt, three-line entry: the pill REACHES the title (454.2 vs 454.0)")
+        XCTAssertLessThan(
+            titleTop(viewport: 667, content: content4, cap: chrome(667)),
+            pillBottom(viewport: 667),
+            "667 pt, four-line entry: the pill REACHES the title (454.2 vs 433.0)")
+
+        // — Post-fix: with the pill-title cap in force, the
+        // title clears the pill's bottom at every viewport
+        /// class, both anatomies, and every scroll offset
+        /// (scrolling only moves the pill UP, relaxing it).
+        for v in [667, 736, 812, 844, 852, 932] as [CGFloat] {
+            for content in [content3, content4] {
+                for offset in [0, 25, 120, 400] as [CGFloat] {
+                    let pb = pillBottom(viewport: v, scrollOffset: offset)
+                    let cap = WearIveRunOverlayPolicy.effectiveCap(
+                        viewportHeight: v, pillBottomY: pb)
+                    let top = titleTop(viewport: v, content: content, cap: cap)
+                    XCTAssertGreaterThanOrEqual(
+                        top, pb - 0.001,
+                        "V=\(v) content=\(content) offset=\(offset): " +
+                            "title top \(top) must clear pill bottom \(pb)")
+                }
+            }
+        }
+        // No pill in the seat → the §2 cap stands untouched.
+        XCTAssertEqual(
+            WearIveRunOverlayPolicy.effectiveCap(viewportHeight: 852, pillBottomY: nil),
+            WearIveRunOverlayPolicy.expandedCap(viewportHeight: 852),
+            accuracy: 0.001)
+        // A pill scrolled far above the panel relaxes the
+        // cap back to the §2 cap exactly.
+        XCTAssertEqual(
+            WearIveRunOverlayPolicy.effectiveCap(
+                viewportHeight: 852,
+                pillBottomY: pillBottom(viewport: 852, scrollOffset: 10000)),
+            WearIveRunOverlayPolicy.expandedCap(viewportHeight: 852),
+            accuracy: 0.001)
+
+        // — Source pins: the host places the pill's bottom
+        // from the same constants and hands it to the dock;
+        // the container caps through the one effective cap
+        // and forwards it to the surface's entry budget.
+        let host = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
+        XCTAssertTrue(host.contains("pillBottomY: pillBottomY"),
+                      "the host hands the pill's bottom edge to the dock")
+        XCTAssertTrue(host.contains("HeroVerticalLayout.straddleDip - homeScrollOffset"),
+                      "the pill's bottom is placed from the stacked constants and the live scroll offset")
+        let bar = try sourceFile("../RunWear/Views/WearIveRunMiniBar.swift")
+        XCTAssertTrue(bar.contains("WearIveRunOverlayPolicy.effectiveCap("),
+                      "the container caps the expanded height through the effective cap")
+        XCTAssertTrue(bar.contains("expandedCapOverride: pillBottomY == nil ? nil : effectiveCap"),
+                      "the surface's entry-region budget reads the same effective cap")
+    }
 }

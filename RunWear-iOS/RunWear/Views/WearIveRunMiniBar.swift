@@ -1739,6 +1739,52 @@ enum WearIveRunOverlayPolicy {
         max(0, viewportHeight - topChromeZoneHeight)
     }
 
+    /// The expanded form's top padding (RB-04): the script
+    /// title seats this far below the panel's top edge. The
+    /// unified surface's own `expandedTopPadding` constant
+    /// references this value — one anatomy, one number.
+    static let expandedTopPadding: CGFloat = 20
+
+    /// RW-173 (Nov 13, 2026): the panel-height cap that keeps
+    /// the expanded title clear of the Make It Me straddle
+    /// pill at home rest. Code-level geometry from the real
+    /// placement constants (see RW135RebuildTests
+    /// testRW173_PillGeometry_TitleReachability): the pill's
+    /// bottom sits at HeroHeightPolicy.stackedHeight +
+    /// HeroVerticalLayout.straddleDip − scrollOffset; the
+    /// panel's bottom sits at viewportHeight −
+    /// DockResidence.bottomInset; the title seats
+    /// expandedTopPadding below the panel's top. In the
+    /// short viewport class (and marginally at 812 pt with a
+    /// four-line entry) the uncapped panel's title crosses
+    /// the pill's bottom edge — the Android F1 defect's
+    /// geometry exists on iOS too, so the panel yields here
+    /// as well: its height is capped at the value whose top
+    /// edge puts the title exactly at the pill's bottom.
+    /// [pillBottomY] is the pill bottom's current screen Y
+    /// (nil when no pill renders or the seat is not the
+    /// stacked straddle seat — e.g. the Duo pane seat, whose
+    /// pill rides inside the hero pane and is not this
+    /// surface's neighbour).
+    static func pillTitleCap(
+        viewportHeight: CGFloat, pillBottomY: CGFloat
+    ) -> CGFloat {
+        max(0, (viewportHeight - DockResidence.bottomInset)
+            - pillBottomY + expandedTopPadding)
+    }
+
+    /// The cap in force: the top-chrome cap, further bound
+    /// by the pill-title cap while the pill is in its
+    /// straddle seat near the panel's expansion zone.
+    static func effectiveCap(
+        viewportHeight: CGFloat, pillBottomY: CGFloat?
+    ) -> CGFloat {
+        let base = expandedCap(viewportHeight: viewportHeight)
+        guard let pillBottomY else { return base }
+        return min(base, pillTitleCap(
+            viewportHeight: viewportHeight, pillBottomY: pillBottomY))
+    }
+
     /// The height the panel stands at: the content's own
     /// height, or the cap when the cap binds — panel height
     /// EQUALS content height in every other case.
@@ -2458,6 +2504,15 @@ struct WearIveRunUnifiedSurfaceView: View {
     var isDimmedBySheet: Bool = false
     var isScrollGestureActive: Bool = false
     let viewportHeight: CGFloat
+    /// RW-173: the pill-title cap in force, when the host's
+    /// straddle pill is in the panel's expansion zone (the
+    /// overlay container computes it through
+    /// WearIveRunOverlayPolicy.effectiveCap). The entry
+    /// region's budget reads the same cap as the container's
+    /// height, so a binding pill cap scrolls the entry region
+    /// internally — header, narration and doorway pinned,
+    /// exactly as under the §2 top-chrome cap.
+    var expandedCapOverride: CGFloat? = nil
     var heroURLResolver: ((WearIveRunEntry) async -> String?)?
     /// The morph's one progress value (0 = mini, 1 = expanded),
     /// owned by the overlay container.
@@ -2520,8 +2575,11 @@ struct WearIveRunUnifiedSurfaceView: View {
     static let miniRowHeight: CGFloat = 26
     /// EXPANDED paddings (RB-04): top 20 / sides 16 / bottom
     /// 12 — the A′ in-flow seat's 32 pt bottom padding (and
-    /// the interim 20) do not carry into the overlay.
-    static let expandedTopPadding: CGFloat = 20
+    /// the interim 20) do not carry into the overlay. The top
+    /// padding's value is the overlay policy's (RW-173: the
+    /// pill-title cap's anatomy reads the same number).
+    static let expandedTopPadding: CGFloat =
+        WearIveRunOverlayPolicy.expandedTopPadding
     static let expandedBottomPadding: CGFloat = 12
     /// The expanded header zone: header row 44 + the 12 pt
     /// spacing above the expanded narration slot, measured
@@ -2560,8 +2618,10 @@ struct WearIveRunUnifiedSurfaceView: View {
     /// edge and the doorway was pushed out of the surface —
     /// the loop-back's binding-cap capture is the evidence.)
     var entryRegionBudget: CGFloat {
-        let cap = WearIveRunOverlayPolicy.expandedCap(
-            viewportHeight: viewportHeight)
+        let cap = min(
+            WearIveRunOverlayPolicy.expandedCap(
+                viewportHeight: viewportHeight),
+            expandedCapOverride ?? .greatestFiniteMagnitude)
         return max(56, cap - (136 + expandedNarrationHeight))
     }
 
@@ -3149,6 +3209,16 @@ struct WearIveRunOverlayView: View {
     /// The host viewport's height — the expanded state's §2
     /// cap input.
     let viewportHeight: CGFloat
+    /// RW-173: the Make It Me straddle pill's bottom edge in
+    /// screen coordinates at the host's current scroll
+    /// position, when the pill renders in the stacked seat
+    /// (the host computes it from HeroHeightPolicy +
+    /// HeroVerticalLayout.straddleDip − scroll offset). Nil
+    /// when no pill renders or the layout is not the stacked
+    /// seat. While it is near the panel's expansion zone the
+    /// expanded height is capped so the title clears it
+    /// (WearIveRunOverlayPolicy.effectiveCap).
+    var pillBottomY: CGFloat? = nil
     /// RW-152 §3: the resolver's signing half, forwarded to the
     /// surface (the collection surfaces resolve through
     /// HeroRefRuntime directly).
@@ -3209,10 +3279,18 @@ struct WearIveRunOverlayView: View {
     /// the fold being the §4.7 exit policy's height scale
     /// (from MINI there is no fold; from EXPANDED the fold
     /// runs only after the content fade's segment).
+    /// RW-173: the cap in force for this seat — §2's
+    /// top-chrome cap, bound further by the pill-title cap
+    /// while the straddle pill is in the expansion zone.
+    private var effectiveCap: CGFloat {
+        WearIveRunOverlayPolicy.effectiveCap(
+            viewportHeight: viewportHeight, pillBottomY: pillBottomY)
+    }
+
     private var containerHeight: Double {
         let expanded = min(
             expandedRestHeight > 0 ? expandedRestHeight : expandedRestEstimate,
-            Double(WearIveRunOverlayPolicy.expandedCap(viewportHeight: viewportHeight)))
+            Double(effectiveCap))
         let base = WearIveRunMorphProbe.containerHeight(
             miniRest: miniRestHeight, expandedRest: expanded, progress: expansionProgress)
         return base * WearIveRunExitPolicy.heightScale(
@@ -3240,6 +3318,7 @@ struct WearIveRunOverlayView: View {
             isDimmedBySheet: isDimmedBySheet,
             isScrollGestureActive: isScrollGestureActive,
             viewportHeight: viewportHeight,
+            expandedCapOverride: pillBottomY == nil ? nil : effectiveCap,
             heroURLResolver: heroURLResolver,
             expansionProgress: expansionProgress,
             onRestHeights: { mini, expanded in

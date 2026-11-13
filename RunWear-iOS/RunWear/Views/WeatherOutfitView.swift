@@ -47,6 +47,11 @@ struct WeatherOutfitView: View {
     /// 1 = settled as a card under the nav bar), driven by
     /// onScrollGeometryChange on the stacked scroll views.
     @State private var heroScrollProgress: CGFloat = 0
+    /// RW-173: the stacked scroll's raw offset (the same
+    /// sample updateHeroScrollProgress consumes), kept so the
+    /// dock host can place the straddle pill's bottom edge in
+    /// screen coordinates for the panel's pill-title cap.
+    @State private var homeScrollOffset: CGFloat = 0
     @EnvironmentObject var personalStore: PersonalHeroStore
     @ObservedObject var viewModel: WeatherViewModel
     @ObservedObject var locationService: LocationService
@@ -257,7 +262,12 @@ struct WeatherOutfitView: View {
                 GeometryReader { proxy in
                     VStack {
                         Spacer()
-                        miniBarDock(viewportHeight: proxy.size.height)
+                        miniBarDock(
+                            viewportHeight: proxy.size.height,
+                            pillBottomY: wirPillBottomY(
+                                viewportHeight: proxy.size.height,
+                                isDuoLayout: horizontalSizeClass == .regular
+                                    && proxy.size.width > proxy.size.height))
                     }
                     .padding(.horizontal, 12)
                     .padding(.bottom, 14)
@@ -982,7 +992,24 @@ struct WeatherOutfitView: View {
     /// Scroll-coupled 1:1 per §1.1 — a direct function of the
     /// offset, no spring and no lag is applied to it.
     private func updateHeroScrollProgress(offset: CGFloat) {
+        homeScrollOffset = offset
         heroScrollProgress = HomeHandoffGeometry.progress(forScrollOffset: offset)
+    }
+
+    /// RW-173: the straddle pill's bottom edge in screen
+    /// coordinates at the current scroll position — hero foot
+    /// (HeroHeightPolicy.stackedHeight) + the 14 pt dip
+    /// (HeroVerticalLayout.straddleDip), travelling up with
+    /// the scroll content. Nil when no pill renders, and nil
+    /// in the Duo layout (its pill rides inside the hero pane
+    /// at the pane's foot — a different seat, not the stacked
+    /// straddle seat this cap serves).
+    private func wirPillBottomY(
+        viewportHeight: CGFloat, isDuoLayout: Bool
+    ) -> CGFloat? {
+        guard !isDuoLayout, heroPillState != .hidden else { return nil }
+        return HeroHeightPolicy.stackedHeight(viewportHeight: viewportHeight)
+            + HeroVerticalLayout.straddleDip - homeScrollOffset
     }
 
     /// The sheet surface for the stacked layouts: overlaps the
@@ -1259,7 +1286,9 @@ struct WeatherOutfitView: View {
     /// The surface renders the entry record only (§7.0). During
     /// a §4.7/§4.8 exit it renders the host's frozen snapshot
     /// instead.
-    @ViewBuilder private func miniBarDock(viewportHeight: CGFloat) -> some View {
+    @ViewBuilder private func miniBarDock(
+        viewportHeight: CGFloat, pillBottomY: CGFloat? = nil
+    ) -> some View {
         // GEN-3 (the presentation half, superseding W-15's
         // by-date key): the dock presents the CURRENT SESSION's
         // entry — the entry's own place is what the narration
@@ -1311,6 +1340,11 @@ struct WeatherOutfitView: View {
                 // in, as it reports it (onExpansionChange below).
                 exitFromExpanded: wearSurfaceExpanded,
                 viewportHeight: viewportHeight,
+                // RW-173: the straddle pill's bottom edge at
+                // the current scroll position — the expanded
+                // panel caps its height so its title clears
+                // the pill (the panel yields, as on Android).
+                pillBottomY: pillBottomY,
                 // RW-152 §3: the panel thumbnail resolves through
                 // the one resolver (re-signing half).
                 // RW-159: the RECOVERING resolution — the
