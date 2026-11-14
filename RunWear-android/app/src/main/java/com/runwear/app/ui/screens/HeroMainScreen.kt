@@ -288,6 +288,18 @@ fun HeroMainScreen(
     var wirPanelBounds by remember {
         mutableStateOf<androidx.compose.ui.geometry.Rect?>(null)
     }
+    // RW-173: the morph surface's OWN window bounds (the
+    // painted card, inside the host's padding). Its bottom
+    // edge is the panel's seated bottom — invariant across
+    // the morph (the surface is bottom-anchored) — and with
+    // the pill anchor's measured bottom it prices the
+    // pill-aware expansion cap in wirFooterRender below:
+    // the panel may grow until its top reaches the pill
+    // seat's bottom edge, and no further (RB-09: the pill
+    // renders whole and above the surface; the panel yields).
+    var wirSurfaceBounds by remember {
+        mutableStateOf<androidx.compose.ui.geometry.Rect?>(null)
+    }
     // RW-170 Move 2: the PRESENTED (mini) form's measured
     // height, reported by the morph surface at p = 0 geometry.
     // Every dock-band consumer below prices from this one
@@ -924,6 +936,7 @@ fun HeroMainScreen(
     LaunchedEffect(wirSurfacesPresent) {
         if (!wirSurfacesPresent) {
             wirPanelBounds = null
+            wirSurfaceBounds = null
         }
     }
 
@@ -1292,6 +1305,27 @@ fun HeroMainScreen(
         if (line != null && dayEntry != null && barEntry != null &&
             entryLine != null
         ) {
+            // RW-173: the pill cap as a panel height (dp) —
+            // the surface's seated bottom minus the pill
+            // seat's measured bottom, in their shared window
+            // frame; null when either seat is unmeasured or
+            // the seats do not share a column.
+            val pillDensityHere = LocalDensity.current
+            val pillCapDp: Float? = run {
+                val anchor = wirPillAnchorBounds
+                val surface = wirSurfaceBounds
+                if (anchor == null || surface == null) {
+                    null
+                } else if (anchor.right <= surface.left ||
+                    anchor.left >= surface.right
+                ) {
+                    null
+                } else {
+                    with(pillDensityHere) {
+                        (surface.bottom - anchor.bottom).toDp().value
+                    }
+                }
+            }
             com.runwear.app.weariverun.WearIveRunMorphSurface(
                 narration = line,
                 entry = barEntry,
@@ -1337,9 +1371,23 @@ fun HeroMainScreen(
                 onExitFinished = {
                     wirExit?.let { wirFinishExit(it) }
                 },
+                // RW-173: the expansion cap in force — the
+                // top-chrome cap, bound further at the pill
+                // seat's bottom edge while the measured pill
+                // anchor shares the surface's column (the
+                // two-pane layout seats the panel in the
+                // scrolling pane only, clear of the hero
+                // pane's pill by construction — the horizontal
+                // check leaves that seat to the chrome cap).
+                // The pill anchor travels with the scroll, so
+                // the cap relaxes as the pill rides up.
                 maxExpandedHeightDp = WirOverlayPanelPolicy
                     .maxPanelHeightDp(
-                        LocalConfiguration.current.screenHeightDp.toFloat()
+                        viewportDp = LocalConfiguration.current
+                            .screenHeightDp.toFloat(),
+                        pillCapDp = pillCapDp,
+                        presentedMiniHeightDp =
+                            wirPresentedMiniHeightDp
                     ),
                 // RW-170 Move 2: the presented mini height —
                 // the band below prices from it.
@@ -1357,6 +1405,9 @@ fun HeroMainScreen(
                         bottom =
                             WearIveRunDockPolicy.DOCK_BOTTOM_DP.dp
                     )
+                    .onGloballyPositioned { coords ->
+                        wirSurfaceBounds = coords.boundsInWindow()
+                    }
             )
         }
     }

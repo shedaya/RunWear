@@ -114,4 +114,45 @@ object WirOverlayPanelPolicy {
      * entry-region scroll's engagement rule). */
     fun capBinds(contentDp: Float, viewportDp: Float): Boolean =
         contentDp > maxPanelHeightDp(viewportDp)
+
+    /**
+     * RW-173 (Nov 13, 2026) — the pill-aware expansion cap.
+     * At home rest the expanded panel grows from the dock
+     * residence up into the Make It Me pill's seat; the pill
+     * renders whole and ABOVE the surface in every Home
+     * state (RB-09), so where the two seats meet the PANEL
+     * yields: its expansion top is capped at the pill seat's
+     * bottom edge. [pillCapDp] is that cap expressed as a
+     * panel height — the surface's seated bottom edge minus
+     * the pill seat's measured bottom edge, both in the
+     * host's window frame (the host derives it from the
+     * measured pill anchor and surface bounds it already
+     * tracks). The morph's internal entry-region scroll
+     * absorbs a binding cap, as it does the top-chrome cap.
+     *
+     * The cap in force is the tighter of the top-chrome cap
+     * and the pill cap, but never below the PRESENTED mini
+     * height: the mini form itself stands clear of the pill
+     * seat in every seat the host composes (the pill travels
+     * with the hero at the top of the page; the dock rides
+     * the bottom), so pricing the floor at the presented
+     * height can only engage in a seat where the pill's
+     * measured bottom has already passed the panel's whole
+     * mini extent — there the panel must still stand.
+     * A null or non-positive [pillCapDp] (no pill rendered,
+     * or the seats do not share a column) leaves the
+     * top-chrome cap alone in force.
+     */
+    fun maxPanelHeightDp(
+        viewportDp: Float,
+        pillCapDp: Float?,
+        presentedMiniHeightDp: Float
+    ): Float {
+        val chromeCap = maxPanelHeightDp(viewportDp)
+        if (pillCapDp == null || pillCapDp <= 0f) return chromeCap
+        return minOf(
+            chromeCap,
+            maxOf(pillCapDp, presentedMiniHeightDp)
+        )
+    }
 }

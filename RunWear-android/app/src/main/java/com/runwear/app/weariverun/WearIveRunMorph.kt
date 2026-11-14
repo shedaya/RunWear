@@ -162,6 +162,53 @@ object WearIveRunMorphPolicy {
      * 12sp at the mini slot -> 15sp at the expanded slot. */
     fun narrationSp(progress: Float): Float = lerp(12f, 15f, progress)
 
+    /** RW-173 (Nov 13, 2026) — the narration's migration
+     * path, conformed to the iOS geometry (F2): on the
+     * straight lerp the migrating narration crossed the
+     * growing wordmark's descenders mid-morph (text on
+     * text, parent gate frame rw170-home-midmorph-light).
+     * Two path corrections, both EXACT at the rests (0 at
+     * p = 0, identity at p = 1 — the settled layouts do not
+     * move):
+     * (1) the narration's WIDTH migration runs ahead of the
+     *     height progress (front-loaded exponent below), so
+     *     a wrapping narration reaches its one-line expanded
+     *     measure early and its box stops straddling the
+     *     header row's vertical span;
+     * (2) its Y path carries a mid-morph descent bulge —
+     *     [NARRATION_DESCENT_BULGE_DP] at the travel's middle,
+     *     zero at both rests — so the box passes BELOW the
+     *     wordmark's box with clearance at every progress
+     *     point where their x-ranges overlap, the clearance
+     *     the iOS slot geometry (expanded narration seated a
+     *     full header zone below the panel top) shows in its
+     *     mid-morph frame. */
+    const val NARRATION_DESCENT_BULGE_DP = 28f
+
+    /** The descent bulge at [progress]: a front-loaded
+     * half-sine over the shaped progress p^0.8 — zero at
+     * both rests, rising fast enough to clear the wordmark
+     * by the travel's first quarter (where the measured
+     * crossing was deepest relative to the panel's growth),
+     * and tapering as the narration nears its expanded
+     * slot, whose own 4dp gap takes over at the rest. */
+    fun narrationDescentBulgeDp(progress: Float): Float {
+        val p = progress.coerceIn(0f, 1f)
+        val shaped = if (p <= 0f) 0f
+            else Math.pow(p.toDouble(), 0.8).toFloat()
+        return NARRATION_DESCENT_BULGE_DP *
+            kotlin.math.sin(kotlin.math.PI.toFloat() * shaped)
+    }
+
+    /** The narration width's migration progress: ahead of
+     * the container's height progress mid-travel, identical
+     * at the rests. */
+    fun narrationWidthProgress(progress: Float): Float =
+        progress.coerceIn(0f, 1f).let {
+            if (it <= 0f) 0f
+            else Math.pow(it.toDouble(), 0.6).toFloat()
+        }
+
     /** RW-170 Move 1 — the surface's background alpha: the
      * mini translucency (WearIveRunMiniBarPolicy: 0.85 light
      * / 0.82 dark) lerping to fully opaque at expanded. The
@@ -760,7 +807,8 @@ private fun MorphLayout(
         val narrationMiniH = measurables[1].maxIntrinsicHeight(miniNarrW)
         val narrationExpandedH = measurables[1].maxIntrinsicHeight(availW)
         val narrW = WearIveRunMorphPolicy.lerp(
-            miniNarrW.toFloat(), availW.toFloat(), p
+            miniNarrW.toFloat(), availW.toFloat(),
+            WearIveRunMorphPolicy.narrationWidthProgress(p)
         ).roundToInt().coerceAtLeast(0)
         val narrationPlaceable = measurables[1].measure(
             Constraints(minWidth = narrW, maxWidth = narrW)
@@ -864,10 +912,16 @@ private fun MorphLayout(
                 (sidePadPx + wordmarkPlaceable.width + gapPx).toFloat(),
                 sidePadPx.toFloat(), p
             ).roundToInt()
+            // RW-173: + the mid-morph descent bulge (zero at
+            // both rests) so the migrating box passes below
+            // the wordmark's box, never across its descenders.
             val narrationY = WearIveRunMorphPolicy.lerp(
                 topPadPx + (miniHeaderH - narrationPlaceable.height) / 2f,
                 (topPadPx + expandedRowH + narrGapPx).toFloat(), p
-            ).roundToInt()
+            ).roundToInt() + with(density) {
+                WearIveRunMorphPolicy
+                    .narrationDescentBulgeDp(p).dp.roundToPx()
+            }
             narrationPlaceable.placeRelative(narrationX, narrationY)
             if (p > 0f) {
                 expandedPlaceable.placeRelative(

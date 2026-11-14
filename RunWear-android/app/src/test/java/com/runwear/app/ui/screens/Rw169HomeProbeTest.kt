@@ -308,20 +308,29 @@ class Rw169PillSeatProbeTest : Rw169HomeBase() {
         // panel is clear of its seat, the overlay copy (in
         // front of the panel, never over its header) when the
         // panel covers the seat.
+        // RW-173 (Nov 13, 2026) — this RW-170 expectation is
+        // SUPERSEDED in its mechanism, not its invariant. The
+        // RW-170 head let the expanded panel grow OVER the pill
+        // seat, so the host presented the overlay copy in front
+        // of the panel — and the pill clipped the panel's script
+        // title (parent picture gate, finding F1). RW-173 caps
+        // the panel's expansion at the pill seat's bottom edge
+        // (WirOverlayPanelPolicy pill cap): the panel now YIELDS
+        // and never covers the seat in this class, so no overlay
+        // copy is composed and the presented copy is the in-list
+        // copy — exactly as at rest. The map §7 invariant is
+        // unchanged and still asserted below and above: exactly
+        // one pill copy exists and is presented, whole, in every
+        // state.
         assertEquals(
-            "exactly one overlay pill copy while the panel is " +
-                "expanded over its seat (map §7: never removed)",
-            1, overlayPillCopies(host)
+            "no overlay pill copy while expanded — RW-173 caps " +
+                "the panel below the pill seat (panel yields)",
+            0, overlayPillCopies(host)
         )
-        // Two semantics nodes carry the pill text in this
-        // state: the presented overlay copy (asserted above)
-        // and the in-list copy, which the host holds at
-        // alpha 0 while the panel covers its seat — present
-        // in the tree, not drawn. Exactly one copy is ever
-        // PRESENTED; that is the §7 invariant.
         assertEquals(
-            "in-list (alpha-0, undrawn) + overlay (presented) copies",
-            2, nodeBoxes(host).count { it.text == pillText }
+            "exactly one pill copy presented while expanded " +
+                "(the in-list copy, whole — map §7)",
+            1, nodeBoxes(host).count { it.text == pillText }
         )
         // The panel's header wordmark: exactly one instance,
         // rendered WHOLE inside the panel's bounds — its full
