@@ -313,7 +313,9 @@ final class RW169StructuralTests: XCTestCase {
             .failed(reason: .qualityRefused), .failed(reason: .serviceRefused),
         ]
         for look in states {
-            for pill in [HeroPillState.hidden, .making, .makingWithUpsell, .premium] {
+            // RW-174 / RW-171: the pill-state set carries no
+            // two-line generating case (superseded, removed).
+            for pill in [HeroPillState.hidden, .making, .premium] {
                 let presentation = PersonalCellPresentation.resolve(lookState: look, pillState: pill)
                 if look.isFailed {
                     XCTAssertEqual(presentation, .failed,
@@ -1092,9 +1094,11 @@ final class RW169LoopbackTests: XCTestCase {
             name: "RW169-ios-fullcomp-pill-expanded-phone.png")
 
         // (e) MAKING: one cell, one state — the straddle pill
-        // carries "Making this you… / Get it instantly next
-        // time"; the hero carries NO failure wording; the
-        // agreed value is .making.
+        // carries "Making this you…" on ONE line (RW-174 /
+        // RW-171: the upsell second line this comment and pin
+        // once carried is superseded and removed); the hero
+        // carries NO failure wording; the agreed value is
+        // .making.
         let making = PersonalCellPresentation.resolve(
             lookState: .making,
             pillState: HeroPill.resolve(
@@ -1104,7 +1108,7 @@ final class RW169LoopbackTests: XCTestCase {
         let makingPill = HeroPill.resolve(
             optedIn: true, lookState: .making, personalPhotoDisplayed: false,
             isSubscribed: false, freeGenerationsUsed: 3, freeAllowance: 10)
-        XCTAssertEqual(makingPill, .makingWithUpsell)
+        XCTAssertEqual(makingPill, .making)
         try writeRender(
             composition(presentation: making, pillState: makingPill,
                         dockProgress: 0, dockHeight: rests.mini, entry: entry),
@@ -1118,8 +1122,10 @@ final class RW169LoopbackTests: XCTestCase {
         // rule), the hero carries the failure wording in the
         // pill's eye line (production HeroImageView seat), and
         // nothing anywhere claims MAKING.
+        // RW-174 / RW-171: the pill derivation input here is
+        // .making (the two-line upsell case is removed).
         let failed = PersonalCellPresentation.resolve(
-            lookState: .failed(reason: .error), pillState: .makingWithUpsell)
+            lookState: .failed(reason: .error), pillState: .making)
         XCTAssertEqual(failed, .failed,
                        "FAILED outranks any pill derivation — one cell, one state (D9)")
         try writeRender(

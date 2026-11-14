@@ -891,6 +891,39 @@ enum WearIveRunMorph {
     /// total, when a settle lands on a changed record.
     static let narrationCrossfadeSeconds: Double = 0.21
 
+    /// RW-174 (row 36) — the settle-flip is TWO-PHASE, as
+    /// spec §4.3 specifies and Android's WearIveRunMorph
+    /// implements (narrationAlpha.animateTo(0f, tween(95)) →
+    /// swap → animateTo(1f, tween(115))): the old line fades
+    /// OUT over 95 ms, the record swaps at the midpoint —
+    /// at opacity 0, never before — and the new line fades
+    /// IN over 115 ms. This supersedes the single easeInOut
+    /// crossfade over the total 0.21 s that blended old and
+    /// new lines through one curve (RW-174 audit row 36).
+    static let narrationFadeOutSeconds: Double = 0.095
+    static let narrationFadeInSeconds: Double = 0.115
+
+    /// The opacity at the swap instant: the record may swap
+    /// only when the old line is fully out.
+    static let narrationFlipSwapOpacity: Double = 0
+
+    /// The flip's opacity at `elapsed` seconds after the
+    /// flip starts: 1 → 0 linearly across the fade-out
+    /// phase, 0 at the swap instant, 0 → 1 across the
+    /// fade-in phase, and 1 thereafter. (The live surfaces
+    /// drive the same shape with two sequential animations
+    /// of these durations; this function is the policy the
+    /// tests pin.)
+    static func narrationFlipOpacity(elapsedSeconds: Double) -> Double {
+        if elapsedSeconds <= 0 { return 1 }
+        if elapsedSeconds < narrationFadeOutSeconds {
+            return 1 - elapsedSeconds / narrationFadeOutSeconds
+        }
+        let intoFadeIn = elapsedSeconds - narrationFadeOutSeconds
+        if intoFadeIn >= narrationFadeInSeconds { return 1 }
+        return intoFadeIn / narrationFadeInSeconds
+    }
+
     /// The animation a driver runs, built from the pinned
     /// constants above — one animation of the one progress
     /// value, never separate per-property animations.
@@ -1201,6 +1234,13 @@ struct WearIveRunMiniBarView: View {
     @State private var pendingNarrationState: WearIveRunState?
     /// The §7.5 deferral gate the shown line passes through.
     @State private var narrationDeferral = WearIveRunNarrationDeferral()
+    /// RW-174 (row 36): the two-phase settle-flip's opacity —
+    /// driven 1 → 0 over the 95 ms fade-out, the record swaps
+    /// at 0, then 0 → 1 over the 115 ms fade-in. The token
+    /// invalidates a superseded flip's completion, so a newer
+    /// record always wins (§4.9).
+    @State private var narrationFlipOpacity: Double = 1
+    @State private var narrationFlipToken = 0
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -1397,6 +1437,11 @@ struct WearIveRunMiniBarView: View {
                     .layoutPriority(1)
                     .id(line)
                     .transition(.opacity)
+                    // RW-174 (row 36): the two-phase flip's
+                    // opacity — the line is fully out before
+                    // the record swaps, then the new line fades
+                    // in (see applyNarrationCrossfade).
+                    .opacity(narrationFlipOpacity)
                     .allowsHitTesting(false)
             }
             Spacer(minLength: 0)
@@ -1442,8 +1487,20 @@ struct WearIveRunMiniBarView: View {
             displayedState = newState
             return
         }
-        withAnimation(.easeInOut(duration: WearIveRunMorph.narrationCrossfadeSeconds)) {
+        // RW-174 (row 36, spec §4.3): TWO-PHASE flip — the
+        // old line fades OUT over 95 ms, the record swaps at
+        // the midpoint (opacity 0), the new line fades IN
+        // over 115 ms. Never a single-curve crossfade.
+        narrationFlipToken += 1
+        let token = narrationFlipToken
+        withAnimation(.easeInOut(duration: WearIveRunMorph.narrationFadeOutSeconds)) {
+            narrationFlipOpacity = WearIveRunMorph.narrationFlipSwapOpacity
+        } completion: {
+            guard token == narrationFlipToken else { return }
             displayedState = newState
+            withAnimation(.easeInOut(duration: WearIveRunMorph.narrationFadeInSeconds)) {
+                narrationFlipOpacity = 1
+            }
         }
     }
 
@@ -1900,6 +1957,12 @@ struct WearIveRunExpandedPanelView: View {
     /// entry line flip together at the cross-fade's midpoint;
     /// the thumbnail cross-fades when the hero image changes.
     @State private var displayedEntry: WearIveRunEntry?
+    /// RW-174 (row 36): the two-phase field-flip's opacity
+    /// (95 ms out, swap at 0, 115 ms in — see
+    /// applyFieldCrossfade); the token invalidates a
+    /// superseded flip's completion (§4.9).
+    @State private var narrationFlipOpacity: Double = 1
+    @State private var narrationFlipToken = 0
     @State private var trashHapticNonce = 0
     /// RW-152 §2: the entry row's measured height — the entry
     /// region's standing height (before the cap). Seeded at
@@ -1988,6 +2051,10 @@ struct WearIveRunExpandedPanelView: View {
                         .font(.system(size: 15))
                         .id(line)
                         .transition(.opacity)
+                        // RW-174 (row 36): the two-phase
+                        // flip's opacity (see
+                        // applyFieldCrossfade).
+                        .opacity(narrationFlipOpacity)
                 }
             }
             .onGeometryChange(for: CGFloat.self) { proxy in
@@ -2217,6 +2284,10 @@ struct WearIveRunExpandedPanelView: View {
                 .id(WearIveRunNarration.expandedLine(
                     for: shownEntry, formattedFeelsLike: formattedFeelsLike))
                 .transition(.opacity)
+                // RW-174 (row 36): the entry line flips with
+                // the narration on the same two-phase opacity
+                // (§4.5 — the fields flip together).
+                .opacity(narrationFlipOpacity)
                 Spacer(minLength: 0)
             }
             .contentShape(Rectangle())
@@ -2228,15 +2299,25 @@ struct WearIveRunExpandedPanelView: View {
     /// §4.3/§4.5: a released line flips the panel's fields —
     /// narration and entry line together, thumbnail keyed by
     /// hero reference — as an opacity cross-fade (≈210 ms).
+    /// RW-174 (row 36): the flip is TWO-PHASE — out 95 ms,
+    /// swap at opacity 0, in 115 ms (see WearIveRunMorph).
     private func applyFieldCrossfade(to newState: WearIveRunState) {
         if reduceMotion {
             displayedState = newState
             displayedEntry = entry
             return
         }
-        withAnimation(.easeInOut(duration: WearIveRunMorph.narrationCrossfadeSeconds)) {
+        narrationFlipToken += 1
+        let token = narrationFlipToken
+        withAnimation(.easeInOut(duration: WearIveRunMorph.narrationFadeOutSeconds)) {
+            narrationFlipOpacity = WearIveRunMorph.narrationFlipSwapOpacity
+        } completion: {
+            guard token == narrationFlipToken else { return }
             displayedState = newState
             displayedEntry = entry
+            withAnimation(.easeInOut(duration: WearIveRunMorph.narrationFadeInSeconds)) {
+                narrationFlipOpacity = 1
+            }
         }
     }
 
@@ -2534,6 +2615,15 @@ struct WearIveRunUnifiedSurfaceView: View {
     @State private var pendingNarrationState: WearIveRunState?
     @State private var narrationDeferral = WearIveRunNarrationDeferral()
     @State private var displayedEntry: WearIveRunEntry?
+    /// RW-174 (row 36): the two-phase settle-flip's opacity —
+    /// 1 at morph rest (the morph itself never dissolves the
+    /// narration; this opacity belongs to the SETTLE flip
+    /// only): driven 1 → 0 over the 95 ms fade-out, the
+    /// record swaps at 0, then 0 → 1 over the 115 ms fade-in.
+    /// The token invalidates a superseded flip's completion,
+    /// so a newer record always wins (§4.9).
+    @State private var narrationFlipOpacity: Double = 1
+    @State private var narrationFlipToken = 0
     @State private var resolvedHeroURL: String?
     @State private var wordmarkWidth: CGFloat = 96
     @State private var miniNarrationHeight: CGFloat = 17
@@ -2721,6 +2811,11 @@ struct WearIveRunUnifiedSurfaceView: View {
                     narrationView(line)
                         .frame(width: narrationWidth, alignment: .leading)
                         .offset(x: narrationX, y: narrationY)
+                        // RW-174 (row 36): the settle-flip's
+                        // two-phase opacity — at morph rest this
+                        // is 1; during a settle flip it runs the
+                        // 95 ms out / swap / 115 ms in shape.
+                        .opacity(narrationFlipOpacity)
                         .allowsHitTesting(false)
                 }
                 // The entry region — the same row throughout,
@@ -2790,9 +2885,13 @@ struct WearIveRunUnifiedSurfaceView: View {
         // settled iOS expression — black 14%, radius 12 (half
         // the spec's 24 pt blur in SwiftUI terms), offset
         // (0, +6), constant across progress. No elevation
-        // model, nothing animated. (RW-170 Move 3 is
-        // verify-and-confirm on iOS; the travel-clip finding
-        // is recorded in the lane report.)
+        // model, nothing animated. RW-174 (row 17): this
+        // shadow is applied AFTER the surface's own clip
+        // above (the clip bounds the content layer only) and
+        // NO outer container clip wraps the surface any
+        // more, so the shadow persists through the ENTIRE
+        // morph — the RW-170 travel-clip finding (below-spill
+        // 13 pt → 0 pt under the container clip) is closed.
         .shadow(color: Color.black.opacity(0.14), radius: 12, x: 0, y: 6)
         // §4.7 exit split (WearIveRunExitPolicy): opacity and
         // sink are the policy's functions of the host's one
@@ -3073,6 +3172,15 @@ struct WearIveRunUnifiedSurfaceView: View {
     /// narration and entry together, from the one snapshot —
     /// as an opacity-only cross-fade (≈210 ms) + the update
     /// bounce, deferred to scroll rest by the gate above.
+    /// RW-174 (row 36, spec §4.3): the flip is TWO-PHASE —
+    /// the old line fades OUT over 95 ms, the record swaps at
+    /// the midpoint (opacity 0, narrationFlipSwapOpacity),
+    /// the new line fades IN over 115 ms — exactly as
+    /// Android's WearIveRunMorph implements it. The single
+    /// easeInOut crossfade over the total duration that
+    /// blended old and new lines through one curve is
+    /// retired. The update bounce + haptic at the settle
+    /// (row 35) still fire first, unchanged.
     private func applyNarrationCrossfade(to newState: WearIveRunState) {
         guard displayedState != newState || displayedEntry != entry else { return }
         if exitProgress == 0 { runUpdateBounce() }
@@ -3081,9 +3189,17 @@ struct WearIveRunUnifiedSurfaceView: View {
             displayedEntry = entry
             return
         }
-        withAnimation(.easeInOut(duration: WearIveRunMorph.narrationCrossfadeSeconds)) {
+        narrationFlipToken += 1
+        let token = narrationFlipToken
+        withAnimation(.easeInOut(duration: WearIveRunMorph.narrationFadeOutSeconds)) {
+            narrationFlipOpacity = WearIveRunMorph.narrationFlipSwapOpacity
+        } completion: {
+            guard token == narrationFlipToken else { return }
             displayedState = newState
             displayedEntry = entry
+            withAnimation(.easeInOut(duration: WearIveRunMorph.narrationFadeInSeconds)) {
+                narrationFlipOpacity = 1
+            }
         }
     }
 
@@ -3298,13 +3414,24 @@ struct WearIveRunOverlayView: View {
             reduceMotion: reduceMotion)
     }
 
-    /// RW-162 G5, carried: the travel clip applies ONLY while
-    /// the morph is actually travelling (0 < progress < 1) or
-    /// an exit is folding — at either rest state the surface's
-    /// own rounded shape and shadow stand unclipped.
-    private var travelClipActive: Bool {
-        (expansionProgress > 0 && expansionProgress < 1) || exitProgress > 0
-    }
+    // RW-174 (row 17) — NO container clip, at any progress
+    // value. The RW-162 G5 travel clip that stood here (a
+    // rounded-rect clip on this container while 0<p<1 or an
+    // exit folded) bounded the unified surface's §2.1 shadow
+    // at the container's bounds for the whole morph: the
+    // RW-170 travel-clip probe measured the shadow's
+    // below-spill at 13 pt unclipped → 0 pt clipped. The
+    // clip's actual work — revealing the growing surface's
+    // content at the morph's rounded shape — is already done
+    // INSIDE the surface: WearIveRunUnifiedSurfaceView clips
+    // its content layer to the same rounded rect at the same
+    // progress-derived radius, and applies its shadow AFTER
+    // that clip, on the unclipped outer surface. So the
+    // container carries no clip at all, and the specified
+    // one-sided shadow (0/+6, radius 12, black 14%, hairline
+    // at ink 5%) persists through the entire morph, identical
+    // at every progress value. RW-162 G5's rest-state intent
+    // (shadow unclipped at rest) now holds at EVERY state.
 
     var body: some View {
         WearIveRunUnifiedSurfaceView(
@@ -3338,7 +3465,10 @@ struct WearIveRunOverlayView: View {
             onTrash: onTrash
         )
         .frame(height: containerHeight)
-        .clippedIfMorphing(travelClipActive, radius: WearIveRunMorph.cornerRadius(progress: expansionProgress))
+        // RW-174 (row 17): deliberately NO clip on this
+        // container — see the note at the retired travel
+        // clip above. The surface clips its own content
+        // layer internally; its shadow stands outside.
         .onAppear {
             expansionPolicy.scrollChanged(atFooter: isAtFooter)
             syncProgress(animated: false)
@@ -3390,19 +3520,8 @@ struct WearIveRunOverlayView: View {
     }
 }
 
-private extension View {
-    /// Clip only while a morph or exit is TRAVELLING — at
-    /// either rest state the container must not clip: the
-    /// dock's and the panel's soft shadows live outside their
-    /// bounds, and the expanded state's boundary IS its
-    /// rounded shape. RW-162 G5: the clip follows the morph's
-    /// own rounded shape (never a plain rectangle), so even
-    /// mid-travel the surface keeps its corners.
-    @ViewBuilder func clippedIfMorphing(_ condition: Bool, radius: Double) -> some View {
-        if condition {
-            self.clipShape(RoundedRectangle(cornerRadius: radius))
-        } else {
-            self
-        }
-    }
-}
+// RW-174 (row 17): the RW-162 G5 container travel clip
+// that stood here is REMOVED — it bounded the surface's
+// §2.1 shadow mid-morph (audit row 17). The unified
+// surface's own inner clip (content layer only, shadow
+// applied after it) carries the morph's reveal.

@@ -261,18 +261,23 @@ enum HeroChipPlacement {
 // MARK: - Hero pill metrics (Ruling 2, Nov 9, 2026)
 //
 // The straddle pill's height by state — the input the hero's
-// vertical layout guarantees against. The single-line states
-// (making, free look, Premium, exhausted) render one row inside
-// the straddle seat's 10 pt vertical padding (≈40 pt actual);
-// the two-line generating form (script row + the green upsell
-// line, HeroPillView's makingWithUpsell) renders ≈58 pt. The
-// planning values carry margin over both, so the guarantee —
-// no pill state can cover the weather line (the build-33 device
-// defect: the two-line pill's top-anchored seat grew DOWN over
-// the sheet's opening line, cutting the wind value and the UV
-// figure) — holds for the real view, not just the model.
+// vertical layout guarantees against. EVERY state renders one
+// row inside the straddle seat's 10 pt vertical padding
+// (≈40 pt actual): RW-174 / RW-171 (Sol, Nov 12, 2026) — the
+// pill holds ONE line in every state; the two-line generating
+// form (script row + a stacked green upsell line) is removed
+// entirely. The planning value carries margin over the row,
+// so the guarantee — no pill state can cover the weather
+// line (the build-33 device defect: a taller pill's
+// top-anchored seat grew DOWN over the sheet's opening line,
+// cutting the wind value and the UV figure) — holds for the
+// real view, not just the model.
 enum HeroPillMetrics {
     static let singleLineHeight: CGFloat = 44
+    /// Retained as a layout VALUE for callers that plan
+    /// against an arbitrary pill height (the folded-hero
+    /// geometry tests exercise it as an input); NO pill state
+    /// plans at it any more — RW-171 leaves no two-line state.
     static let twoLineHeight: CGFloat = 62
 
     /// The planning height for a pill state; 0 when the state
@@ -281,7 +286,6 @@ enum HeroPillMetrics {
     static func height(for state: HeroPillState) -> CGFloat {
         switch state {
         case .hidden: return 0
-        case .makingWithUpsell: return twoLineHeight
         case .making, .freeLook, .exhausted, .premium: return singleLineHeight
         }
     }

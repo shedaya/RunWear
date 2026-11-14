@@ -177,14 +177,14 @@ final class Gen3TrainDeltaTests: XCTestCase {
         // mid-generation: the shared store still reports the
         // requested cell as making, no personal photo is on
         // screen yet, and the hero pill resolves to the
-        // generating pill over the fallback photo. GEN-5
-        // (C-4 AMENDED, Nov 5): for this FREE user the
-        // generating state is .makingWithUpsell — script +
-        // spinner + "Making this you…" + the one small green
-        // "Get it instantly next time" line; a subscriber's
-        // generating pill stays the clean .making.
+        // generating pill over the fallback photo. RW-174 /
+        // RW-171 SUPERSEDES the GEN-5 C-4 pin that stood here
+        // (for this FREE user the generating state was the
+        // two-line upsell state): the pill is ONE line in
+        // every state — script + spinner + "Making this you…"
+        // — on both tiers.
         XCTAssertEqual(
-            .makingWithUpsell,
+            .making,
             HeroPill.resolve(optedIn: true, lookState: .making, personalPhotoDisplayed: false,
                              isSubscribed: false, freeGenerationsUsed: 0, freeAllowance: 5),
             "leaving mid-generation must land on home with the generating pill active")

@@ -106,12 +106,14 @@ final class Gen6WaveATests: XCTestCase {
         XCTAssertNil(making.meterLine, "no debit is presented before delivery")
         XCTAssertFalse(making.showsPremiumBand, "the Premium band waits for the look")
         // No pill-less window: during the same generation, the
-        // home pill policy resolves the generating pill — free
-        // tier with the C-4 green line, Premium clean.
+        // home pill policy resolves the generating pill.
+        // RW-174 / RW-171: free and Premium both resolve to
+        // the ONE-line .making (the C-4 green-line state this
+        // pin carried is superseded).
         XCTAssertEqual(
             HeroPill.resolve(optedIn: true, lookState: .making, personalPhotoDisplayed: false,
                              isSubscribed: false, freeGenerationsUsed: 0, freeAllowance: 5),
-            .makingWithUpsell)
+            .making)
         XCTAssertEqual(
             HeroPill.resolve(optedIn: true, lookState: .making, personalPhotoDisplayed: false,
                              isSubscribed: true, freeGenerationsUsed: 0, freeAllowance: 5),
@@ -176,8 +178,11 @@ final class Gen6WaveATests: XCTestCase {
         XCTAssertTrue(outfit.contains("HeroPill.resolve("),
                       "home's pill comes from the single pill policy")
         let hero = try sourceFile("../RunWear/Views/HeroImageView.swift")
-        XCTAssertTrue(hero.contains("HeroPill.getInstantlyLabel"),
-                      "the C-4 green line renders from the policy's label")
+        // RW-174 / RW-171 SUPERSEDES the C-4 pin that stood
+        // here: the instantly upsell line no longer renders
+        // in the pill at all.
+        XCTAssertFalse(hero.contains("HeroPill.getInstantlyLabel"),
+                      "RW-171: the instantly upsell line is removed from the pill")
         XCTAssertTrue(hero.contains("pillScriptMark"),
                       "every pill state leads with the Make It Me script mark")
     }
@@ -394,16 +399,23 @@ final class Gen6WaveATests: XCTestCase {
 
     // MARK: - Item 6 · Pill policy — the full approved state table (RW-34)
 
-    func testPillTable_Generating_FreeCarriesGreenLine_PremiumStaysClean() {
+    // RW-174 / RW-171 SUPERSEDES this test's GEN-5 C-4 form
+    // (testPillTable_Generating_FreeCarriesGreenLine_…): the
+    // pill is ONE line in every state — free generating is
+    // the same one-line .making as Premium generating, and
+    // no tier's generating pill carries an upsell line.
+    func testPillTable_Generating_OneLineOnBothTiers() throws {
         XCTAssertEqual(
             HeroPill.resolve(optedIn: true, lookState: .making, personalPhotoDisplayed: false,
                              isSubscribed: false, freeGenerationsUsed: 0, freeAllowance: 5),
-            .makingWithUpsell, "free generating: script + spinner + making + green instantly line")
-        XCTAssertEqual(HeroPill.getInstantlyLabel, "Get it instantly next time")
+            .making, "free generating: script + spinner + making — ONE line (RW-171)")
         XCTAssertEqual(
             HeroPill.resolve(optedIn: true, lookState: .making, personalPhotoDisplayed: false,
                              isSubscribed: true, freeGenerationsUsed: 0, freeAllowance: 5),
             .making, "Premium generating carries NO upsell")
+        let models = try sourceFile("../RunWear/Models/PersonalHeroModels.swift")
+        XCTAssertFalse(models.contains("getInstantlyLabel"),
+                       "RW-171: the instantly upsell label is removed from the pill entirely")
     }
 
     func testPillTable_GenerationWindowNeverHasNoPill() {
@@ -417,7 +429,10 @@ final class Gen6WaveATests: XCTestCase {
                         optedIn: true, lookState: .making, personalPhotoDisplayed: displayed,
                         isSubscribed: subscribed, freeGenerationsUsed: used, freeAllowance: 5,
                         isScaffoldServe: displayed)
-                    XCTAssertTrue(state == .making || state == .makingWithUpsell,
+                    // RW-174 / RW-171: the one generating
+                    // state is .making on both tiers (the
+                    // two-line free variant is superseded).
+                    XCTAssertTrue(state == .making,
                                   "making + displayed=\(displayed) subscribed=\(subscribed) used=\(used) must carry the generating pill, got \(state)")
                 }
             }

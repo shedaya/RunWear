@@ -512,9 +512,11 @@ struct HeroImageView: View {
 /// THE Make It Me pill — one component, state-driven by
 /// HeroPill from the requested cell's facts, rendering ONLY the
 /// settled pill table: generating (script + spinner + "Making
-/// this you…"), free generating (+ the one green upsell line),
-/// free serve (script + "— N of 10 looks" count form + "Get
-/// unlimited"), exhausted, Premium (script + "Premium" + lock).
+/// this you…"), free serve (script + "— N of 10 looks" count
+/// form + "Get unlimited"), exhausted, Premium (script +
+/// "Premium" + lock). RW-174 / RW-171: EVERY state is ONE
+/// line — the free generating state's stacked upsell second
+/// line is removed from the pill entirely.
 /// A scaffold serve resolves .hidden and renders nothing.
 ///
 /// Two seats, one pill:
@@ -642,52 +644,26 @@ struct HeroPillView: View {
                 }
             )
             .accessibilityLabel("\(HeroPill.scriptMarkText). \(HeroPill.makingLabel)")
-        case .makingWithUpsell:
-            // GEN-5 (C-4 AMENDED) + GEN-6 VQ FIX (RW-71): the
-            // FREE generating pill — the clean generating row
-            // plus ONE small green upsell line on its own line
-            // beneath (the one-row form ellipsised both texts at
-            // the hero composition's width). Every settled
-            // string renders whole.
-            seated(
-                VStack(alignment: .leading, spacing: 3) {
+        case .exhausted(let used, let allowance):
+            // GEN-5 (OUT OF FREE LOOKS), RW-174 / RW-171 form:
+            // ONE line — script + the whole honest count +
+            // "Get unlimited" (the pill's main message, in the
+            // green accent) on the same row, in the free-look
+            // pill's one-line form; the whole pill taps through
+            // to the Premium offer. (The GEN-6 VQ two-line form
+            // — count over "Get unlimited" — is superseded by
+            // RW-171's one-line rule for every state.)
+            Button(action: onPillGetUnlimited) {
+                seated(
                     HStack(spacing: 6) {
                         pillScriptMark
-                        ProgressView()
-                            .controlSize(.mini)
-                            .tint(ink)
-                        Text(HeroPill.makingLabel)
+                        Text(HeroPill.exhaustedCountLabel(used: used, allowance: allowance))
                             .font(.appFootnote.weight(.semibold))
                             .foregroundColor(ink)
                             .lineLimit(1)
-                    }
-                    Button(action: onPillGetUnlimited) {
-                        Text(HeroPill.getInstantlyLabel)
-                            .font(.appFootnote.weight(.bold))
-                            // RW-105: the dynamic pine payload.
-                            .foregroundColor(AppTheme.pinePayload)
-                            .lineLimit(1)
-                    }
-                    .buttonStyle(.plain)
-                }
-            )
-            .accessibilityLabel("\(HeroPill.scriptMarkText). \(HeroPill.makingLabel). \(HeroPill.getInstantlyLabel)")
-        case .exhausted(let used, let allowance):
-            // GEN-5 (OUT OF FREE LOOKS) + GEN-6 VQ FIX (RW-72):
-            // script + the whole honest count on the first line,
-            // "Get unlimited" — the pill's main message in the
-            // green accent — on its own line beneath; the whole
-            // pill taps through to the Premium offer.
-            Button(action: onPillGetUnlimited) {
-                seated(
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack(spacing: 6) {
-                            pillScriptMark
-                            Text(HeroPill.exhaustedCountLabel(used: used, allowance: allowance))
-                                .font(.appFootnote.weight(.semibold))
-                                .foregroundColor(ink)
-                                .lineLimit(1)
-                        }
+                        Text("·")
+                            .font(.appFootnote)
+                            .foregroundColor(secondaryInk)
                         Text(HeroPill.getUnlimitedLabel)
                             .font(.appFootnote.weight(.bold))
                             .foregroundColor(AppTheme.pinePayload)

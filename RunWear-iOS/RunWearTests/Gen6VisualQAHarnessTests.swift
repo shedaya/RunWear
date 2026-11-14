@@ -131,7 +131,11 @@ final class Gen6VisualQAHarnessTests: XCTestCase {
                              isSubscribed: false, freeGenerationsUsed: 1, freeAllowance: 5,
                              isScaffoldServe: true),
             .hidden, "scaffold serve resolves silent per the operative pill table")
-        try renderPill(state: .makingWithUpsell, name: "VQ-1.1-ios-F-FREE-0-default.png")
+        // RW-174 / RW-171: the FREE-0 fixture renders .making —
+        // the free generating pill is the same ONE-line state
+        // as the Premium one (the two-line upsell fixture state
+        // this line carried is superseded and removed).
+        try renderPill(state: .making, name: "VQ-1.1-ios-F-FREE-0-default.png")
         try renderPill(state: .making, name: "VQ-1.2-ios-F-PREM-GEN-default.png")
         try renderPill(state: .freeLook(used: 3, allowance: 10), name: "VQ-1.3-ios-F-FREE-3-default.png")
         try renderPill(state: .exhausted(used: 10, allowance: 10), name: "VQ-1.4-ios-F-FREE-10-default.png")
@@ -141,7 +145,7 @@ final class Gen6VisualQAHarnessTests: XCTestCase {
 
     @MainActor
     func testVQ110PillStates_Dark() throws {
-        try renderPill(state: .makingWithUpsell, dark: true, name: "VQ-1.10-ios-F-FREE-0-dark.png")
+        try renderPill(state: .making, dark: true, name: "VQ-1.10-ios-F-FREE-0-dark.png")
         try renderPill(state: .freeLook(used: 3, allowance: 10), dark: true, name: "VQ-1.10-ios-F-FREE-3-dark.png")
         try renderPill(state: .exhausted(used: 10, allowance: 10), dark: true, name: "VQ-1.10-ios-F-FREE-10-dark.png")
     }
@@ -563,7 +567,7 @@ final class Gen6VisualQAHarnessTests: XCTestCase {
                 weatherCondition: .clear, date: Date(timeIntervalSince1970: 1_798_000_000), hour: 7,
                 tempBracket: HeroTempBracket.from(feelsLikeTemperature: 72),
                 fallbackImageUrl: "", aiImageUrl: nil,
-                pillState: .makingWithUpsell, heightMode: .fill, showsTopControls: false),
+                pillState: .making, heightMode: .fill, showsTopControls: false),
             size: CGSize(width: 390, height: 520), name: "VQ-1.1-ios-F-FREE-0-default.png")
         try writeHostedRender(
             HeroImageView(
@@ -603,7 +607,7 @@ final class Gen6VisualQAHarnessTests: XCTestCase {
                 weatherCondition: .clear, date: Date(timeIntervalSince1970: 1_798_000_000), hour: 7,
                 tempBracket: HeroTempBracket.from(feelsLikeTemperature: 72),
                 fallbackImageUrl: "", aiImageUrl: nil,
-                pillState: .makingWithUpsell, heightMode: .fill, showsTopControls: false)
+                pillState: .making, heightMode: .fill, showsTopControls: false)
                 .preferredColorScheme(.dark),
             size: CGSize(width: 390, height: 520), name: "VQ-1.10-ios-F-FREE-0-dark.png")
         try writeHostedRender(
@@ -718,7 +722,7 @@ final class Gen6VisualQAHarnessTests: XCTestCase {
                     pillState: state, heightMode: .fill, showsTopControls: false),
                 size: CGSize(width: 390, height: 520), name: name)
         }
-        try pill(.makingWithUpsell, "VQ-1.1-ios-F-FREE-0-default-fixed.png")
+        try pill(.making, "VQ-1.1-ios-F-FREE-0-default-fixed.png")
         try pill(.making, "VQ-1.2-ios-F-PREM-GEN-default-fixed.png")
         try pill(.freeLook(used: 3, allowance: 10), "VQ-1.3-ios-F-FREE-3-default-fixed.png")
         try pill(.exhausted(used: 10, allowance: 10), "VQ-1.4-ios-F-FREE-10-default-fixed.png")

@@ -218,12 +218,19 @@ final class Gen5FidelityTests: XCTestCase {
 
     // MARK: - Wave 1 + C-4 amended + Addendum 3: the pill state machine
 
-    func testPill_FreeGeneratingCarriesTheInstantlyLine() {
+    // RW-174 / RW-171 SUPERSEDES this test's GEN-5 C-4 form
+    // (testPill_FreeGeneratingCarriesTheInstantlyLine): the
+    // free generating pill no longer carries an upsell second
+    // line — the pill is ONE line in every state, and free
+    // generating resolves to the same .making as Premium.
+    func testPill_FreeGeneratingIsTheOneLineMakingState() throws {
         XCTAssertEqual(
             HeroPill.resolve(optedIn: true, lookState: .making, personalPhotoDisplayed: false,
                              isSubscribed: false, freeGenerationsUsed: 1, freeAllowance: 5),
-            .makingWithUpsell)
-        XCTAssertEqual(HeroPill.getInstantlyLabel, "Get it instantly next time")
+            .making)
+        let models = try sourceFile("../RunWear/Models/PersonalHeroModels.swift")
+        XCTAssertFalse(models.contains("getInstantlyLabel"),
+                       "RW-171: the instantly upsell label is removed from the pill entirely")
     }
 
     func testPill_PremiumGeneratingStaysClean() {
@@ -259,10 +266,12 @@ final class Gen5FidelityTests: XCTestCase {
         // not the scaffold status — generation in flight
         // outranks the scaffold serve (Android test-pins the
         // same precedence).
+        // RW-174 / RW-171: the free case below resolves to
+        // .making (was the two-line upsell state under C-4).
         XCTAssertEqual(
             HeroPill.resolve(optedIn: true, lookState: .making, personalPhotoDisplayed: true,
                              isSubscribed: false, freeGenerationsUsed: 1, freeAllowance: 5),
-            .makingWithUpsell)
+            .making)
         XCTAssertEqual(
             HeroPill.resolve(optedIn: true, lookState: .making, personalPhotoDisplayed: true,
                              isSubscribed: true, freeGenerationsUsed: 0, freeAllowance: 5),
@@ -311,13 +320,18 @@ final class Gen5FidelityTests: XCTestCase {
 
     func testPillView_EveryStatusLeadsWithTheScript() throws {
         let hero = try sourceFile("../RunWear/Views/HeroImageView.swift")
-        XCTAssertTrue(hero.contains("case .makingWithUpsell"))
+        // RW-174 / RW-171 SUPERSEDES the two pins that stood
+        // here (a makingWithUpsell case exists; the instantly
+        // label renders): the pill is ONE line in every state
+        // and the upsell line is gone from the pill entirely.
+        XCTAssertFalse(hero.contains("case .makingWithUpsell"))
         XCTAssertTrue(hero.contains("case .exhausted"))
-        XCTAssertTrue(hero.contains("HeroPill.getInstantlyLabel"))
+        XCTAssertFalse(hero.contains("HeroPill.getInstantlyLabel"))
         // The making case renders the script mark (it was the one
-        // state that dropped it — A-13/B-14).
+        // state that dropped it — A-13/B-14). Its case block now
+        // runs to the exhausted case (the case that follows it).
         let makingRange = try XCTUnwrap(hero.range(of: "case .making:"))
-        let scaffoldRange = try XCTUnwrap(hero.range(of: "case .makingWithUpsell:"))
+        let scaffoldRange = try XCTUnwrap(hero.range(of: "case .exhausted"))
         XCTAssertTrue(hero[makingRange.lowerBound..<scaffoldRange.lowerBound].contains("pillScriptMark"))
     }
 

@@ -1260,16 +1260,15 @@ enum FreeLooksMeter {
 // pill (silent, above).
 enum HeroPillState: Equatable {
     case hidden
-    /// Generating, subscribed (or otherwise not sellable): the
-    /// clean pill — script + spinner + "Making this you…".
+    /// Generating: the clean one-line pill — script + spinner
+    /// + "Making this you…" — on EVERY tier. RW-174 / RW-171
+    /// (Sol, Nov 12, 2026) SUPERSEDES the GEN-5 C-4 free-tier
+    /// variant that stood here: the free generating pill
+    /// stacked a second, upsell line beneath the generating
+    /// row and starved the primary line into an ellipsis.
+    /// The pill holds ONE line in every state; there is no
+    /// two-line generating state.
     case making
-    /// GEN-5 (RW-28, C-4 AMENDED — Sol, Nov 5, 2026): generating
-    /// on the FREE tier, where the user is actually waiting on
-    /// demand — the same clean pill PLUS one small green upsell
-    /// line, "Get it instantly next time" (Premium looks are
-    /// banked ahead, so next time the look is already there).
-    /// Gated to the free generating state ONLY.
-    case makingWithUpsell
     case freeLook(used: Int, allowance: Int)
     /// GEN-5 (RW-28, Sol Nov 5, 2026): OUT OF FREE LOOKS — the
     /// free tier's exhausted status: script lead, the used-up
@@ -1308,7 +1307,7 @@ enum PersonalCellPresentation: Equatable {
         pillState: HeroPillState
     ) -> PersonalCellPresentation {
         if lookState.isFailed { return .failed }
-        if pillState == .making || pillState == .makingWithUpsell { return .making }
+        if pillState == .making { return .making }
         if lookState == .making { return .making }
         return .serving
     }
@@ -1323,9 +1322,10 @@ enum HeroPill {
     // above and `resolve`'s scaffold gate).
     static let premiumLabel = "Premium"
     static let getUnlimitedLabel = "Get unlimited"
-    /// GEN-5 (C-4 AMENDED): the free generating pill's green
-    /// upsell line — verbatim, unembellished.
-    static let getInstantlyLabel = "Get it instantly next time"
+    // RW-174 / RW-171: there is NO "instantly" upsell label.
+    // The GEN-5 C-4 upsell line that the free generating pill
+    // carried as its stacked second line is removed from the
+    // pill entirely (not relocated within it).
 
     /// The exhausted pill's honest count, in the free pill's
     /// count family: "10 of 10 looks used".
@@ -1361,14 +1361,15 @@ enum HeroPill {
         // the photo underneath it (Android's HeroPillPolicy is
         // test-pinned to exactly this precedence; iOS build 25
         // inverted it, resolving to the scaffold state whenever a
-        // personal photo showed during a generation). The C-4
-        // amendment's gating applies here too: a free user's
-        // generating pill carries the green instantly line, a
-        // subscriber's stays clean. This also discharges the
-        // table's never-rule: a generation window ALWAYS has a
-        // pill — the generating one.
+        // personal photo showed during a generation). RW-174 /
+        // RW-171: the generating pill is the SAME one-line
+        // .making state on both tiers — the C-4 free-tier
+        // two-line variant is superseded (see HeroPillState).
+        // This also discharges the table's never-rule: a
+        // generation window ALWAYS has a pill — the generating
+        // one.
         if lookState == .making {
-            return isSubscribed ? .making : .makingWithUpsell
+            return .making
         }
         // GEN-6 Wave A (RW-34): a scaffold serve — the user's
         // own banked photo standing in for the exact look — is

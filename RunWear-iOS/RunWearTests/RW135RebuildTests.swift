@@ -1249,4 +1249,205 @@ final class RW135RebuildTests: XCTestCase {
         XCTAssertTrue(bar.contains("expandedCapOverride: pillBottomY == nil ? nil : effectiveCap"),
                       "the surface's entry-region budget reads the same effective cap")
     }
+
+    // MARK: - RW-174 · Row 17 — the §2.1 shadow persists through the ENTIRE morph
+    //
+    // Audit row 17 (iOS, ALTERED): at rest the §2.1 shadow
+    // stands, but during travel the overlay container's
+    // rounded-rect clip bounds it — the RW-170 travel-clip
+    // probe measured below-spill 13 pt unclipped → 0 pt
+    // clipped while 0<p<1. RW-174: the shadow lives OUTSIDE
+    // every clipped region at every progress value — the
+    // clip applies to the surface's inner content layer
+    // (the unified surface's own clip, which precedes its
+    // shadow), and NO outer container clip wraps the surface.
+
+    @MainActor
+    func testRW174_Row17_ShadowPersistsThroughMorph() throws {
+        try registerGreatVibes()
+        // — Source structure: the production container must
+        // not clip the surface it hosts, and inside the
+        // unified surface the clip must precede the shadow
+        // (clip the content, never the shadow).
+        let bar = try sourceFile("../RunWear/Views/WearIveRunMiniBar.swift")
+        XCTAssertFalse(bar.contains("clippedIfMorphing"),
+                       "RW-174 row 17: no container clip wraps the unified surface — the RW-162 G5 travel clip bound the §2.1 shadow to 0 pt of spill mid-morph and is retired")
+        XCTAssertFalse(bar.contains("travelClipActive"),
+                       "RW-174 row 17: the travel-clip state is retired with the clip it drove")
+        let unifiedStart = try XCTUnwrap(bar.range(of: "struct WearIveRunUnifiedSurfaceView"))
+        let unifiedEnd = try XCTUnwrap(bar.range(
+            of: "// MARK: - RW-152 §1 / RW-169 §7A", range: unifiedStart.upperBound..<bar.endIndex))
+        let unified = bar[unifiedStart.lowerBound..<unifiedEnd.lowerBound]
+        let clipRange = try XCTUnwrap(unified.range(
+            of: ".clipShape(RoundedRectangle(cornerRadius: WearIveRunMorph.cornerRadius(progress: p)))"))
+        let shadowRange = try XCTUnwrap(unified.range(
+            of: ".shadow(color: Color.black.opacity(0.14), radius: 12, x: 0, y: 6)"))
+        XCTAssertLessThan(clipRange.lowerBound, shadowRange.lowerBound,
+                          "RW-174 row 17: inside the surface the clip applies to the content layer and the §2.1 shadow is applied AFTER it, on the unclipped outer surface")
+
+        // — Render probe (RW-170 probe idiom): the surface
+        // as production composes it (no external clip), seated
+        // at the bottom of a light-ground canvas, at p = 0,
+        // mid, and 1. The below-spill must stand at every
+        // progress value and match across them.
+        let rests = try rw170RestHeights()
+        let canvasH = 500
+        func belowSpill(progress: Double) throws -> Int {
+            let h = rests.mini + (rests.expanded - rests.mini) * CGFloat(progress)
+            let data = try writeRenderSettled(
+                ZStack {
+                    Color(hex: "F5F1E8")
+                    VStack {
+                        Spacer()
+                        rw170Surface(progress: progress, height: h)
+                    }
+                    .padding(.horizontal, 12).padding(.bottom, 14)
+                }
+                .environment(\.colorScheme, .light),
+                size: CGSize(width: 393, height: CGFloat(canvasH)),
+                name: "RW174-probe-shadow-p\(Int(progress * 100)).png")
+            let reader = try rw170Pixels(data)
+            let ground = (245, 241, 232)
+            var count = 0
+            var yy = (canvasH - 14 + 1) * 2
+            while count < 40 && yy <= reader.height - 1 {
+                let px = reader.pixel(196 * 2, yy)
+                let darkening = Double((ground.0 - px.0) + (ground.1 - px.1) + (ground.2 - px.2)) / 3.0
+                if darkening > 6 { count += 1; yy += 2 } else { break }
+            }
+            return count
+        }
+        let spill0 = try belowSpill(progress: 0)
+        let spillMid = try belowSpill(progress: 0.5)
+        let spill1 = try belowSpill(progress: 1)
+        try rw170WriteProbe(
+            "RW174 shadow persistence (light, below-spill pt): p0=\(spill0) pMid=\(spillMid) p1=\(spill1)\n",
+            name: "RW174-probe-shadow-persistence.txt")
+        for (label, spill) in [("p=0", spill0), ("p=0.5", spillMid), ("p=1", spill1)] {
+            XCTAssertGreaterThanOrEqual(spill, 6,
+                                        "RW-174 row 17: the §2.1 shadow pools below the surface at \(label) (\(spill) pt — suppressed to 0 pt by the retired container clip)")
+        }
+        XCTAssertLessThanOrEqual(abs(spillMid - spill0), 3,
+                                 "RW-174 row 17: mid-morph spill \(spillMid) matches rest spill \(spill0) within raster tolerance")
+        XCTAssertLessThanOrEqual(abs(spill1 - spill0), 3,
+                                 "RW-174 row 17: expanded spill \(spill1) matches rest spill \(spill0) within raster tolerance")
+    }
+
+    // MARK: - RW-174 · Row 36 — settle-flip is TWO-PHASE (out 95 ms, swap, in 115 ms)
+    //
+    // Audit row 36 (iOS, ALTERED): the unified surface flipped
+    // narration with a single easeInOut crossfade of
+    // narrationCrossfadeSeconds = 0.21 — old and new lines
+    // blended through one curve. Spec §4.3 (and Android's
+    // WearIveRunMorph narrationAlpha: animateTo(0, tween(95))
+    // → swap → animateTo(1, tween(115))): opacity only, the
+    // old line fully OUT over 95 ms, the swap at the midpoint
+    // (opacity 0), the new line IN over 115 ms.
+
+    func testRW174_Row36_SettleFlip_TwoPhase() throws {
+        // The total is unchanged: 95 + 115 = 210 ms, the
+        // standing crossfade constant other pins rely on.
+        XCTAssertEqual(WearIveRunMorph.narrationCrossfadeSeconds, 0.21, accuracy: 0.0001,
+                       "the settle-flip total stays ≈210 ms (95 out + 115 in)")
+        let bar = try sourceFile("../RunWear/Views/WearIveRunMiniBar.swift")
+        // The two phase durations exist as named policy
+        // constants with the spec's exact values.
+        XCTAssertTrue(bar.contains("narrationFadeOutSeconds: Double = 0.095"),
+                      "RW-174 row 36: the fade-OUT phase is a named 95 ms policy constant")
+        XCTAssertTrue(bar.contains("narrationFadeInSeconds: Double = 0.115"),
+                      "RW-174 row 36: the fade-IN phase is a named 115 ms policy constant")
+        XCTAssertTrue(bar.contains("narrationFlipSwapOpacity"),
+                      "RW-174 row 36: the swap point is policy — the record swaps only at the midpoint opacity (0)")
+        // No single-curve crossfade remains anywhere in the
+        // file: every narration flip is the two-phase form.
+        XCTAssertFalse(bar.contains("withAnimation(.easeInOut(duration: WearIveRunMorph.narrationCrossfadeSeconds))"),
+                       "RW-174 row 36: the single easeInOut crossfade over the total duration is gone — old and new lines must never blend through one curve")
+        // The LIVE path (the unified surface) runs the two
+        // phases in order: fade out, swap in the completion,
+        // fade in.
+        let unifiedStart = try XCTUnwrap(bar.range(of: "struct WearIveRunUnifiedSurfaceView"))
+        let unifiedEnd = try XCTUnwrap(bar.range(
+            of: "// MARK: - RW-152 §1 / RW-169 §7A", range: unifiedStart.upperBound..<bar.endIndex))
+        let unified = bar[unifiedStart.lowerBound..<unifiedEnd.lowerBound]
+        let flipStart = try XCTUnwrap(unified.range(of: "private func applyNarrationCrossfade"))
+        let flipEnd = try XCTUnwrap(unified.range(
+            of: "private func runEntranceIfNeeded", range: flipStart.upperBound..<unified.endIndex))
+        let flip = unified[flipStart.lowerBound..<flipEnd.lowerBound]
+        let outRange = try XCTUnwrap(flip.range(of: "WearIveRunMorph.narrationFadeOutSeconds"),
+                                     "the live flip's first phase is the 95 ms fade-out")
+        let swapRange = try XCTUnwrap(flip.range(
+            of: "displayedState = newState", range: outRange.upperBound..<flip.endIndex),
+                                      "the live flip swaps the record inside the fade-out's completion")
+        let inRange = try XCTUnwrap(flip.range(
+            of: "WearIveRunMorph.narrationFadeInSeconds", range: swapRange.upperBound..<flip.endIndex),
+                                    "the live flip's second phase is the 115 ms fade-in")
+        XCTAssertLessThan(outRange.lowerBound, swapRange.lowerBound,
+                          "RW-174 row 36: fade OUT runs before the swap")
+        XCTAssertLessThan(swapRange.lowerBound, inRange.lowerBound,
+                          "RW-174 row 36: the swap precedes the fade IN — the new line never appears before the old line is out")
+        // The flip drives a narration opacity (the midpoint
+        // mechanism), applied to the one narration view.
+        XCTAssertTrue(unified.contains("narrationFlipOpacity"),
+                      "RW-174 row 36: the unified surface carries a flip opacity the two phases drive")
+        // Row 35 CONFORMS and must stay: the update bounce
+        // still fires from the flip path.
+        XCTAssertTrue(flip.contains("runUpdateBounce()"),
+                      "RW-174 row 36: the settle's update bounce + haptic (row 35) is preserved in the flip path")
+    }
+
+    // MARK: - RW-174 · Row 53 — RW-171: the Make It Me pill is ONE line in every state
+    //
+    // Audit row 53 (iOS, ALTERED): the free-tier generating
+    // state stacked a second line by construction —
+    // "Get it instantly next time" beneath the generating
+    // row — starving the primary line into an ellipsis.
+    // RW-171 (Sol, Nov 12, 2026): the pill holds ONE line in
+    // every state; the upsell copy leaves the pill entirely.
+
+    func testRW174_Row53_PillOneLineEveryState() throws {
+        // — Resolution: a free-tier generation resolves to
+        // the SAME one-line making state as a subscriber's —
+        // there is no second-line generating state.
+        XCTAssertEqual(
+            HeroPill.resolve(optedIn: true, lookState: .making, personalPhotoDisplayed: false,
+                             isSubscribed: false, freeGenerationsUsed: 0, freeAllowance: 10),
+            .making,
+            "RW-171: free-tier generating resolves to the one-line making pill (was the two-line upsell state)")
+        XCTAssertEqual(
+            HeroPill.resolve(optedIn: true, lookState: .making, personalPhotoDisplayed: true,
+                             isSubscribed: false, freeGenerationsUsed: 0, freeAllowance: 10,
+                             isScaffoldServe: true),
+            .making,
+            "RW-171: a free generation in flight over a scaffold serve is still the one-line making pill")
+        // — Planning height: every rendered state is ONE line.
+        XCTAssertEqual(HeroPillMetrics.height(for: .hidden), 0, accuracy: 0.001)
+        for state in [HeroPillState.making, .freeLook(used: 3, allowance: 10),
+                      .exhausted(used: 10, allowance: 10), .premium] {
+            XCTAssertEqual(HeroPillMetrics.height(for: state), HeroPillMetrics.singleLineHeight,
+                           accuracy: 0.001,
+                           "RW-171: state \(state) plans at the single-line height")
+        }
+        // — Construction: the upsell copy and the stacked
+        // second line are gone from the pill entirely — model,
+        // view, and metrics alike.
+        let models = try sourceFile("../RunWear/Models/PersonalHeroModels.swift")
+        XCTAssertFalse(models.contains("Get it instantly next time"),
+                       "RW-171: the instantly upsell copy leaves the pill's model entirely")
+        XCTAssertFalse(models.contains("makingWithUpsell"),
+                       "RW-171: there is no two-line generating state in the pill model")
+        let hero = try sourceFile("../RunWear/Views/HeroImageView.swift")
+        XCTAssertFalse(hero.contains("Get it instantly next time"),
+                       "RW-171: the instantly upsell copy is not rendered in the pill")
+        XCTAssertFalse(hero.contains("makingWithUpsell"),
+                       "RW-171: the pill view carries no two-line generating case")
+        let pillStart = try XCTUnwrap(hero.range(of: "struct HeroPillView"))
+        let pillEnd = try XCTUnwrap(hero.range(
+            of: "// MARK: - RW-106", range: pillStart.upperBound..<hero.endIndex))
+        let pillView = hero[pillStart.lowerBound..<pillEnd.lowerBound]
+        XCTAssertFalse(pillView.contains("VStack"),
+                       "RW-171: the pill view stacks nothing — every state is a single row")
+        let heroLayout = try sourceFile("../RunWear/Views/FirstScreenHero.swift")
+        XCTAssertFalse(heroLayout.contains("makingWithUpsell"),
+                       "RW-171: the pill metrics carry no two-line state")
+    }
 }

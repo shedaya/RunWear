@@ -1744,12 +1744,15 @@ final class Gen6SuccessorWaveTests: XCTestCase {
             .hidden)
         // Precedence preserved: MAKING outranks the exhausted
         // branch; a scaffold serve stays silent over it.
+        // RW-174 / RW-171: the making resolution is the
+        // one-line .making on the free tier too (was the
+        // two-line upsell state under GEN-5 C-4).
         XCTAssertEqual(
             HeroPill.resolve(
                 optedIn: true, lookState: .making, personalPhotoDisplayed: false,
                 isSubscribed: false, freeGenerationsUsed: 5, freeAllowance: 5,
                 isExhaustedCell: true),
-            .makingWithUpsell)
+            .making)
         XCTAssertEqual(
             HeroPill.resolve(
                 optedIn: true, lookState: .ready, personalPhotoDisplayed: true,

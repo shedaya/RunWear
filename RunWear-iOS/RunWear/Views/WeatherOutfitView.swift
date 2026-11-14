@@ -2018,7 +2018,10 @@ struct WeatherOutfitView: View {
     /// (HeroPillMetrics) — the input the hero's one vertical
     /// layout guarantees the whole stack against, in every
     /// pill state (Ruling 2 / the build-33 weather-line
-    /// defect: the two-line generating pill is the tall one).
+    /// defect: the then-two-line generating pill was the tall
+    /// one; RW-174 / RW-171 makes every state one line, so
+    /// every rendered state now plans at the single-line
+    /// height through this same input).
     private var currentPillHeight: CGFloat {
         HeroPillMetrics.height(for: heroPillState)
     }

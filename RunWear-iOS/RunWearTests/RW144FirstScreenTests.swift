@@ -459,9 +459,12 @@ final class RW144FirstScreenTests: XCTestCase {
     /// (g) a stock-serve hero (no personal photo, no pill).
     @MainActor
     func testRW144PillAndStockFrames() throws {
+        // RW-174 / RW-171: the free generating pill frame that
+        // stood here as a second, two-line state is removed —
+        // the generating states are the one .making pill on
+        // both tiers (the frame now shows it once, as shipped).
         let generating = VStack(spacing: 28) {
             HeroPillView(pillState: .making, seat: .straddle)
-            HeroPillView(pillState: .makingWithUpsell, seat: .straddle, onPillGetUnlimited: {})
             HeroPillView(pillState: .exhausted(used: 10, allowance: 10), seat: .straddle, onPillGetUnlimited: {})
             HeroPillView(pillState: .premium, seat: .straddle)
         }

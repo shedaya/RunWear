@@ -939,10 +939,21 @@ final class RWNextBuildTests: XCTestCase {
                       "RW-169 §7A: no during-morph measurement pass remains")
         XCTAssertTrue(bar.contains("WearIveRunMorphProbe.containerHeight"),
                       "RW-169 §7A: the container height is the rest-height interpolation (see WearIveRunOverlayView)")
-        XCTAssertTrue(bar.contains("travelClipActive"),
-                      "the container clip binds only while the morph travels (RW-162 G5)")
-        XCTAssertTrue(bar.contains("clipShape(RoundedRectangle(cornerRadius: radius))"),
-                      "the travel clip follows the morph's rounded shape, never a plain rectangle (RW-162 G5)")
+        // RW-174 (row 17) SUPERSEDES the RW-162 G5 travel-clip
+        // pins that stood here: the container's travel clip
+        // bound the surface's §2.1 shadow to 0 pt of spill for
+        // the whole morph (RW-170 travel-clip probe), so the
+        // clip is retired from the container — the unified
+        // surface clips its own CONTENT layer to the morph's
+        // rounded shape (radius 16, constant) and its shadow
+        // is applied after that clip, unclipped at every
+        // progress value.
+        XCTAssertFalse(bar.contains("travelClipActive"),
+                      "RW-174 row 17: the RW-162 G5 container travel clip is retired — it suppressed the §2.1 shadow mid-morph")
+        XCTAssertFalse(bar.contains("clippedIfMorphing"),
+                      "RW-174 row 17: no container clip wraps the unified surface")
+        XCTAssertTrue(bar.contains(".clipShape(RoundedRectangle(cornerRadius: WearIveRunMorph.cornerRadius(progress: p)))"),
+                      "RW-174 row 17: the clip lives INSIDE the surface, on its content layer, following the morph's rounded shape")
     }
 
     /// RW-162 G2: the fresh-fix rule and its wiring — an
