@@ -53,6 +53,7 @@ import com.runwear.app.ui.components.HapticSpec
 import com.runwear.app.ui.theme.GreatVibesFontFamily
 import com.runwear.app.ui.theme.RunWearColors
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 
 /**
  * RW-135 REBUILD (Phase 2, Nov 12, 2026): ONE element, two
@@ -257,6 +258,180 @@ object WearIveRunMorphPolicy {
      * prototype-measured ≈49dp. */
     fun miniRestHeightDp(contentRowDp: Float = CONTROL_DP): Float =
         MINI_TOP_DP + contentRowDp + MINI_BOTTOM_DP
+
+    // ---- Creation pulse pine ring (spec §4.1; RW-174 row 34) --
+
+    /** The ring's stroke width (the iOS reference draws its
+     * ring at lineWidth 2 in AppTheme.pinePayload). */
+    const val PINE_RING_WIDTH_DP = 2f
+
+    /** The ring's peak alpha and bloom scale — the retired
+     * dock seat's PineRing values (WearIveRunDock.kt), ported
+     * to the live morph surface by RW-174: alpha ~0.45 -> 0,
+     * scale ~1 -> 1.05 across the pulse. */
+    const val PINE_RING_PEAK_ALPHA = 0.45f
+    const val PINE_RING_BLOOM_SCALE = 1.05f
+
+    /** Ring alpha at pulse [progress] (0 -> 1 over the cue):
+     * blooms at the peak and decays to nothing. */
+    fun pineRingAlpha(progress: Float): Float =
+        PINE_RING_PEAK_ALPHA * (1f - progress.coerceIn(0f, 1f))
+
+    /** Ring scale at pulse [progress]. */
+    fun pineRingScale(progress: Float): Float =
+        1f + (PINE_RING_BLOOM_SCALE - 1f) * progress.coerceIn(0f, 1f)
+}
+
+/**
+ * RW-174 (audit rows 39+40, spec §4.7) — the delete /
+ * session-end exit split, ONE choreography per form. This
+ * mirrors the iOS WearIveRunExitPolicy of record:
+ *
+ * - from MINI: fade + 26dp sink over the 300ms exit curve —
+ *   driven by the HOST layer (its graphicsLayer owns the
+ *   container fade/sink); the height is RELEASED when the
+ *   surface leaves, never folded, and the morph's internal
+ *   exit does not run at all;
+ * - from EXPANDED: the morph's internal exit only — content
+ *   fades 160ms, THEN the height folds to 0 over 400ms on
+ *   the fold curve (560ms total) — and the host layer adds
+ *   NO sink and NO container fade;
+ * - Reduce Motion (§5): a 200ms fade, height snaps — the
+ *   morph fades its content over 200ms and snaps the fold
+ *   at the end; the host fades over the same 200ms with
+ *   no sink.
+ *
+ * At 5a9e0b0 both layers ran in both forms: a mini delete
+ * folded for ~560ms, and an expanded delete additionally
+ * sank 26dp and container-faded over its first 300ms.
+ */
+object WearIveRunExitPolicy {
+
+    /** Total exit length from MINI (300ms exit curve). */
+    const val MINI_MS = 300
+
+    /** The expanded exit's content-fade segment. */
+    const val EXPANDED_FADE_MS = 160
+
+    /** The expanded exit's height-fold segment. */
+    const val EXPANDED_FOLD_MS = 400
+
+    /** Total exit length from EXPANDED (160 fade + 400 fold). */
+    const val EXPANDED_MS = EXPANDED_FADE_MS + EXPANDED_FOLD_MS
+
+    /** Reduce Motion (§5): a 200ms fade, height snaps. */
+    const val REDUCED_MOTION_MS = 200
+
+    /** The MINI exit's sink (§4.7: 26dp). */
+    const val SINK_DP = 26f
+
+    fun durationMs(fromExpanded: Boolean, reduceMotion: Boolean): Int =
+        when {
+            reduceMotion -> REDUCED_MOTION_MS
+            fromExpanded -> EXPANDED_MS
+            else -> MINI_MS
+        }
+
+    /** Whether the morph's internal exit (content fade /
+     * height fold) runs for this exit: expanded form, or
+     * Reduce Motion (fade + snap in both forms). A non-RM
+     * mini exit is the host's alone. */
+    fun morphRunsInternalExit(
+        fromExpanded: Boolean,
+        reduceMotion: Boolean
+    ): Boolean = reduceMotion || fromExpanded
+
+    /** Host-layer container alpha at exit [progress]: the
+     * mini fade (and the shared RM fade); an expanded non-RM
+     * exit gets NO container fade from the host. */
+    fun hostAlpha(
+        progress: Float,
+        fromExpanded: Boolean,
+        reduceMotion: Boolean
+    ): Float =
+        if (!reduceMotion && fromExpanded) {
+            1f
+        } else {
+            1f - progress.coerceIn(0f, 1f)
+        }
+
+    /** Host-layer sink (dp) at exit [progress]: MINI only,
+     * never under Reduce Motion, never from expanded. */
+    fun hostSinkDp(
+        progress: Float,
+        fromExpanded: Boolean,
+        reduceMotion: Boolean
+    ): Float =
+        if (reduceMotion || fromExpanded) {
+            0f
+        } else {
+            SINK_DP * progress.coerceIn(0f, 1f)
+        }
+
+    /** Content opacity at exit [progress] (the morph's own
+     * fade): from expanded the fade completes inside its
+     * 160ms segment of the 560ms total; the mini and RM
+     * forms fade across their whole exit. */
+    fun contentOpacity(
+        progress: Float,
+        fromExpanded: Boolean,
+        reduceMotion: Boolean
+    ): Float {
+        val q = progress.coerceIn(0f, 1f)
+        if (reduceMotion || !fromExpanded) return 1f - q
+        val fadeFraction =
+            EXPANDED_FADE_MS.toFloat() / EXPANDED_MS.toFloat()
+        return 1f - minOf(1f, q / fadeFraction)
+    }
+
+    /** Height scale at exit [progress] (1 = no fold): the
+     * mini height is released (always 1); the expanded fold
+     * starts only after its fade segment; under RM the
+     * height stays and snaps at removal. */
+    fun heightScale(
+        progress: Float,
+        fromExpanded: Boolean,
+        reduceMotion: Boolean
+    ): Float {
+        val q = progress.coerceIn(0f, 1f)
+        if (reduceMotion || !fromExpanded) return 1f
+        val fadeFraction =
+            EXPANDED_FADE_MS.toFloat() / EXPANDED_MS.toFloat()
+        if (q <= fadeFraction) return 1f
+        return 1f - (q - fadeFraction) / (1f - fadeFraction)
+    }
+}
+
+/**
+ * The creation cue's pine ring (spec §4.1; RW-174 row 34):
+ * a rounded-rect border in pine blooming and decaying
+ * around the surface across the pulse — scale ~1 -> 1.05,
+ * alpha ~0.45 -> 0. Ported from the retired dock seat's
+ * PineRing (WearIveRunDock.kt), which Home no longer
+ * composes; the radius is the surface's constant 16dp
+ * ([WearIveRunMorphPolicy.RADIUS_DP] — never animates).
+ * [progress] runs 0 -> 1 over the 900ms cue.
+ */
+@Composable
+private fun MorphPineRing(progress: Float, modifier: Modifier = Modifier) {
+    if (progress <= 0f || progress >= 1f) return
+    Box(
+        modifier = modifier
+            .graphicsLayer {
+                val s = WearIveRunMorphPolicy.pineRingScale(progress)
+                scaleX = s
+                scaleY = s
+            }
+            .border(
+                width = WearIveRunMorphPolicy.PINE_RING_WIDTH_DP.dp,
+                color = RunWearColors.PineAccent.copy(
+                    alpha = WearIveRunMorphPolicy.pineRingAlpha(progress)
+                ),
+                shape = RoundedCornerShape(
+                    WearIveRunMorphPolicy.RADIUS_DP.dp
+                )
+            )
+    )
 }
 
 @Composable
@@ -278,6 +453,13 @@ fun WearIveRunMorphSurface(
     bounceKey: Int = 0,
     entranceKey: Int = 0,
     exiting: Boolean = false,
+    /** RW-174 (spec §4.7): the form the exit started from,
+     * captured by the host in its exit snapshot. The exit
+     * split ([WearIveRunExitPolicy]) keys off it: from
+     * EXPANDED the morph runs the fade+fold and the host
+     * adds nothing; from MINI the host runs fade+sink and
+     * this surface's internal exit does not run. */
+    exitFromExpanded: Boolean = false,
     reduceMotion: Boolean = false,
     onExitFinished: () -> Unit = {},
     maxExpandedHeightDp: Float = Float.MAX_VALUE,
@@ -326,18 +508,39 @@ fun WearIveRunMorphSurface(
     }
 
     // ---- Creation pulse / update bounce (spec §4.1 / §4.3) -----
+    // RW-174 (row 34): the pulse carries the pine RING as well
+    // as the scale — the ring blooms and decays around the
+    // surface across the same 900ms, armed on the same cueKey,
+    // exactly once per creation (the update bounce below never
+    // touches it). At 5a9e0b0 the live surface had scale +
+    // haptic only; the ring existed only in the retired dock
+    // seat Home does not compose.
     val pulse = remember { Animatable(1f) }
+    val ring = remember { Animatable(0f) }
+    var ringActive by remember { mutableStateOf(false) }
     var lastPulsedCue by remember { mutableStateOf(0) }
     LaunchedEffect(cueKey, cueArmed) {
         if (!cueArmed || cueKey <= 0 || cueKey == lastPulsedCue) return@LaunchedEffect
         lastPulsedCue = cueKey
         haptic.performHapticFeedback(HapticSpec.CUE_TICK)
         if (!reduceMotion) {
+            ringActive = true
+            ring.snapTo(0f)
+            val ringJob = launch {
+                ring.animateTo(
+                    1f,
+                    tween(
+                        durationMillis = WearIveRunDockPolicy.CUE_PULSE_MS
+                    )
+                )
+            }
             pulse.animateTo(
                 WearIveRunDockPolicy.CUE_PULSE_SCALE,
                 tween(durationMillis = 450, easing = EaseInOut)
             )
             pulse.animateTo(1f, tween(durationMillis = 450, easing = EaseInOut))
+            ringJob.join()
+            ringActive = false
         }
     }
     val bounce = remember { Animatable(1f) }
@@ -375,23 +578,50 @@ fun WearIveRunMorphSurface(
         }
     }
 
-    // ---- Delete / session-end exit (spec §4.7) ------------------
+    // ---- Delete / session-end exit (spec §4.7; RW-174 split) ---
+    // Form-aware per WearIveRunExitPolicy:
+    // - from EXPANDED: content fades 160ms, then the height
+    //   folds to 0 over 400ms (fold curve); this effect owns
+    //   the exit and reports its completion;
+    // - from MINI (non-RM): NOTHING runs here — the host's
+    //   fade + 26dp sink over 300ms is the whole exit, the
+    //   height is released when the surface leaves, and the
+    //   host reports completion. (At 5a9e0b0 this effect ran
+    //   in both forms, folding a mini exit out to ~560ms.)
+    // - Reduce Motion (§5): 200ms fade, height snaps — kept
+    //   in both forms.
     val contentAlpha = remember { Animatable(1f) }
     val foldFraction = remember { Animatable(1f) }
     LaunchedEffect(exiting) {
         if (!exiting) return@LaunchedEffect
+        if (!WearIveRunExitPolicy.morphRunsInternalExit(
+                exitFromExpanded, reduceMotion
+            )
+        ) {
+            return@LaunchedEffect
+        }
         if (reduceMotion) {
-            contentAlpha.animateTo(0f, tween(durationMillis = 200))
+            contentAlpha.animateTo(
+                0f,
+                tween(
+                    durationMillis =
+                        WearIveRunExitPolicy.REDUCED_MOTION_MS
+                )
+            )
             foldFraction.snapTo(0f)
         } else {
             contentAlpha.animateTo(
                 0f,
-                tween(durationMillis = WearIveRunDockPolicy.DELETE_CONTENT_FADE_MS)
+                tween(
+                    durationMillis =
+                        WearIveRunExitPolicy.EXPANDED_FADE_MS
+                )
             )
             foldFraction.animateTo(
                 0f,
                 tween(
-                    durationMillis = WearIveRunDockPolicy.DELETE_FOLD_MS,
+                    durationMillis =
+                        WearIveRunExitPolicy.EXPANDED_FOLD_MS,
                     easing = WearIveRunDockPolicy.FOLD_EASING
                 )
             )
@@ -711,6 +941,16 @@ fun WearIveRunMorphSurface(
                     }
                     }
                 }
+            )
+        }
+        // RW-174 (row 34, spec §4.1): the creation pulse's
+        // pine ring, drawn AROUND this surface (an overlay
+        // sibling matching its size, blooming past its edge
+        // as it scales) — present only while the cue runs.
+        if (ringActive) {
+            MorphPineRing(
+                progress = ring.value,
+                modifier = Modifier.matchParentSize()
             )
         }
     }

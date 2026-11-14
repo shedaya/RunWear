@@ -178,9 +178,14 @@ class Rw169CapFoldedDelete : Rw169CaptureBase() {
     @Test
     fun `capture folded delete fold in flight and at end of scroll`() {
         val host = homeHost()
-        // The fold in flight: delete from the mini at rest and
-        // sample the exit (content fade 160ms + height fold
-        // 400ms) at fine frame steps.
+        // Delete from the mini at rest, sampled at fine frame
+        // steps. RW-174 NOTE (Nov 14, 2026): the mini exit is
+        // the host's fade + 26dp sink over 300ms with the
+        // height RELEASED — the content fade 160ms + height
+        // fold 400ms this comment used to name is the EXPANDED
+        // form's exit only (spec §4.7 split); the captures
+        // below simply record the mini exit's flight either
+        // way.
         clickDescription(host, "Remove from Wear I've Run")
         advanceFramesMs(host, 2, 60)
         capture(host, "rw169-folded-delete-midfold.png")

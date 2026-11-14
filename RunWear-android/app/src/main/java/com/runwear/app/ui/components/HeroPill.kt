@@ -3,10 +3,8 @@ package com.runwear.app.ui.components
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.ui.draw.shadow
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -23,7 +21,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.runwear.app.makeitme.MakeItMeMode
@@ -72,13 +69,14 @@ data class HeroPillContent(
     val showScriptMark: Boolean = false,
     /** GEN-3 DESIGN DELTA: the lock glyph trails the PREMIUM state. */
     val showLock: Boolean = false,
-    /** GEN-5 C-4 AMENDED: the small green upsell line on the
-     *  FREE-tier generating pill only ("Get it instantly next
-     *  time"); its tap goes to the same Premium offer as the free
-     *  pill's "Get unlimited". Null on every other state. */
-    val upsellText: String? = null,
     /** GEN-5: the whole pill is the tap target (EXHAUSTED state). */
     val wholePillAction: Boolean = false
+    // RW-171 / RW-174 (Nov 14, 2026): there is NO upsell field.
+    // The GEN-5 C-4 "Get it instantly next time" line that the
+    // FREE-tier generating state used to carry here — and the
+    // pill rendered as a stacked second line — is REMOVED by
+    // Sol's RW-171 ruling: the pill is ONE line in every state
+    // and the upsell copy leaves the pill entirely.
 )
 
 object HeroPillPolicy {
@@ -98,19 +96,14 @@ object HeroPillPolicy {
         if (lookStatus == PersonalLookStatus.Making) {
             // GEN-5 (RW-28): EVERY pill status leads with the Make
             // It Me script — the generating pill included (A-13/B-14).
-            // C-4 AMENDED: the free-tier generating state also
-            // carries the one small green upsell line; a subscriber's
-            // generating state stays clean.
+            // RW-171 / RW-174: the generating state is ONE line on
+            // every tier — the GEN-5 C-4 free-tier upsell line that
+            // used to stack beneath it is removed entirely.
             return HeroPillContent(
                 kind = HeroPillKind.MAKING,
                 text = MakeItMeStrings.HERO_PILL_MAKING,
                 showSpinner = true,
-                showScriptMark = true,
-                upsellText = if (mode == MakeItMeMode.FREE) {
-                    MakeItMeStrings.HERO_PILL_MAKING_UPSELL
-                } else {
-                    null
-                }
+                showScriptMark = true
             )
         }
         // GEN-5 (Sol, Nov 5 ~06:30 CST): EXHAUSTED — a free user who
@@ -176,8 +169,13 @@ object HeroPillPolicy {
  * actually offers (BoxWithConstraints + widthIn) and script-led
  * states get extra leading padding — in Sol's recording the
  * capsule's shape clip cut the script's opening swash at the
- * pill's left edge ("› Make It Me"). The main text ellipsizes on
- * one line rather than pushing the capsule past its host.
+ * pill's left edge ("› Make It Me").
+ *
+ * RW-171 / RW-174 (Nov 14, 2026) SUPERSEDES DA-15(b)'s ellipsis:
+ * the main text is ONE line and is never truncated — it does not
+ * ellipsize (Sol's RW-171 device evidence: the generating pill's
+ * primary line truncated while a stacked upsell line was spent
+ * beneath it; the upsell line is removed entirely).
  */
 @Composable
 fun HeroPill(
@@ -206,15 +204,17 @@ fun HeroPill(
             // the v8 frames' form, with ink text on it.
             color = com.runwear.app.ui.theme.RunWearColors.BgCard
         ) {
-            // WT-4 (parity with iOS): the FREE generating pill
-            // STACKS — the generating row keeps its one-row form
-            // and the green upsell line takes its own line beneath
-            // it. (It previously trailed the row, where the hero's
-            // granted width squeezed it into a narrow right-hand
-            // column that wrapped it mid-phrase: "Get it instantly
-            // next / time".) Every other state is the single row
-            // it has always been.
-            Column(
+            // RW-171 / RW-174 (Nov 14, 2026) SUPERSEDES WT-4:
+            // the pill is ONE ROW in every state, the free-tier
+            // generating state included. WT-4's stacked second
+            // line (the "Get it instantly next time" upsell) is
+            // removed — Sol's device evidence showed the primary
+            // line truncating with an ellipsis while the second
+            // line was spent beneath it. The primary line is
+            // never truncated now (softWrap off, no ellipsis):
+            // one line, whole.
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(
                     start = if (content.showScriptMark) 16.dp else 12.dp,
                     end = 12.dp,
@@ -222,9 +222,6 @@ fun HeroPill(
                     bottom = 8.dp
                 )
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
                 if (content.showSpinner) {
                     CircularProgressIndicator(
                         color = com.runwear.app.ui.theme.RunWearColors.TextPrimary,
@@ -246,8 +243,12 @@ fun HeroPill(
                     text = content.text,
                     fontSize = 13.5.sp,
                     color = com.runwear.app.ui.theme.RunWearColors.TextSecondary,
+                    // RW-171: ONE line, never truncated — no
+                    // ellipsis overflow and no wrap; the line
+                    // renders whole or the pill grows with its
+                    // host's granted width.
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    softWrap = false
                 )
                 if (content.showLock) {
                     Spacer(Modifier.width(5.dp))
@@ -287,18 +288,6 @@ fun HeroPill(
                         } else {
                             com.runwear.app.ui.theme.RunWearColors.TextPrimary
                         },
-                        modifier = Modifier.clickable { onAction() }
-                    )
-                }
-                }
-                if (content.upsellText != null) {
-                    Spacer(Modifier.height(3.dp))
-                    Text(
-                        text = content.upsellText,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        // RW-144 FIX: theme pine, as on the CTA above.
-                        color = com.runwear.app.ui.theme.RunWearColors.PineAccent,
                         modifier = Modifier.clickable { onAction() }
                     )
                 }

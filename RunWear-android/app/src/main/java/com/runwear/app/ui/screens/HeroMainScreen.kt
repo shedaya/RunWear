@@ -882,7 +882,13 @@ fun HeroMainScreen(
         val barEntry: WearIveRunEntry,
         val dayEntry: WearIveRunDayEntry,
         val entryLine: String,
-        val fromTrash: Boolean
+        val fromTrash: Boolean,
+        /** RW-174 (spec §4.7): the form the exit starts
+         * from, captured at the moment the exit begins —
+         * the delete split (host fade+sink from MINI vs
+         * morph fade+fold from EXPANDED) keys off this
+         * frozen value, never the live expansion state. */
+        val fromExpanded: Boolean
     )
     var wirExit by remember { mutableStateOf<WirExitSnapshot?>(null) }
     var wirExitFromTrashDone by remember { mutableStateOf(false) }
@@ -1074,16 +1080,13 @@ fun HeroMainScreen(
     // at-footer). (The pure WearIveRunDockPolicy fade functions
     // remain for the RW-140 harness, which builds its own
     // host; nothing on the Home path reads them.)
-    // Whether the footer item is among the active host's visible
-    // items (its content is composed and on screen) — the delete
-    // choreography branches on this (spec section 4.7).
-    // RW-152 §1: "the footer is composed" now means the expanded
-    // panel state is composed in the overlay — the delete
-    // choreography branches on it exactly as before (the panel's
-    // fold is the longest exit and reports completion).
-    val wirFooterComposed by remember {
-        derivedStateOf { wirExpanded }
-    }
+    // RW-174: the delete choreography no longer branches on
+    // a live "footer composed" derivation — it branches on
+    // the exit snapshot's frozen form (WirExitSnapshot
+    // .fromExpanded, stamped by the trash / session-end
+    // paths from wirExpanded at the moment the exit begins),
+    // so a mid-exit expansion change can never re-route an
+    // exit that has already started.
 
     // Creation / update cue bookkeeping. A CREATION is an
     // Absent -> Present flip with the cue armed (the holder's Cue
@@ -1177,7 +1180,10 @@ fun HeroMainScreen(
             // haptic, off the last live snapshot.
             if (wirExit == null && !wirExitFromTrashDone) {
                 wirLastSnapshot?.let { snap ->
-                    wirExit = snap.copy(fromTrash = false)
+                    wirExit = snap.copy(
+                        fromTrash = false,
+                        fromExpanded = wirExpanded
+                    )
                 }
             }
             wirExitFromTrashDone = false
@@ -1196,24 +1202,32 @@ fun HeroMainScreen(
                 barEntry = snapshot.barEntry,
                 dayEntry = snapshot.entry,
                 entryLine = snapshot.entryLine,
-                fromTrash = false
+                fromTrash = false,
+                // Placeholder: the trash and session-end
+                // paths stamp the live form when the exit
+                // actually begins (RW-174).
+                fromExpanded = false
             )
         }
     }
 
-    // The dock's exit animation + the exit completion for the
-    // paths where the footer cannot report it (footer off-screen
-    // at trash: dock exit only, 300ms — section 4.7; session end
-    // with the footer off-screen likewise). When the footer IS
-    // composed, its fold is the longest exit and IT reports
-    // completion via onExitFinished; this effect then only drives
-    // the dock's own fade/sink.
+    // RW-174 (spec §4.7): the exit split, form-aware. The
+    // host layer owns the exit ONLY from MINI — fade + 26dp
+    // sink over 300ms exit easing, height released — and
+    // under Reduce Motion (a shared 200ms fade in both
+    // forms). From EXPANDED (non-RM) the host drives
+    // NOTHING: the morph's own content fade (160ms) + height
+    // fold (400ms) is the whole exit, and the morph reports
+    // completion via onExitFinished; from MINI this effect
+    // reports completion when its 300ms runs out. (At
+    // 5a9e0b0 this effect ran the fade/sink in BOTH forms,
+    // stacking a sink + container fade on expanded exits.)
     LaunchedEffect(wirExit) {
         val exit = wirExit ?: return@LaunchedEffect
         wirDockExit.snapTo(0f)
         if (wirReduceMotion) {
             wirDockExit.animateTo(1f, tween(durationMillis = 200))
-        } else {
+        } else if (!exit.fromExpanded) {
             wirDockExit.animateTo(
                 1f,
                 tween(
@@ -1222,7 +1236,7 @@ fun HeroMainScreen(
                 )
             )
         }
-        if (!wirFooterComposed) {
+        if (!exit.fromExpanded) {
             wirFinishExit(exit)
         }
     }
@@ -1273,7 +1287,10 @@ fun HeroMainScreen(
     val wirTrash: () -> Unit = {
         if (wirExit == null) {
             wirLastSnapshot?.let { snap ->
-                wirExit = snap.copy(fromTrash = true)
+                wirExit = snap.copy(
+                    fromTrash = true,
+                    fromExpanded = wirExpanded
+                )
             }
         }
     }
@@ -1367,6 +1384,10 @@ fun HeroMainScreen(
                 bounceKey = wirDockBounceKey + wirFooterBounceKey,
                 entranceKey = wirCreationKey,
                 exiting = exit != null,
+                // RW-174: the exit's starting form, frozen in
+                // the snapshot — the morph's internal exit
+                // runs only for an expanded (or RM) exit.
+                exitFromExpanded = exit?.fromExpanded ?: false,
                 reduceMotion = wirReduceMotion,
                 onExitFinished = {
                     wirExit?.let { wirFinishExit(it) }
@@ -1986,16 +2007,34 @@ fun HeroMainScreen(
                                     // scroll position never fades,
                                     // sinks or scales it. All that
                                     // remains here is the exit
-                                    // choreography's own term
-                                    // (spec §4.7: fade + 26dp sink
-                                    // over the dock exit, driven
-                                    // by wirDockExit).
+                                    // choreography's own term,
+                                    // RW-174 form-aware per
+                                    // WearIveRunExitPolicy: fade +
+                                    // 26dp sink ONLY for a mini
+                                    // exit (and the RM fade);
+                                    // an expanded exit gets no
+                                    // sink and no container fade
+                                    // from this layer at all.
                                     val exitP = wirDockExit.value
-                                    alpha = 1f - exitP
+                                    val exitFromExpanded =
+                                        exitSnap?.fromExpanded
+                                            ?: false
+                                    alpha =
+                                        com.runwear.app.weariverun
+                                            .WearIveRunExitPolicy
+                                            .hostAlpha(
+                                                exitP,
+                                                exitFromExpanded,
+                                                wirReduceMotion
+                                            )
                                     translationY =
-                                        WearIveRunDockPolicy
-                                            .DELETE_DOCK_SINK_DP * exitP *
-                                            wirDensity.density
+                                        com.runwear.app.weariverun
+                                            .WearIveRunExitPolicy
+                                            .hostSinkDp(
+                                                exitP,
+                                                exitFromExpanded,
+                                                wirReduceMotion
+                                            ) * wirDensity.density
                                 }
                         ) {
                             // RW-152 §1+§2 (Nov 10, 2026): ONE

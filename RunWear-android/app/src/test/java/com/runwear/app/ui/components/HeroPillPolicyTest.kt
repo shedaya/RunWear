@@ -36,16 +36,25 @@ class HeroPillPolicyTest {
         // the generating pill included (A-13/B-14).
         assertTrue(pill?.showScriptMark == true)
         assertTrue(pill?.showLock == false)
-        // GEN-5 C-4 AMENDED: the FREE-tier generating pill carries
-        // the one small green upsell line, verbatim.
-        assertEquals(MakeItMeStrings.HERO_PILL_MAKING_UPSELL, pill?.upsellText)
-        assertEquals("Get it instantly next time", pill?.upsellText)
+        // RW-171 / RW-174 SUPERSESSION (Nov 14, 2026): this test
+        // previously asserted the GEN-5 C-4 upsell —
+        // pill.upsellText == "Get it instantly next time" — on
+        // the FREE-tier generating pill. Sol's RW-171 ruling
+        // removes that line from the pill entirely (the pill is
+        // ONE line in every state; the upsell copy leaves the
+        // pill), and RW-174 deletes the upsellText field, so
+        // there is nothing left to assert here beyond the
+        // single making line above.
     }
 
     @Test
     fun `a subscriber's generating pill carries no upsell`() {
         // C-4 AMENDED scope limit: Premium generating states have
-        // nothing left to sell — no upsell line.
+        // nothing left to sell — no upsell line. RW-171 / RW-174
+        // SUPERSESSION (Nov 14, 2026): the upsellText field this
+        // test asserted null on is deleted — NO tier's
+        // generating pill carries an upsell now; the free tier
+        // is pinned by the one-line render probes (Rw174).
         val pill = HeroPillPolicy.resolve(
             lookStatus = PersonalLookStatus.Making,
             serveKind = PersonalServeKind.EXACT,
@@ -54,7 +63,6 @@ class HeroPillPolicyTest {
             freeGenerationsUsed = 5
         )
         assertEquals(HeroPillKind.MAKING, pill?.kind)
-        assertNull(pill?.upsellText)
         assertTrue(pill?.showScriptMark == true)
     }
 
@@ -73,7 +81,9 @@ class HeroPillPolicyTest {
         assertEquals(MakeItMeStrings.HERO_PILL_GET_UNLIMITED, pill?.actionText)
         assertTrue(pill?.showScriptMark == true)
         assertTrue(pill?.wholePillAction == true)
-        assertNull(pill?.upsellText)
+        // RW-174: the assertNull(pill?.upsellText) that stood
+        // here is gone with the field itself (RW-171 — the
+        // pill carries no upsell slot in any state).
     }
 
     @Test
