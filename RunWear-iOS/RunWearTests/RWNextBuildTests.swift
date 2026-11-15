@@ -718,34 +718,6 @@ final class RWNextBuildTests: XCTestCase {
         XCTAssertFalse(store.contains("Morning Poster couldn't"))
     }
 
-    /// The EXPANDED panel state (the morph's target state),
-    /// standard + short portrait viewports.
-    @MainActor
-    func testRW152Frame_ExpandedPanel_StandardAndShort() throws {
-        for (viewport, suffix) in [(852.0, "standard"), (667.0, "short")] {
-            let entry = frameEntry(hero: "")
-            let panel = WearIveRunExpandedPanelView(
-                state: frameState(for: entry),
-                entry: entry,
-                formattedFeelsLike: "71°",
-                viewportHeight: viewport,
-                onOpenCollection: {}, onCollapse: {}, onTrash: {})
-            let size = CGSize(width: viewport == 852 ? 393 : 375, height: 380)
-            let composed = ZStack {
-                AppTheme.background
-                VStack {
-                    panel
-                        .padding(.horizontal, DockResidence.horizontalInset)
-                        .padding(.top, 24)
-                    Spacer()
-                }
-            }
-            try writeRender(
-                composed, size: size,
-                name: "RW152-ios-overlay-expanded-\(suffix).png")
-        }
-    }
-
     // MARK: - Build 28 fix lane (device verdict, Nov 10, 2026)
 
     /// RW-159 (F1): the REAL failing shape — not the RW-158
@@ -984,49 +956,4 @@ final class RWNextBuildTests: XCTestCase {
                        "both explicit Current Location taps (gate sheet + Home sheet) request a fresh fix")
     }
 
-    /// RW-162 G5: the expanded panel OVER NON-UNIFORM content —
-    /// the acceptance frame for the boundary/shadow fix. The
-    /// harness's uniform grounds are exactly why this class
-    /// kept passing the gate: a flat rectangle over a flat
-    /// ground reads as composed. Over list rows the panel's
-    /// hairline edge and shadow are the separation.
-    @MainActor
-    func testRW162Frame_PanelOverContent() throws {
-        let entry = frameEntry(hero: "")
-        let panel = WearIveRunExpandedPanelView(
-            state: frameState(for: entry),
-            entry: entry,
-            formattedFeelsLike: "71°",
-            viewportHeight: 852,
-            onOpenCollection: {}, onCollapse: {}, onTrash: {})
-        let backdrop = VStack(spacing: 0) {
-            ForEach(0..<14, id: \.self) { row in
-                HStack(spacing: 10) {
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(row.isMultiple(of: 2) ? AppTheme.pinePayload.opacity(0.55) : AppTheme.cardOnSheet)
-                        .frame(width: 44, height: 44)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Running Shorts (5-7\")")
-                            .font(.appItemName)
-                            .foregroundColor(AppTheme.inkPrimary)
-                        Text("Row \(row + 1) of the outfit list under the panel")
-                            .font(.appFootnote)
-                            .foregroundColor(AppTheme.inkSecondary)
-                    }
-                    Spacer()
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 9)
-                .background(row.isMultiple(of: 2) ? AppTheme.sheet : AppTheme.background)
-            }
-        }
-        let composed = ZStack(alignment: .bottom) {
-            backdrop
-            panel
-                .padding(.horizontal, DockResidence.horizontalInset)
-                .padding(.bottom, 14)
-        }
-        try writeRender(composed, size: CGSize(width: 393, height: 852),
-                        name: "RW162-ios-panel-over-content.png")
-    }
 }

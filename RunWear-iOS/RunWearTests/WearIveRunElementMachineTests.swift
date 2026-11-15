@@ -547,8 +547,11 @@ final class WearIveRunElementMachineTests: XCTestCase {
         // at the slot itself: the undecodable branch paints
         // Color.clear, never a filled tile.
         let view = try sourceFile("../RunWear/Views/WearIveRunMiniBar.swift")
-        XCTAssertTrue(view.contains("struct WearIveRunExpandedPanelView"),
-                      "RW-152 §1: the expanded form is the overlay panel")
+        // RW-TRAIN (2026-11-15): the struct-presence pin for the
+        // retired standalone expanded panel is removed with that
+        // dead view; the D-12 thumbnail-slot pins below stand —
+        // the slot lives in the live promoted thumbnail / unified
+        // surface in the same file.
         XCTAssertTrue(view.contains("Color.clear"),
                       "D-12: the thumbnail slot's undecodable branch paints clear, not a tile")
         // RE-PINNED for RW-169 §7E.3 (Nov 11, 2026; supersedes

@@ -324,11 +324,17 @@ final class RW144FirstScreenTests: XCTestCase {
     func testRW144FirstOpenFrames() throws {
         for (scheme, suffix) in [(ColorScheme.light, "light"), (ColorScheme.dark, "dark")] {
             let photo = Self.syntheticPhoto(bright: scheme == .light)
-            let dock = WearIveRunMiniBarView(
+            // RW-TRAIN (2026-11-15): the dock fixture is the LIVE
+            // unified surface at its mini rest state (progress 0);
+            // the retired standalone mini form it used before is
+            // removed as dead code. The first-open clearance rule
+            // this frame pins is unchanged.
+            let dock = WearIveRunUnifiedSurfaceView(
                 state: .updated(payload: .place("Phoenix, AZ")),
                 entry: fixtureEntry(),
                 formattedFeelsLike: "58°F", cueCount: 0,
-                onOpenCollection: {}, onTrash: {})
+                viewportHeight: 852, heroURLResolver: nil, expansionProgress: 0,
+                onToggle: {}, onOpenCollection: {}, onOpenShareEntry: nil, onTrash: {})
             let dockHeight = fittingHeight(dock, width: 393 - 24)
             // Lowest readable element: hero (383) − sheet
             // overlap (28) + pill clearance (36) + weather line

@@ -360,27 +360,13 @@ final class RW135RebuildTests: XCTestCase {
             49, accuracy: 0.001)
         XCTAssertEqual(DockResidence.measuredDockHeight, 49, accuracy: 0.001)
 
-        // The layout level (natural size, the RW-145 fitting
-        // method): the retained MINI form with a one-line
-        // narration ("Updated to Miami, FL") measures ≈49 pt
-        // tall — the brief's 47–52 band at natural size.
-        let mini = WearIveRunMiniBarView(
-            state: miamiState,
-            entry: miamiEntry(), formattedFeelsLike: "82°F",
-            cueCount: 0, onOpenCollection: {}, onTrash: {})
-        let renderer = ImageRenderer(content: mini)
-        renderer.scale = 3
-        renderer.proposedSize = ProposedViewSize(width: 369, height: nil)
-        let miniHeight = try XCTUnwrap(renderer.uiImage?.size.height, "MINI fitting render failed")
-        let probeDir = artefactsDirectory()
-        try FileManager.default.createDirectory(at: probeDir, withIntermediateDirectories: true)
-        try "RW135 RB-04 probe: miniBarFittingHeight=\(miniHeight)\n"
-            .write(to: probeDir.appendingPathComponent("RW135-rb04-minibar-probe.txt"),
-                   atomically: true, encoding: .utf8)
-        XCTAssertGreaterThanOrEqual(miniHeight, 47,
-                                    "MINI rest height \(miniHeight) is at the measured footprint's floor")
-        XCTAssertLessThanOrEqual(miniHeight, 52,
-                                 "MINI rest height \(miniHeight) ≈ 49 pt — no empty room (RB-04)")
+        // RW-TRAIN (2026-11-15): the layout-level half of this
+        // test measured the retained standalone MINI form
+        // (WearIveRunMiniBarView) at natural size. That form is
+        // removed as dead code (no app call site); the formula
+        // pins above stand — they read the LIVE unified surface's
+        // own constants (WearIveRunUnifiedSurfaceView.miniTop/
+        // Row/Bottom), which carry the same 49 pt footprint.
     }
 
     @MainActor

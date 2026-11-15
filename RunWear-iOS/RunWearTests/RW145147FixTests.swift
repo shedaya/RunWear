@@ -757,12 +757,18 @@ final class RW145147FixTests: XCTestCase {
         }
     }
 
-    private func dock() -> WearIveRunMiniBarView {
-        WearIveRunMiniBarView(
+    /// RW-TRAIN (2026-11-15): the frame fixture's dock is the
+    /// LIVE unified surface at its mini rest state (progress 0);
+    /// the retired standalone mini form it used before is
+    /// removed as dead code. The frames' subjects (hero / pill /
+    /// sheet layout) are unchanged.
+    private func dock() -> WearIveRunUnifiedSurfaceView {
+        WearIveRunUnifiedSurfaceView(
             state: .updated(payload: .placeAtMoment("Phoenix, AZ", .now)),
             entry: fixtureEntry(),
             formattedFeelsLike: "58°F", cueCount: 0,
-            onOpenCollection: {}, onTrash: {})
+            viewportHeight: 852, heroURLResolver: nil, expansionProgress: 0,
+            onToggle: {}, onOpenCollection: {}, onOpenShareEntry: nil, onTrash: {})
     }
 
     // MARK: - Frames

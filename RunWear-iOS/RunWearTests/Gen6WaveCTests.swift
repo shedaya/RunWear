@@ -1128,12 +1128,13 @@ final class Gen6FixWaveTests: XCTestCase {
         // actual discipline). The panel endpoint is the
         // panel's measured content height (RW-152 §2's gate),
         // which RW-86 never governed.
-        let barStart = try XCTUnwrap(bar.range(of: "struct WearIveRunMiniBarView"))
-        let barEnd = try XCTUnwrap(bar.range(
-            of: "struct WearIveRunExpandedPanelView", range: barStart.upperBound..<bar.endIndex))
-        let barBody = bar[barStart.lowerBound..<barEnd.lowerBound]
-        XCTAssertFalse(barBody.contains("height: dockHeight"),
-                       "RW-86: the bar's one measurement never sizes the bar itself")
+        // RW-TRAIN (2026-11-15): the barBody slice pin that stood
+        // here sliced the file between the two retired standalone
+        // forms (WearIveRunMiniBarView / WearIveRunExpandedPanelView)
+        // and pinned RW-86's no-self-sizing rule on the mini form.
+        // Both standalone forms are removed as dead code (no app
+        // call site; the live dock is WearIveRunUnifiedSurfaceView);
+        // the unified-surface pins below stand unchanged.
         // RE-PINNED for RW-169 §7A (Nov 11, 2026; supersedes
         // the RW-152 §1 rest-capture pins that stood here):
         // the dual-form overlay — whose rest capture was
@@ -1897,8 +1898,11 @@ final class Gen6SuccessorWaveTests: XCTestCase {
                        "§7.1: no empty/placeholder form stands in the dock's seat")
         XCTAssertTrue(view.contains("if state != .preAdd"),
                       "the dock renders only while a session entry stands")
-        XCTAssertEqual(WearIveRunEmptyDockView.emptyLine, "Your scrapbook starts with today's run.",
-                       "the designed empty state's head line, verbatim (collection surface)")
+        // RW-TRAIN (2026-11-15): the WearIveRunEmptyDockView.emptyLine
+        // equality pin that stood here is removed with the dead
+        // empty-dock view itself; the designed empty copy is still
+        // pinned verbatim on the live collection surface directly
+        // below.
         let collection = try sourceFile("../RunWear/Views/WearIveRunCollectionView.swift")
         XCTAssertTrue(collection.contains("Your scrapbook starts with today's run."),
                       "the collection's empty state carries the settled copy")
@@ -2594,8 +2598,10 @@ extension Gen6FixWaveTests {
         // RE-PINNED for RW-152 §1 (Nov 9, 2026): the expanded
         // form is the overlay PANEL in the same residence — the
         // in-flow footer section view is removed.
-        XCTAssertTrue(bar.contains("struct WearIveRunExpandedPanelView"),
-                      "RW-152 §1: the expanded form is the overlay panel view")
+        // RW-TRAIN (2026-11-15): the struct-presence pin for the
+        // retired standalone expanded panel is removed with that
+        // dead view; the expanded form lives in the one unified
+        // surface (WearIveRunUnifiedSurfaceView) in the same file.
         XCTAssertFalse(bar.contains("struct WearIveRunFooterSectionView"),
                        "RW-152 §1: the in-flow footer section view is removed")
         XCTAssertTrue(bar.contains("WearIveRunNarration.expandedLine"),
