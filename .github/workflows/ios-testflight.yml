@@ -90,7 +90,7 @@ on:
       build_number:
         description: "Build number (CURRENT_PROJECT_VERSION) the archive will carry"
         required: true
-        default: "25"
+        default: "34"
       upload_to_testflight:
         description: "Upload the exported IPA to App Store Connect / TestFlight (false = archive only, IPA kept as an artifact)"
         type: boolean
