@@ -505,13 +505,18 @@ final class WearIveRunElementMachineTests: XCTestCase {
         // fade and the page glide are REMOVED with the two-
         // surface split — the view's driver is now the one
         // `expansionProgress` the overlay container owns, and
-        // the dock's tap is the in-place expansion (onExpand).
+        // the dock's tap is the in-place expansion (onToggle in
+        // the unified surface; onExpand in the retired mini bar).
         // The machine TYPE and its pure transition tests stand
         // (this file); RW-86's no-machine-in-the-view discipline
         // is unchanged.
         XCTAssertTrue(view.contains("expansionProgress"),
                       "RW-152 §1: the surface's two states are driven by the one expansion progress")
-        XCTAssertTrue(view.contains("onExpand"),
+        // RW-TRAIN RE-PIN (2026-11-15): the onExpand form stood
+        // on the retired standalone mini bar; the live unified
+        // surface's tap callback is the one toggle (onToggle),
+        // which summons the expanded state in place.
+        XCTAssertTrue(view.contains("onToggle"),
                       "RW-152 §1: the dock's tap summons the expanded state in place")
         XCTAssertFalse(view.contains("handoffFade"),
                        "RW-152 §1: the scroll-position handoff is removed")

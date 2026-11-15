@@ -675,9 +675,14 @@ final class RW135RebuildTests: XCTestCase {
         let bar = try sourceFile("../RunWear/Views/WearIveRunMiniBar.swift")
         XCTAssertFalse(bar.contains("sheetLightHex"),
                        "the superseded MINI token (#FDFBF6) is retired from the Wear surfaces")
-        XCTAssertGreaterThanOrEqual(
-            bar.components(separatedBy: "unifiedSurfaceHex(").count - 1, 3,
-            "mini form, expanded form and the unified surface all paint the ruled token")
+        // RW-TRAIN RE-PIN (2026-11-15): the count stood at the
+        // definition plus three forms (mini, expanded, unified);
+        // the two standalone forms are removed as dead code, so
+        // the file now carries the definition plus the ONE live
+        // unified surface's paint — exactly two occurrences.
+        XCTAssertEqual(
+            bar.components(separatedBy: "unifiedSurfaceHex(").count - 1, 2,
+            "the definition and the one live unified surface paint the ruled token")
     }
 
     // MARK: RW-170 · Move 2 — one band (verify-and-price the presented form)
@@ -719,10 +724,13 @@ final class RW135RebuildTests: XCTestCase {
         // expression in the unified surface as in the two
         // reference forms. No elevation model exists in
         // SwiftUI to mistake it for.
+        // RW-TRAIN RE-PIN (2026-11-15): the two reference forms
+        // are removed as dead code; the one live unified surface
+        // carries the one spec shadow — exactly one occurrence.
         let bar = try sourceFile("../RunWear/Views/WearIveRunMiniBar.swift")
         XCTAssertEqual(
-            bar.components(separatedBy: ".shadow(color: Color.black.opacity(0.14), radius: 12, x: 0, y: 6)").count - 1, 3,
-            "mini form, expanded form and unified surface carry the one spec shadow")
+            bar.components(separatedBy: ".shadow(color: Color.black.opacity(0.14), radius: 12, x: 0, y: 6)").count - 1, 1,
+            "the one live unified surface carries the one spec shadow")
         let unifiedStart = try XCTUnwrap(bar.range(of: "struct WearIveRunUnifiedSurfaceView"))
         let unifiedEnd = try XCTUnwrap(bar.range(
             of: "// MARK: - RW-152 §1 / RW-169 §7A", range: unifiedStart.upperBound..<bar.endIndex))

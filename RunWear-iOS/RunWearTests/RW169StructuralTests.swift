@@ -261,8 +261,16 @@ final class RW169StructuralTests: XCTestCase {
         XCTAssertFalse(hero.contains("truncationMode(.tail)"),
                        "the place name is never tail-truncated")
         let bar = try sourceFile("../RunWear/Views/WearIveRunMiniBar.swift")
-        XCTAssertTrue(bar.contains(".layoutPriority(2)"),
-                      "the wordmark carries the row's highest priority (D1)")
+        // RW-TRAIN RE-PIN (2026-11-15): the .layoutPriority(2)
+        // form stood in the retired standalone mini bar's HStack.
+        // The live unified surface is not a negotiating row: the
+        // wordmark is fixed-claim and its MEASURED width is taken
+        // first — the narration's slot is computed from it — so
+        // the wordmark never yields and is never crushed (D1).
+        XCTAssertTrue(bar.contains(".fixedSize(horizontal: true, vertical: false)"),
+                      "the wordmark is a fixed-claim element — it never yields (D1)")
+        XCTAssertTrue(bar.contains("let miniNarrationX = 16 + wordmarkWidth + 8"),
+                      "the narration's slot is computed from the wordmark's measured width (D1)")
     }
 
     // MARK: - C · top chrome, one negotiating pass

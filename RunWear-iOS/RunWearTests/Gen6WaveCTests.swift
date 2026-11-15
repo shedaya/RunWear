@@ -2690,8 +2690,13 @@ extension Gen6FixWaveTests {
                        "§9.2: no rotation is applied on the dock path (the morph's pure rotation function remains for its unit pins, unused by the views)")
         XCTAssertTrue(bar.contains("Open the collection ›"),
                       "§2.2: the footer carries the collection doorway element")
-        XCTAssertTrue(bar.contains("greatVibes(size: 31)"),
-                      "§2.2: the footer's wordmark is 31 pt")
+        // RW-TRAIN RE-PIN (2026-11-15): the literal 31 pt form
+        // stood in the retired standalone expanded panel; the
+        // live unified surface's one wordmark interpolates
+        // 17 → 31 pt on the morph, reaching the same 31 pt at
+        // full expansion.
+        XCTAssertTrue(bar.contains("greatVibes(size: lerp(17, 31))"),
+                      "§2.2: the footer's wordmark is 31 pt (the unified surface's expanded endpoint)")
         XCTAssertTrue(bar.contains("cornerRadius: 14"),
                       "§2.2: the entry thumbnail's radius is 14")
         // §4.1: the creation cue peak as pinned on the machine.

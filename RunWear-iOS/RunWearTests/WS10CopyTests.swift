@@ -154,8 +154,18 @@ final class WS10CopyTests: XCTestCase {
         // copy superseded the promise's welcome RENDERING — the
         // canonical wording stays defined, and A1's ban on every
         // other surface (setup form, fork) stands untouched.
+        // RW-TRAIN RE-PIN (2026-11-15): the definition now DERIVES
+        // its number from the one allowance constant
+        // ("Your first \(FreeLooksAllowance.value) looks are
+        // free."), so the rendered sentence no longer appears
+        // verbatim in any source line. The pins below keep the
+        // same intent at the same strength: the rendered value is
+        // exact, and the promise's sentence is spelled out in
+        // exactly one place in app code — its definition.
+        XCTAssertEqual(OnboardingCopy.freeLooksPromise, "Your first 10 looks are free.",
+                       "the derived promise renders exactly the canonical sentence")
         let lines = try appCodeLines()
-        let hits = lines.filter { $0.text.contains(OnboardingCopy.freeLooksPromise) }
+        let hits = lines.filter { $0.text.contains("looks are free") }
         XCTAssertEqual(hits.count, 1,
                        "the promise must be spelled out exactly once — found: \(hits)")
         XCTAssertEqual(hits.first?.file, "OnboardingSequence.swift")

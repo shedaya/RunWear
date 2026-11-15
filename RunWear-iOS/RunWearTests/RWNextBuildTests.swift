@@ -456,18 +456,30 @@ final class RWNextBuildTests: XCTestCase {
         // `frame(maxHeight:)` making the panel height-flexible
         // (expanding + centering its content, and feeding the
         // morph a false endpoint). The panel is content-sized
-        // by construction: the chrome block and the row are
-        // measured (both independent of the region's frame),
-        // the region's height is COMPUTED from the policy, and
+        // by construction: the row is measured (independent of
+        // the region's frame), the chrome is fixed anatomy, the
+        // region's height is COMPUTED as a budget, and
         // a ScrollView exists only in the cap-binding branch.
+        // RW-TRAIN RE-PIN (2026-11-15): the four pins below stood
+        // on the retired standalone expanded panel (its measured
+        // entryRowHeight / chromeHeight and its regionBudget
+        // branch). The live unified surface carries the same law
+        // in its own form: the row is measured on itself into
+        // expandedEntryHeight; the chrome is FIXED anatomy (the
+        // expanded top padding + header zone constants — the
+        // measured-chrome assertion is retired with the panel,
+        // the chrome's contribution is now the constants in the
+        // budget expression); the region's height is the computed
+        // entryRegionBudget; and the ScrollView exists only at
+        // expanded rest when the cap binds.
         let bar = try sourceFile("../RunWear/Views/WearIveRunMiniBar.swift")
-        XCTAssertTrue(bar.contains("entryRowHeight = height"),
+        XCTAssertTrue(bar.contains("expandedEntryHeight = height"),
                       "the row's height is measured on the row itself")
-        XCTAssertTrue(bar.contains("chromeHeight = height"),
-                      "the chrome block's height is measured on the block itself")
-        XCTAssertTrue(bar.contains("WearIveRunOverlayPolicy.entryRegionHeight("),
-                      "the region's height is the policy's computed budget")
-        XCTAssertTrue(bar.contains("if entryRowHeight > regionBudget"),
+        XCTAssertTrue(bar.contains("var entryRegionBudget: CGFloat"),
+                      "the region's height is a computed budget, not an offered height")
+        XCTAssertTrue(bar.contains("max(56, cap - (136 + expandedNarrationHeight))"),
+                      "the budget is the cap minus the fixed chrome anatomy (136 + narration), floored at the thumbnail cell")
+        XCTAssertTrue(bar.contains("if p >= 1, capBinds"),
                       "the ScrollView exists only when the cap binds")
         XCTAssertFalse(bar.contains(".frame(maxHeight: WearIveRunOverlayPolicy.expandedCap"),
                        "no root max-height frame makes the panel flexible")
@@ -892,13 +904,19 @@ final class RWNextBuildTests: XCTestCase {
     /// the overlay measures the panel before driving its frame.
     func testRW162G1_ExpandIsSynchronousAndMeasured_SourcePins() throws {
         let bar = try sourceFile("../RunWear/Views/WearIveRunMiniBar.swift")
-        let tapStart = try XCTUnwrap(bar.range(of: "private func handleExpandTap()"))
-        let tapEnd = try XCTUnwrap(bar.range(of: "// MARK: §4.1"))
+        // RW-TRAIN RE-PIN (2026-11-15): the slice stood on the
+        // retired standalone mini bar's handleExpandTap/onExpand.
+        // The live unified surface's tap is handleToggleTap, and
+        // its synchronous call is onToggle() — the same G1 rule:
+        // the toggle fires in the tap's own transaction, before
+        // any press animation.
+        let tapStart = try XCTUnwrap(bar.range(of: "private func handleToggleTap()"))
+        let tapEnd = try XCTUnwrap(bar.range(of: "private func applyNarrationCrossfade"))
         let tap = bar[tapStart.lowerBound..<tapEnd.lowerBound]
-        let expandCall = try XCTUnwrap(tap.range(of: "onExpand()"))
+        let expandCall = try XCTUnwrap(tap.range(of: "onToggle()"))
         let pressAnim = try XCTUnwrap(tap.range(of: "withAnimation"))
         XCTAssertLessThan(expandCall.lowerBound, pressAnim.lowerBound,
-                          "RW-162 G1: onExpand fires in the tap's own transaction, BEFORE any press animation — never in its completion")
+                          "RW-162 G1: onToggle fires in the tap's own transaction, BEFORE any press animation — never in its completion")
         // RE-PINNED for RW-169 §7A (Nov 11, 2026; supersedes
         // the RW-162 G1 measurement-pass pin that stood here):
         // the during-morph measurement pass (startMorph) is
