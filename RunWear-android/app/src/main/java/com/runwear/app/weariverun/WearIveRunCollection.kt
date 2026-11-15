@@ -496,8 +496,25 @@ object WearIveRunRecordPolicy {
     fun shouldRecord(
         isNowSelected: Boolean,
         weatherMoment: kotlinx.datetime.LocalDateTime?,
-        selectedMoment: java.time.LocalDateTime
+        selectedMoment: java.time.LocalDateTime,
+        /**
+         * RW-175: whether the presented selection's place NAME is
+         * resolved. A GPS selection's name arrives by reverse
+         * geocode, after its weather can land; recording in that
+         * window would persist an entry whose place is the
+         * unresolved placeholder — or, pre-fix, the PREVIOUS
+         * place's name paired with the new place's kit (Sol's
+         * "Miami Beach, FL" entry carrying New York's cold kit,
+         * Nov 15, 2026). While the name is unresolved the record
+         * is refused outright; when the resolved name lands the
+         * presented frame's place changes, so the stability gate
+         * re-settles and the entry is recorded under the current
+         * place. Default true: every caller that has no
+         * unresolved-name state keeps its previous behaviour.
+         */
+        placeNameResolved: Boolean = true
     ): Boolean {
+        if (!placeNameResolved) return false
         if (isNowSelected) return true
         val weather = weatherMoment ?: return false
         return weather.date == kotlinx.datetime.LocalDate(

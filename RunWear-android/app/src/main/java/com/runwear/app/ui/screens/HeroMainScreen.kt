@@ -561,6 +561,11 @@ fun HeroMainScreen(
     // edits, so the latest admitted solve is the final content.
     LaunchedEffect(
         uiState.outfit, uiState.weather, uiState.locationName,
+        // RW-175: the resolution flag is a key in its own right —
+        // a geocode-failure fallback resolves the SAME display
+        // string ("Your Location"), so the name alone cannot
+        // re-fire this effect to admit the now-recordable entry.
+        uiState.placeNameResolved,
         uiState.effectiveHeroUrl, uiState.heroImageUrl, uiState.heroFallbackUrl,
         uiState.isNowSelected, uiState.selectedDateTime
     ) {
@@ -583,7 +588,13 @@ fun HeroMainScreen(
             com.runwear.app.weariverun.WearIveRunRecordPolicy.shouldRecord(
                 isNowSelected = uiState.isNowSelected,
                 weatherMoment = weather.dateTime,
-                selectedMoment = uiState.selectedDateTime
+                selectedMoment = uiState.selectedDateTime,
+                // RW-175: never record while the current
+                // selection's place name is unresolved (a GPS
+                // selection whose reverse geocode has not landed)
+                // — the entry would carry a placeholder, or worse
+                // the previous place's name, over this place's kit.
+                placeNameResolved = uiState.placeNameResolved
             )
         ) {
             // GEN-6 Wave B (RW-31): the day's canonical range for

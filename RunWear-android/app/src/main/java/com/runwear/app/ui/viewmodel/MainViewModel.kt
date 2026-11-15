@@ -87,6 +87,24 @@ data class MainUiState(
      */
     val simplePlace: com.runwear.shared.domain.model.SimplePlace? = null,
     /**
+     * RW-175: whether [simplePlace]/[locationName] are the RESOLVED
+     * name of the current selection. A GPS selection's name is
+     * unknown at tap time, so its pending selection carries the
+     * existing "Your Location" fallback form with this flag false
+     * until the reverse geocode resolves the SAME selection (see
+     * [SelectionGeneration]). No surface may pair an unresolved
+     * name with another place's weather, and Wear I've Run never
+     * records while this is false.
+     */
+    val placeNameResolved: Boolean = true,
+    /**
+     * RW-175: the generation of the selection this state belongs
+     * to. Every new selection (manual or GPS) takes the next
+     * generation; a late reverse-geocode result applies only while
+     * its generation is still current.
+     */
+    val selectionGeneration: Long = 0L,
+    /**
      * The selected moment, ALWAYS expressed as a naive wall-clock time in the
      * SELECTED LOCATION's frame — never the phone's. When [isNowSelected] is
      * true this is kept equal to [locationNow] and the weather comes from the
@@ -295,6 +313,82 @@ internal fun nextHeroInRotation(
 }
 
 /**
+ * RW-175: the identity of a place selection. Every selection —
+ * manual pick, GPS adoption, saved-place re-apply — takes the
+ * next generation when it is installed, and asynchronous work
+ * belonging to a selection (above all its reverse geocode) may
+ * only land while that generation is still current. This
+ * replaces the pre-fix guard that compared exact Double
+ * coordinates against the mutable currentLat/currentLon: a
+ * superseded geocode whose coordinates happened to match again
+ * (GPS → manual → GPS at the same fix) was applied whole.
+ */
+internal class SelectionGeneration {
+    @Volatile
+    var current: Long = 0L
+        private set
+
+    fun next(): Long {
+        current += 1
+        return current
+    }
+
+    fun isCurrent(generation: Long): Boolean = generation == current
+}
+
+/**
+ * RW-175: the pending place a GPS selection installs at tap
+ * time. A GPS selection has no name until its reverse geocode
+ * returns, so — unlike a manual pick, which pends its known
+ * name — it pends the existing "Your Location" fallback form
+ * (no new copy) as an UNRESOLVED placeholder. The previous
+ * place's name is thereby never inheritable by the new
+ * selection's weather: when the fetch commits, it commits this
+ * placeholder (or the resolved place, if the geocode won the
+ * race), never the old name over new weather.
+ */
+internal fun gpsUnresolvedPendingPlace(): com.runwear.shared.domain.model.SimplePlace =
+    com.runwear.shared.domain.model.SimplePlace("Your Location")
+
+/** RW-175: what a landing reverse-geocode result may do. */
+internal enum class GpsPlaceCommit { DIRECT, PENDING, DROP }
+
+/**
+ * RW-175: the geocode commit decision, pure so the interleavings
+ * are unit-tested without the ViewModel. A result for a
+ * superseded generation is dropped whole; a current result
+ * applies directly only when the weather already on screen
+ * describes its own selection, and otherwise becomes the
+ * pending pair the fetch commit carries in atomically.
+ */
+internal fun gpsPlaceCommitDecision(
+    generationIsCurrent: Boolean,
+    weatherOnScreenDescribesFix: Boolean
+): GpsPlaceCommit = when {
+    !generationIsCurrent -> GpsPlaceCommit.DROP
+    weatherOnScreenDescribesFix -> GpsPlaceCommit.DIRECT
+    else -> GpsPlaceCommit.PENDING
+}
+
+/**
+ * RW-175: apply a resolved GPS place directly to committed
+ * state — the write [MainViewModel.commitGpsPlace] performs
+ * when the weather on screen already describes the geocode's
+ * selection. Name, source and the resolved flag move together;
+ * the weather they label does not.
+ */
+internal fun MainUiState.withResolvedGpsPlace(
+    place: com.runwear.shared.domain.model.SimplePlace,
+    generation: Long
+): MainUiState = copy(
+    locationName = place.display,
+    simplePlace = place,
+    locationSource = "gps",
+    placeNameResolved = true,
+    selectionGeneration = generation
+)
+
+/**
  * GEN-2 A2 (W-6): the ONE state commit that lands a fetch's results.
  * The fetched weather, outfit and forecast, the location-frame anchor,
  * and — when a place switch is in flight — the pending place's name
@@ -323,6 +417,23 @@ internal fun MainUiState.withFetchedConditions(
      * refresh never moves the source either.
      */
     pendingSource: String? = null,
+    /**
+     * RW-175: whether [pendingPlace] is a RESOLVED name. A GPS
+     * selection pends the "Your Location" placeholder with this
+     * false; the flag commits with the place, so the committed
+     * state always knows whether its name may be recorded /
+     * presented as the place's own. Ignored when no place is
+     * pending — a same-place refresh carries the existing
+     * resolution state over untouched (an unresolved GPS name
+     * stays unresolved across a refresh, and a resolved one
+     * stays resolved).
+     */
+    pendingPlaceNameResolved: Boolean = true,
+    /**
+     * RW-175: the generation of the pending selection, committed
+     * with it. Null (and ignored) when no place is pending.
+     */
+    pendingSelectionGeneration: Long? = null,
     heroFallbackUrl: String? = null,
     heroFallbackIsScaffold: Boolean = false,
     // RW-95: the fallback's own requested combination — on a place
@@ -342,6 +453,23 @@ internal fun MainUiState.withFetchedConditions(
         sunTimes = sunTimes ?: this.sunTimes,
         locationName = pendingPlace?.display ?: locationName,
         simplePlace = pendingPlace ?: simplePlace,
+        // RW-175: the resolution flag and the selection generation
+        // ride the same commit as the place — a place switch with
+        // an unresolved name commits weather + placeholder +
+        // unresolved, never weather + the old place's name (the
+        // pending pair is only null for a same-place refresh,
+        // where carrying the existing name over its own weather
+        // is legitimate).
+        placeNameResolved = if (pendingPlace != null) {
+            pendingPlaceNameResolved
+        } else {
+            placeNameResolved
+        },
+        selectionGeneration = if (pendingPlace != null) {
+            pendingSelectionGeneration ?: selectionGeneration
+        } else {
+            selectionGeneration
+        },
         // RW-146: the source rides the same commit as the place
         // and its weather — no surface can ever read a source that
         // belongs to a different moment than the name beside it.
@@ -516,6 +644,43 @@ class MainViewModel @Inject constructor(
      */
     @Volatile
     private var pendingSource: String? = null
+
+    /**
+     * RW-175: whether [pendingPlace] is a resolved name, and the
+     * generation the pending pair belongs to — committed with it
+     * by fetchWeather's success write. A GPS selection pends the
+     * "Your Location" placeholder with the flag false; its
+     * geocode upgrades the SAME pending pair to the resolved
+     * place (flag true) if it lands before the fetch, or resolves
+     * the committed state directly if it lands after.
+     */
+    @Volatile
+    private var pendingPlaceNameResolved: Boolean = true
+
+    @Volatile
+    private var pendingSelectionGeneration: Long = 0L
+
+    /** RW-175: selection identity — see [SelectionGeneration]. */
+    private val selectionGenerations = SelectionGeneration()
+
+    /**
+     * RW-175: install the pending pair for a new selection,
+     * taking its generation. Every selection entry point goes
+     * through here so the pending state is always one selection's
+     * whole truth: place, source, resolution and generation.
+     */
+    private fun installPendingSelection(
+        place: com.runwear.shared.domain.model.SimplePlace,
+        source: String?,
+        nameResolved: Boolean
+    ): Long {
+        val generation = selectionGenerations.next()
+        pendingPlace = place
+        pendingSource = source
+        pendingPlaceNameResolved = nameResolved
+        pendingSelectionGeneration = generation
+        return generation
+    }
 
     /** The coordinates the currently displayed weather describes —
      * recorded by fetchWeather's success commit. A geocoded GPS
@@ -979,6 +1144,14 @@ class MainViewModel @Inject constructor(
                         // User moved significantly: adopt the fresh fix.
                         currentLat = newLat
                         currentLon = newLon
+                        // RW-175: this adoption is a new selection —
+                        // install its pending pair (unresolved
+                        // placeholder, new generation) up front, so
+                        // the fetch below can never commit the new
+                        // weather under the previous place's name.
+                        val generation = installPendingSelection(
+                            gpsUnresolvedPendingPlace(), "gps", nameResolved = false
+                        )
                         // RW-146: the name + source enter state
                         // only through commitGpsPlace (with the
                         // fetch commit, or directly when the
@@ -987,14 +1160,14 @@ class MainViewModel @Inject constructor(
                         // write ahead of the weather.
                         weatherRepository.reverseGeocodePlace(newLat, newLon).fold(
                             onSuccess = { place ->
-                                if (commitGpsPlace(place, newLat, newLon)) {
+                                if (commitGpsPlace(place, newLat, newLon, generation)) {
                                     preferencesRepository.saveGPSLocation(newLat, newLon, place.display)
                                 }
                             },
                             onFailure = {
                                 val fallback =
                                     com.runwear.shared.domain.model.SimplePlace("Your Location")
-                                if (commitGpsPlace(fallback, newLat, newLon)) {
+                                if (commitGpsPlace(fallback, newLat, newLon, generation)) {
                                     preferencesRepository.saveGPSLocation(newLat, newLon, "Your Location")
                                 }
                             }
@@ -1125,8 +1298,11 @@ class MainViewModel @Inject constructor(
                             .fromRawDisplayString(savedLocation.name)
                         // RW-146: name + source are PENDING until
                         // the fetch commits them with their weather.
-                        pendingPlace = savedPlace
-                        pendingSource = savedLocation.source
+                        // RW-175: installed as one selection (its
+                        // name is known, so it pends resolved).
+                        installPendingSelection(
+                            savedPlace, savedLocation.source, nameResolved = true
+                        )
                         _uiState.update { it.copy(isLoading = true) }
                         seedFromLastGood(savedLocation.latitude, savedLocation.longitude)
                         resolveLocationZone()
@@ -1159,33 +1335,48 @@ class MainViewModel @Inject constructor(
      *    screen, so the write cannot mispair them;
      *  - otherwise they become the pending pair, and fetchWeather's
      *    success commit carries them in with the weather.
-     * A superseded adoption (a newer target owns currentLat/Lon)
-     * is dropped whole — name, source and the persisted record.
+     *
+     * RW-175: a superseded adoption is dropped whole — name,
+     * source and the persisted record — by SELECTION GENERATION,
+     * not by the pre-fix exact-Double comparison against the
+     * mutable currentLat/currentLon (which a later re-adoption of
+     * the same fix could satisfy again for a stale result). The
+     * geocode resolves the SAME selection that installed the
+     * pending placeholder at adoption time: landing before the
+     * fetch it upgrades that pending pair to the resolved place;
+     * landing after, it resolves the committed placeholder state
+     * directly via [withResolvedGpsPlace].
      */
     private fun commitGpsPlace(
         place: com.runwear.shared.domain.model.SimplePlace,
         lat: Double,
-        lon: Double
+        lon: Double,
+        generation: Long
     ): Boolean {
-        if (currentLat != lat || currentLon != lon) return false
         val weatherOnScreenDescribesFix =
             committedLat == lat && committedLon == lon &&
                 _uiState.value.weather != null
-        if (weatherOnScreenDescribesFix) {
-            _uiState.update {
-                it.copy(
-                    locationName = place.display,
-                    simplePlace = place,
-                    locationSource = "gps"
-                )
+        when (gpsPlaceCommitDecision(
+            generationIsCurrent = selectionGenerations.isCurrent(generation),
+            weatherOnScreenDescribesFix = weatherOnScreenDescribesFix
+        )) {
+            GpsPlaceCommit.DROP -> return false
+            GpsPlaceCommit.DIRECT -> {
+                _uiState.update { it.withResolvedGpsPlace(place, generation) }
+                if (pendingSelectionGeneration == generation) {
+                    pendingPlace = null
+                    pendingSource = null
+                    pendingPlaceNameResolved = true
+                }
             }
-            if (pendingSource == "gps") {
-                pendingPlace = null
-                pendingSource = null
+            GpsPlaceCommit.PENDING -> {
+                // Upgrade THIS selection's pending pair in place —
+                // same generation, now with its resolved name.
+                pendingPlace = place
+                pendingSource = "gps"
+                pendingPlaceNameResolved = true
+                pendingSelectionGeneration = generation
             }
-        } else {
-            pendingPlace = place
-            pendingSource = "gps"
         }
         return true
     }
@@ -1235,8 +1426,8 @@ class MainViewModel @Inject constructor(
                     .fromRawDisplayString(saved.name)
                 // RW-146: re-apply as the pending pair, committed
                 // with its weather — not as detached writes.
-                pendingPlace = savedPlace
-                pendingSource = saved.source
+                // RW-175: installed as one (resolved) selection.
+                installPendingSelection(savedPlace, saved.source, nameResolved = true)
                 _uiState.update { it.copy(isLoading = true) }
                 seedFromLastGood(saved.latitude, saved.longitude)
                 resolveLocationZone()
@@ -1250,11 +1441,24 @@ class MainViewModel @Inject constructor(
         // commits with the place and its weather (commitGpsPlace /
         // the fetch commit) — until then every surface keeps
         // describing the place actually on screen.
+        // RW-175: but the selection itself IS installed here, at
+        // adoption time, as a pending pair whose name is the
+        // unresolved "Your Location" placeholder under a new
+        // generation. Pre-fix nothing was installed, so when the
+        // fetch won the race against the geocode its commit ran
+        // with no pending place and carried the PREVIOUS place's
+        // name/source over the new weather (Sol's New York
+        // weather under "Miami Beach, FL", Nov 15, 2026). Now the
+        // fetch can only commit this selection's own placeholder
+        // (unresolved) or its resolved name — never the old name.
+        val generation = installPendingSelection(
+            gpsUnresolvedPendingPlace(), "gps", nameResolved = false
+        )
 
         viewModelScope.launch {
             weatherRepository.reverseGeocodePlace(lat, lon).fold(
                 onSuccess = { place ->
-                    if (commitGpsPlace(place, lat, lon)) {
+                    if (commitGpsPlace(place, lat, lon, generation)) {
                         // Save GPS location for next app launch —
                         // only while this adoption is still the
                         // live target, so a superseding manual
@@ -1265,7 +1469,7 @@ class MainViewModel @Inject constructor(
                 onFailure = {
                     val fallback =
                         com.runwear.shared.domain.model.SimplePlace("Your Location")
-                    if (commitGpsPlace(fallback, lat, lon)) {
+                    if (commitGpsPlace(fallback, lat, lon, generation)) {
                         preferencesRepository.saveGPSLocation(lat, lon, "Your Location")
                     }
                 }
@@ -1385,6 +1589,14 @@ class MainViewModel @Inject constructor(
                     // the new place with the old place's weather.
                     val placeToCommit = pendingPlace
                     val sourceToCommit = pendingSource
+                    // RW-175: the pending selection's resolution
+                    // and generation commit with its place — for a
+                    // GPS selection whose geocode is still in
+                    // flight this commits the unresolved placeholder,
+                    // so this weather is never published under the
+                    // previous place's name.
+                    val nameResolvedToCommit = pendingPlaceNameResolved
+                    val generationToCommit = pendingSelectionGeneration
                     // RW-146: this commit's weather describes
                     // (lat, lon) — record it so a late geocode for
                     // the same coordinates may apply its name
@@ -1403,6 +1615,8 @@ class MainViewModel @Inject constructor(
                             forecast = forecast,
                             pendingPlace = placeToCommit,
                             pendingSource = sourceToCommit,
+                            pendingPlaceNameResolved = nameResolvedToCommit,
+                            pendingSelectionGeneration = generationToCommit,
                             locationNowAnchor = now,
                             nowSelected = nowSelected,
                             heroFallbackUrl = fetchFallback.imageUrl,
@@ -1414,6 +1628,7 @@ class MainViewModel @Inject constructor(
                     if (placeToCommit != null) {
                         pendingPlace = null
                         pendingSource = null
+                        pendingPlaceNameResolved = true
                     }
 
                     // GEN-5 (RW-28 Addendum 8, Defect 1): every
@@ -2566,12 +2781,14 @@ class MainViewModel @Inject constructor(
             // GEN-2 A2 (W-6): the place is PENDING until its weather
             // lands — the name commits with the fetched conditions in
             // fetchWeather's success write, never before them.
-            pendingPlace = place
             // RW-146: the "manual" source is PENDING with the
             // place — it commits with the place and its weather,
             // so the sheet's surfaces never read a source from a
             // different moment than the name beside it.
-            pendingSource = "manual"
+            // RW-175: installed as one selection — a manual pick
+            // knows its name, so it pends resolved, and taking a
+            // new generation supersedes any in-flight GPS geocode.
+            installPendingSelection(place, "manual", nameResolved = true)
 
             _uiState.update {
                 it.copy(
@@ -2605,12 +2822,12 @@ class MainViewModel @Inject constructor(
 
             // GEN-2 A2 (W-6): pending until its weather lands (see
             // selectLocation) — name, weather and frame commit together.
-            pendingPlace = place
             // RW-146: the "manual" source is PENDING with the
             // place — it commits with the place and its weather,
             // so the sheet's surfaces never read a source from a
             // different moment than the name beside it.
-            pendingSource = "manual"
+            // RW-175: one selection install (see selectLocation).
+            installPendingSelection(place, "manual", nameResolved = true)
 
             _uiState.update {
                 it.copy(
