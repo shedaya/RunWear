@@ -141,6 +141,24 @@ const ITEM_DISPLAY: Record<string, string> = {
   REFLECTIVE_GEAR: 'Reflective Gear', NECK_GAITER: 'Neck Gaiter / Buff'
 }
 
+// Per-item prompt detail (RW-176, 2026-11-16): some display labels are
+// ambiguous to the image model. 'Ear Warmer / Headband' renders as a
+// sweatband worn above the ears — and stretches the forehead in full-head
+// generations — unless the prompt states the garment's function and
+// placement. These details are prompt-only; the user-facing display
+// labels in ITEM_DISPLAY are unchanged.
+const ITEM_PROMPT_DETAIL: Record<string, string> = {
+  HEADBAND: 'The ear warmer is a fleece ear-warmer band worn low across the lower forehead, covering both ears completely — not a sweatband worn above the ears.'
+}
+
+// Prompt-only renderings used in the outfit list itself for items whose
+// display label misleads the image model (RW-176): the descriptor sits
+// where the garment is introduced, with ITEM_PROMPT_DETAIL as
+// reinforcement. Display labels are unchanged.
+const ITEM_PROMPT_LABEL: Record<string, string> = {
+  HEADBAND: 'a fleece ear-warmer band worn low across the lower forehead, covering both ears completely'
+}
+
 const ITEM_CATEGORY: Record<string, string> = {
   TANK_TOP: 'TOP_BASE', SHORT_SLEEVE: 'TOP_BASE', LONG_SLEEVE_LIGHT: 'TOP_BASE',
   LONG_SLEEVE_THERMAL: 'TOP_BASE', QUARTER_ZIP: 'TOP_MID', FLEECE_PULLOVER: 'TOP_MID',
@@ -169,12 +187,16 @@ function buildPrompt(job: JobRow, failureClasses: string[]): string {
   const order = ['TOP_OUTER', 'TOP_MID', 'TOP_BASE', 'BOTTOM', 'HEAD', 'HANDS', 'ACCESSORIES']
   const ordered = [...keys].sort(
     (a, b) => order.indexOf(ITEM_CATEGORY[a] ?? '') - order.indexOf(ITEM_CATEGORY[b] ?? ''))
-  const items = ordered.map(k => ITEM_DISPLAY[k] ?? k)
+  const items = ordered.map(k => ITEM_PROMPT_LABEL[k] ?? ITEM_DISPLAY[k] ?? k)
   const outerKey = keys.find(k => ITEM_CATEGORY[k] === 'TOP_OUTER')
   const baseKey = keys.find(k => ITEM_CATEGORY[k] === 'TOP_BASE')
   const layering = outerKey && baseKey
     ? ` The ${ITEM_DISPLAY[outerKey]} is the outermost layer, worn over the ${ITEM_DISPLAY[baseKey]}.`
     : ''
+  const details = ordered
+    .filter(k => ITEM_PROMPT_DETAIL[k])
+    .map(k => ` ${ITEM_PROMPT_DETAIL[k]}`)
+    .join('')
   const weatherPhrase: Record<string, string> = {
     CLEAR: 'clear skies', CLOUDY: 'overcast skies',
     RAIN: 'steady rain, wet pavement', SNOW: 'falling snow'
@@ -190,7 +212,7 @@ function buildPrompt(job: JobRow, failureClasses: string[]): string {
     `Photorealistic photo of the same person shown in the reference photos, ` +
     `now running mid-stride along ${background}, ${weatherPhrase[job.weather] ?? 'clear skies'}, ` +
     `${timePhrase[job.time_of_day] ?? 'daylight'}. They are wearing exactly this outfit and nothing extra: ` +
-    `${items.join(', ')}.${layering} The runner is looking ahead, not at the camera. ` +
+    `${items.join(', ')}.${layering}${details} The runner is looking ahead, not at the camera. ` +
     `No visible brand logos, text, or trademarks anywhere in the image.` +
     QUALITY_SUFFIX
   if (failureClasses.length > 0) {

@@ -60,6 +60,33 @@ function ensureQualitySuffix(prompt: string): string {
   return prompt.includes(QUALITY_MARKER) ? prompt : prompt + QUALITY_SUFFIX
 }
 
+// Ear-warmer placement (RW-176, 2026-11-16). Generic prompts are assembled
+// by the clients (and the legacy queue script) from display labels, and
+// 'ear warmer / headband' renders as a sweatband worn above the ears unless
+// the prompt states the garment's function and placement. Hardened HERE,
+// server-side, for the same reason as the quality suffix above: every
+// queued job is covered regardless of which client or script queued it.
+const EAR_WARMER_MARKER = 'EAR WARMER PLACEMENT:'
+const EAR_WARMER_INLINE =
+  'a fleece ear-warmer band worn low across the lower forehead, covering both ears completely'
+const EAR_WARMER_CLAUSE =
+  ` ${EAR_WARMER_MARKER} the ear warmer is ${EAR_WARMER_INLINE} — not a ` +
+  `sweatband worn above the ears; the forehead keeps natural proportions.`
+
+function ensureEarWarmerClause(prompt: string): string {
+  if (prompt.includes(EAR_WARMER_MARKER)) return prompt
+  if (!/ear warmer|headband/i.test(prompt)) return prompt
+  // Round 1 of RW-176 validation (2026-11-16) showed an end-of-prompt
+  // clause alone is too weak for flux-schnell: the garment was dropped or
+  // still rendered above the ears. Substitute the descriptor inline, where
+  // the outfit is introduced, and keep the closing clause as reinforcement.
+  const inlined = prompt
+    .replace(/ear warmer\s*\/\s*headband/gi, EAR_WARMER_INLINE)
+    .replace(/ear warmer/gi, EAR_WARMER_INLINE)
+    .replace(/headband/gi, EAR_WARMER_INLINE)
+  return inlined + EAR_WARMER_CLAUSE
+}
+
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -318,7 +345,7 @@ async function processJob(job: Record<string, unknown> & { id: unknown, combinat
       await claim
     }
 
-    const prompt = ensureQualitySuffix(job.prompt)
+    const prompt = ensureEarWarmerClause(ensureQualitySuffix(job.prompt))
 
     // Call Replicate API (synchronous mode - no webhook)
     const response = await fetch('https://api.replicate.com/v1/predictions', {
