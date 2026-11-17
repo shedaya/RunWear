@@ -1,0 +1,60 @@
+name: Identity screen — Fly log pull
+
+# Decision-grade evidence route for RW-172 (built 2026-11-16).
+#
+# Fly's log API rejects the Muse VM's scope-limited connector token
+# (HTTP 401 on every route from the VM: flyctl WireGuard + polling, and
+# the REST logs endpoint directly), and that token cannot mint a
+# portable replacement (createLimitedAccessToken is denied to it). So
+# this workflow pulls the app logs from a GitHub runner using a full
+# Fly API token stored as the repo Actions secret FLY_API_TOKEN.
+#
+# Until that secret exists, the workflow writes a NOTICE artifact and
+# succeeds — it never fabricates log output. To finish the route, add
+# any full Fly token (e.g. `flyctl tokens create readonly` from a
+# full-access session, or the dashboard) as the FLY_API_TOKEN secret,
+# then push to this branch again.
+#
+# Trigger: push to this branch (the registered GitHub credential used
+# by the agent cannot call workflow_dispatch), or manual dispatch.
+
+on:
+  push:
+    branches: [ops/identity-screen-logs-2026-11-16]
+  workflow_dispatch: {}
+
+jobs:
+  fly-logs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Install flyctl
+        run: |
+          curl -L https://fly.io/install.sh | sh
+          echo "$HOME/.fly/bin" >> "$GITHUB_PATH"
+
+      - name: Pull logs and status
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          mkdir -p out
+          if [ -z "$FLY_API_TOKEN" ]; then
+            {
+              echo "FLY_API_TOKEN secret is not set in this repo."
+              echo "Add a full Fly API token as the Actions secret FLY_API_TOKEN, then re-run."
+              echo "No logs were pulled by this run."
+            } | tee out/NOTICE.txt
+            exit 0
+          fi
+          flyctl status -a runwear-identity-screen > out/status.txt 2>&1 || true
+          flyctl machine list -a runwear-identity-screen > out/machines.txt 2>&1 || true
+          # flyctl logs prints retained history then follows; cap at 120s
+          # so the run captures the history and terminates.
+          timeout 120 flyctl logs -a runwear-identity-screen > out/logs.txt 2>&1 || true
+          wc -l out/*.txt || true
+
+      - name: Upload evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: identity-screen-fly-evidence
+          path: out/
