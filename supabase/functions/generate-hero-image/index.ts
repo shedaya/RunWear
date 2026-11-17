@@ -87,6 +87,72 @@ function ensureEarWarmerClause(prompt: string): string {
   return inlined + EAR_WARMER_CLAUSE
 }
 
+// Two-stage ear-warmer route (RW-176 method change, 2026-11-16).
+// Text-to-image alone could not serve this garment: across the RW-176
+// validation draws flux-schnell omitted the ear warmer in 5 of 6 (and
+// placed it above the ears in the sixth, pre-hardening). The method is
+// therefore changed for ear-warmer jobs only: stage 1 generates the
+// runner WITHOUT the head item (the garment is stripped from the
+// prompt), stage 2 adds the ear warmer with a flux-kontext-pro edit,
+// which places it reliably — 6 of 6 validation edits rendered the band
+// worn low, covering both ears, with the rest of the image unchanged
+// (record: release-prep/rw176-method2-2026-11-16/REPORT.md). If the edit
+// stage fails the job fails with it: serving the stage-1 image would
+// silently serve an outfit missing a prescribed garment.
+const EAR_WARMER_EDIT_PROMPT =
+  'Add a wide fleece ear-warmer band worn low across the lower forehead, ' +
+  'covering both ears completely. Keep the rest of the image unchanged: ' +
+  'same runner, same face, same outfit, same pose, same background, same lighting.'
+
+// Remove the ear warmer from a hardened prompt for the stage-1 base
+// generation: drop the placement clause and the inline descriptor, then
+// tidy the separators the removal leaves behind.
+function stripEarWarmer(prompt: string): string {
+  let p = prompt.replace(EAR_WARMER_CLAUSE, '')
+  p = p.split(EAR_WARMER_INLINE).join('')
+  p = p
+    .replace(/:\s*,/g, ': ')
+    .replace(/\s+,/g, ',')
+    .replace(/,\s*,/g, ',')
+    .replace(/,\s*\./g, '.')
+    .replace(/\s{2,}/g, ' ')
+  return p
+}
+
+async function createPrediction(body: Record<string, unknown>): Promise<Record<string, any>> {
+  const response = await fetch('https://api.replicate.com/v1/predictions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Token ${REPLICATE_API_TOKEN}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  })
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Replicate API error: ${response.status} ${errorText}`)
+  }
+  return await response.json()
+}
+
+// Official-model predictions live on the per-model endpoint (the same
+// route personal-hero-worker uses for flux-kontext-pro).
+async function createModelPrediction(modelPath: string, input: Record<string, unknown>): Promise<Record<string, any>> {
+  const response = await fetch(`https://api.replicate.com/v1/models/${modelPath}/predictions`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Token ${REPLICATE_API_TOKEN}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ input })
+  })
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Replicate API error: ${response.status} ${errorText}`)
+  }
+  return await response.json()
+}
+
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -347,31 +413,22 @@ async function processJob(job: Record<string, unknown> & { id: unknown, combinat
 
     const prompt = ensureEarWarmerClause(ensureQualitySuffix(job.prompt))
 
+    // Ear-warmer jobs take the two-stage route (see stripEarWarmer):
+    // stage 1 generates the runner without the head item.
+    const isEarWarmerJob = prompt.includes(EAR_WARMER_MARKER)
+    const stage1Prompt = isEarWarmerJob ? stripEarWarmer(prompt) : prompt
+
     // Call Replicate API (synchronous mode - no webhook)
-    const response = await fetch('https://api.replicate.com/v1/predictions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Token ${REPLICATE_API_TOKEN}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        version: "5599ed30703defd1d160a25a63321b4dec97101d98b4674bcc56e41f62f35637", // flux-schnell
-        input: {
-          prompt: prompt,
-          num_outputs: 1,
-          aspect_ratio: "2:3",
-          output_format: "png",
-          output_quality: 90
-        }
-      })
+    const prediction = await createPrediction({
+      version: "5599ed30703defd1d160a25a63321b4dec97101d98b4674bcc56e41f62f35637", // flux-schnell
+      input: {
+        prompt: stage1Prompt,
+        num_outputs: 1,
+        aspect_ratio: "2:3",
+        output_format: "png",
+        output_quality: 90
+      }
     })
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`Replicate API error: ${response.status} ${errorText}`)
-    }
-
-    const prediction = await response.json()
     console.log(`[generate-hero-image] Prediction created: ${prediction.id}`)
 
     // Update job with replicate_id
@@ -388,9 +445,39 @@ async function processJob(job: Record<string, unknown> & { id: unknown, combinat
     }
 
     // Get the image URL
-    const imageUrl = result.output?.[0]
+    let imageUrl = result.output?.[0]
     if (!imageUrl) {
       throw new Error('No image URL in output')
+    }
+
+    if (isEarWarmerJob) {
+      // Stage 2: add the ear warmer with a Kontext edit of the stage-1
+      // image. A failed edit fails the job (see the route note above) —
+      // the garment-missing base is never what gets stored or served.
+      const edit = await createModelPrediction('black-forest-labs/flux-kontext-pro', {
+        prompt: EAR_WARMER_EDIT_PROMPT,
+        input_image: imageUrl,
+        aspect_ratio: 'match_input_image',
+        output_format: 'png'
+      })
+      console.log(`[generate-hero-image] Ear-warmer edit created: ${edit.id}`)
+
+      await supabase
+        .from('generation_jobs')
+        .update({ replicate_id: edit.id })
+        .eq('id', job.id)
+
+      const editResult = await pollForCompletion(edit.id, 120000)
+
+      if (editResult.status !== 'succeeded') {
+        throw new Error(`Ear-warmer edit failed: ${editResult.error || editResult.status}`)
+      }
+
+      const editedUrl = Array.isArray(editResult.output) ? editResult.output[0] : editResult.output
+      if (!editedUrl) {
+        throw new Error('Ear-warmer edit returned no image URL')
+      }
+      imageUrl = editedUrl
     }
 
     console.log(`[generate-hero-image] Downloading from: ${imageUrl}`)

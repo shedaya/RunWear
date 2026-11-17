@@ -146,17 +146,38 @@ const ITEM_DISPLAY: Record<string, string> = {
 // sweatband worn above the ears — and stretches the forehead in full-head
 // generations — unless the prompt states the garment's function and
 // placement. These details are prompt-only; the user-facing display
-// labels in ITEM_DISPLAY are unchanged.
+// labels in ITEM_DISPLAY are unchanged. (HEADBAND's detail sentence is
+// superseded by ITEM_HEAD_PLACEMENT below: since the method-2
+// restructure the garment is no longer named in the outfit list at all.)
 const ITEM_PROMPT_DETAIL: Record<string, string> = {
-  HEADBAND: 'The ear warmer is a fleece ear-warmer band worn low across the lower forehead, covering both ears completely — not a sweatband worn above the ears.'
 }
 
 // Prompt-only renderings used in the outfit list itself for items whose
-// display label misleads the image model (RW-176): the descriptor sits
-// where the garment is introduced, with ITEM_PROMPT_DETAIL as
-// reinforcement. Display labels are unchanged.
+// display label misleads the image model (RW-176). Display labels are
+// unchanged. (HEADBAND's inline descriptor is superseded by
+// ITEM_HEAD_PLACEMENT below.)
 const ITEM_PROMPT_LABEL: Record<string, string> = {
-  HEADBAND: 'a fleece ear-warmer band worn low across the lower forehead, covering both ears completely'
+}
+
+// Dedicated head-placement sentences (RW-176 method 2, 2026-11-16).
+// Head-category items leave the flat outfit list entirely and are
+// described after it in their own sentence, so the model treats the
+// headwear as a placed garment rather than one more list entry. The
+// v48 wording-only fix (descriptor inline in the list + a detail
+// sentence) verified in stored prompts but produced no delivered
+// ear-warmer look, so the structure changed, not just the wording.
+// HEADBAND keeps the v48 descriptor language, recast as placement, and
+// adds the natural-forehead constraint that answers the stretched-
+// forehead failure mode. Other head items fall back to a plain
+// "On their head: a <label>." sentence.
+const ITEM_HEAD_PLACEMENT: Record<string, string> = {
+  HEADBAND: 'On their head: a fleece ear-warmer band sits low across the lower forehead, covering both ears completely; the forehead above the band is its natural height.'
+}
+
+function headPlacementSentence(key: string): string {
+  if (ITEM_HEAD_PLACEMENT[key]) return ITEM_HEAD_PLACEMENT[key]
+  const label = (ITEM_PROMPT_LABEL[key] ?? ITEM_DISPLAY[key] ?? key).toLowerCase()
+  return `On their head: a ${label}.`
 }
 
 const ITEM_CATEGORY: Record<string, string> = {
@@ -187,15 +208,23 @@ function buildPrompt(job: JobRow, failureClasses: string[]): string {
   const order = ['TOP_OUTER', 'TOP_MID', 'TOP_BASE', 'BOTTOM', 'HEAD', 'HANDS', 'ACCESSORIES']
   const ordered = [...keys].sort(
     (a, b) => order.indexOf(ITEM_CATEGORY[a] ?? '') - order.indexOf(ITEM_CATEGORY[b] ?? ''))
-  const items = ordered.map(k => ITEM_PROMPT_LABEL[k] ?? ITEM_DISPLAY[k] ?? k)
+  // Head-category items are NOT part of the flat outfit list (RW-176
+  // method 2): they are placed by a dedicated sentence after the outfit
+  // sentence (see ITEM_HEAD_PLACEMENT).
+  const headKeys = ordered.filter(k => ITEM_CATEGORY[k] === 'HEAD')
+  const bodyKeys = ordered.filter(k => ITEM_CATEGORY[k] !== 'HEAD')
+  const items = bodyKeys.map(k => ITEM_PROMPT_LABEL[k] ?? ITEM_DISPLAY[k] ?? k)
   const outerKey = keys.find(k => ITEM_CATEGORY[k] === 'TOP_OUTER')
   const baseKey = keys.find(k => ITEM_CATEGORY[k] === 'TOP_BASE')
   const layering = outerKey && baseKey
     ? ` The ${ITEM_DISPLAY[outerKey]} is the outermost layer, worn over the ${ITEM_DISPLAY[baseKey]}.`
     : ''
-  const details = ordered
+  const details = bodyKeys
     .filter(k => ITEM_PROMPT_DETAIL[k])
     .map(k => ` ${ITEM_PROMPT_DETAIL[k]}`)
+    .join('')
+  const headwear = headKeys
+    .map(k => ` ${headPlacementSentence(k)}`)
     .join('')
   const weatherPhrase: Record<string, string> = {
     CLEAR: 'clear skies', CLOUDY: 'overcast skies',
@@ -212,7 +241,7 @@ function buildPrompt(job: JobRow, failureClasses: string[]): string {
     `Photorealistic photo of the same person shown in the reference photos, ` +
     `now running mid-stride along ${background}, ${weatherPhrase[job.weather] ?? 'clear skies'}, ` +
     `${timePhrase[job.time_of_day] ?? 'daylight'}. They are wearing exactly this outfit and nothing extra: ` +
-    `${items.join(', ')}.${layering}${details} The runner is looking ahead, not at the camera. ` +
+    `${items.join(', ')}.${layering}${details}${headwear} The runner is looking ahead, not at the camera. ` +
     `No visible brand logos, text, or trademarks anywhere in the image.` +
     QUALITY_SUFFIX
   if (failureClasses.length > 0) {
