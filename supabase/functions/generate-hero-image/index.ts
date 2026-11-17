@@ -261,22 +261,6 @@ function stripBeanie(prompt: string): string {
   return p
 }
 
-async function createPrediction(body: Record<string, unknown>): Promise<Record<string, any>> {
-  const response = await fetch('https://api.replicate.com/v1/predictions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Token ${REPLICATE_API_TOKEN}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(body)
-  })
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`Replicate API error: ${response.status} ${errorText}`)
-  }
-  return await response.json()
-}
-
 // Official-model predictions live on the per-model endpoint (the same
 // route personal-hero-worker uses for flux-kontext-pro).
 async function createModelPrediction(modelPath: string, input: Record<string, unknown>): Promise<Record<string, any>> {
@@ -842,16 +826,27 @@ async function processJob(job: Record<string, unknown> & { id: unknown, combinat
     const stage1Prompt = isEarWarmerJob ? stripEarWarmer(prompt)
       : isBeanieJob ? stripBeanie(prompt) : prompt
 
-    // Call Replicate API (synchronous mode - no webhook)
-    const prediction = await createPrediction({
-      version: "5599ed30703defd1d160a25a63321b4dec97101d98b4674bcc56e41f62f35637", // flux-schnell
-      input: {
-        prompt: stage1Prompt,
-        num_outputs: 1,
-        aspect_ratio: "2:3",
-        output_format: "png",
-        output_quality: 90
-      }
+    // Stage-1 generation — the RW-24b pool recipe (2026-11-02), adopted
+    // 2026-11-17: flux-schnell through the OFFICIAL-MODEL endpoint with
+    // aspect_ratio "2:3" and output_quality 90. The previous call form —
+    // a pinned version hash through the generic predictions endpoint —
+    // silently ignored aspect_ratio and returned 1024x1024 SQUARE
+    // images, which the app then cropped into the portrait hero frame
+    // (the soft, "old way" look on every function-generated hero).
+    // Verified empirically before this change (three test draws, same
+    // prompt, 2026-11-17): pinned-version call -> 1024x1024 PNG;
+    // official-model call -> 832x1216 PNG (and 832x1216 with
+    // output_format webp). PNG is kept deliberately: the hybrid routes
+    // decode the stage-1 base with this function's hand-rolled PNG
+    // codec, and stored heroes live at deterministic .png paths. The
+    // stored-format deviation from the RW-24b webp stock is recorded
+    // in release-prep/rw176-production-2026-11-17/REPORT.md.
+    const prediction = await createModelPrediction('black-forest-labs/flux-schnell', {
+      prompt: stage1Prompt,
+      num_outputs: 1,
+      aspect_ratio: "2:3",
+      output_format: "png",
+      output_quality: 90
     })
     console.log(`[generate-hero-image] Prediction created: ${prediction.id}`)
 
