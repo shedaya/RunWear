@@ -3,7 +3,9 @@
 // Uses polling instead of webhooks for reliability
 //
 // Invocation modes:
-//   * Legacy single-job (original behavior, used by scripts/*.js):
+//   * Legacy single-job (original behavior, used by scripts/*.js and
+//     by the "trigger-image-generation" database webhook, which fires
+//     one legacy invocation per inserted generation_jobs row):
 //       POST with no drain parameter -> processes ONE queued job and
 //       returns { success, combination_id, image_url } /
 //       { message: 'No queued jobs' } / 500 { error, job_id }.
@@ -29,9 +31,12 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 // SPEND CAP: maximum number of images generated per UTC day across ALL
 // invocations of this function (legacy single-job calls included — every
 // completion counts). This is the one number that bounds daily Replicate
-// spend; raise or lower it here. Enforcement is deliberately simple: the
-// count is read once per invocation, so two invocations running at the
-// same moment can overshoot by a few images. Acceptable at this scale.
+// spend; raise or lower it here. Enforcement (v39): invocations are
+// serialized by the drain lock below, so the count is read by exactly
+// one invocation at a time and each invocation admits at most the
+// remaining capacity — the pre-v39 "concurrent invocations can overshoot
+// by a few" race (61 completions against this 50 cap on 2026-11-17) is
+// closed, and the legacy path checks the same cap.
 const DAILY_GENERATION_CAP = 50
 
 // Batch drain sizing. Each job can take up to ~60s of polling, so the
@@ -39,6 +44,62 @@ const DAILY_GENERATION_CAP = 50
 // clock: default 5, hard max 10 per invocation.
 const DEFAULT_DRAIN_LIMIT = 5
 const MAX_DRAIN_LIMIT = 10
+
+// Invocation hardening (v39, 2026-11-17; RW-176 follow-up). Three live
+// incidents in 24h traced to this function's concurrency and recovery
+// gaps; the full diagnosis is in
+// release-prep/rw176-production-2026-11-17/REPORT.md. In brief:
+//   * The "trigger-image-generation" database trigger (AFTER INSERT ON
+//     generation_jobs FOR EACH ROW) POSTs this function with NO drain
+//     parameter — legacy mode — once per inserted job. A batch insert
+//     therefore launches that many simultaneous legacy invocations, and
+//     the legacy claim used to be UNGUARDED: every invocation fetched
+//     the same oldest QUEUED job and processed it, so one job was
+//     generated (and inserted into generated_images) N times. The claim
+//     is now guarded on QUEUED in both modes.
+//   * Concurrent drains each read the daily-cap counter before the
+//     others' completions landed and overshot the cap. Invocations are
+//     now serialized with a single-row compare-and-swap lock
+//     (hero_generation_lock), and the legacy path checks the cap too.
+//   * A killed invocation orphaned its in-flight job in PROCESSING
+//     forever, and FAILED jobs needed manual re-queue sweeps. Both
+//     invocation modes now reclaim stale PROCESSING jobs, and drains
+//     automatically re-queue eligible FAILED jobs (below).
+
+// Stale-PROCESSING reclaim (mirrors personal-hero-worker's RW-15
+// pattern; threshold adapted to this function's longer jobs). Every
+// in-code failure path marks a claimed job FAILED, so a job still
+// PROCESSING past the threshold means its invocation was terminated by
+// the platform mid-processing. The worst legitimate job runtime is
+// ~14 min (60s stage-1 poll + 3 x 240s Gemini draw polls + download /
+// composite), so 15 min cannot reclaim a job that is still genuinely
+// running — and platform wall-clock limits kill invocations far sooner
+// than that anyway. Each reclaim spends one from the job's
+// reclaim_count budget; at the cap the job is FAILED with the named
+// stale_processing_timeout reason instead of requeuing forever.
+const STALE_PROCESSING_MS = 900_000 // 15 minutes
+const STALE_MAX_RECLAIMS = 3
+const STALE_FAILURE_REASON = 'stale_processing_timeout'
+
+// Drain lock TTL: comfortably longer than any live invocation (the
+// platform kills invocations at its wall clock, minutes at most) and
+// longer than the stale threshold, so a killed invocation's jobs are
+// reclaimable before its lock can still block the next pg_cron drain
+// (30-minute cadence — a stuck lock costs at most one skipped cycle).
+const DRAIN_LOCK_TTL_MS = 1_200_000 // 20 minutes
+
+// Automatic FAILED retry bounds (per combination_id, counted across
+// all of its job rows — the finisher lane's field rules, automated):
+// a combination whose latest job failed on the RW-176 gates is retried
+// while its total gate failures are under 3; at 3 it stays FAILED and
+// is named in the drain log/response. Transient failures (Replicate
+// 429s, timeouts, network) retry more freely but still bounded: a
+// combination with 10 total failures is left alone. At most 10
+// re-queues per drain, so a failure wave re-enters the queue gradually
+// (and always at the back — clones carry a fresh requested_at).
+const RETRY_GATE_MAX_FAILURES = 3
+const RETRY_TOTAL_MAX_FAILURES = 10
+const RETRY_PER_DRAIN_MAX = 10
 
 // Prompt hardening + review gate (2026-10-27), mirrors HeroPoolPolicy.kt.
 // Every prompt is hardened HERE, server-side, so jobs queued by older
@@ -307,50 +368,327 @@ async function countTodaysGenerations(): Promise<number> {
   return count ?? 0
 }
 
+// Drain lock: a single-row compare-and-swap on hero_generation_lock.
+// The acquire is ONE atomic UPDATE that only lands when the previous
+// lock has expired (expires_at < now), so exactly one concurrent
+// invocation can hold it; the rest see zero rows and stand down. The
+// holder releases by stamping expires_at back to the epoch, guarded on
+// its owner token so it can never release someone else's lock. If the
+// lock table is unreachable (e.g. the migration has not been applied),
+// acquisition returns null and the caller proceeds WITHOUT the lock
+// rather than halting generation entirely — the guarded claim still
+// prevents double-processing — matching this function's existing
+// fallback posture (see the review_status insert fallback). The error
+// is logged loudly either way.
+type DrainLockHandle = { token: string }
+
+async function acquireDrainLock(): Promise<DrainLockHandle | 'busy' | null> {
+  const now = new Date()
+  const token = crypto.randomUUID()
+  const { data, error } = await supabase
+    .from('hero_generation_lock')
+    .update({
+      owner: token,
+      acquired_at: now.toISOString(),
+      expires_at: new Date(now.getTime() + DRAIN_LOCK_TTL_MS).toISOString()
+    })
+    .eq('id', 1)
+    .lt('expires_at', now.toISOString())
+    .select('id')
+
+  if (error) {
+    console.error('[generate-hero-image] Drain lock unavailable, proceeding unlocked:', error)
+    return null
+  }
+  if (!data || data.length === 0) return 'busy'
+  return { token }
+}
+
+async function releaseDrainLock(lock: DrainLockHandle | 'busy' | null): Promise<void> {
+  if (!lock || lock === 'busy') return
+  const { error } = await supabase
+    .from('hero_generation_lock')
+    .update({ owner: '', expires_at: new Date(0).toISOString() })
+    .eq('id', 1)
+    .eq('owner', lock.token)
+
+  if (error) {
+    console.error('[generate-hero-image] Drain lock release failed (the lock will expire on its TTL):', error)
+  }
+}
+
+// Stale-PROCESSING reclaim: find jobs whose PROCESSING claim is older
+// than STALE_PROCESSING_MS and return them to QUEUED, spending one
+// reclaim from each job's reclaim_count budget; a job whose budget is
+// spent is marked FAILED with the named stale_processing_timeout
+// reason. All transitions are guarded on the exact state read (status
+// + reclaim_count + claim age) so concurrent invocations cannot
+// double-reclaim the same job. Unlike personal-hero-worker there is no
+// resume path here — a reclaimed job restarts from stage 1, so its
+// replicate_id is cleared (processJob overwrites it before polling
+// anyway).
+async function reclaimStaleJobs(): Promise<{ reclaimed: string[], staleFailed: string[] }> {
+  const cutoff = new Date(Date.now() - STALE_PROCESSING_MS).toISOString()
+  const { data: stale, error } = await supabase
+    .from('generation_jobs')
+    .select('id, combination_id, reclaim_count')
+    .eq('status', 'PROCESSING')
+    .lt('started_at', cutoff)
+
+  if (error) {
+    console.error('[generate-hero-image] Stale scan failed:', error)
+    return { reclaimed: [], staleFailed: [] }
+  }
+
+  const reclaimed: string[] = []
+  const staleFailed: string[] = []
+
+  for (const row of (stale ?? []) as Array<{ id: string, combination_id: string, reclaim_count: number | null }>) {
+    const reclaims = row.reclaim_count ?? 0
+    if (reclaims >= STALE_MAX_RECLAIMS) {
+      const { data: marked } = await supabase
+        .from('generation_jobs')
+        .update({
+          status: 'FAILED',
+          error_message: `${STALE_FAILURE_REASON}: worker invocation terminated mid-processing; job reclaimed ${reclaims} time(s) without completing`,
+          completed_at: new Date().toISOString()
+        })
+        .eq('id', row.id)
+        .eq('status', 'PROCESSING')
+        .eq('reclaim_count', reclaims)
+        .lt('started_at', cutoff)
+        .select('id')
+      if (marked && marked.length > 0) {
+        staleFailed.push(row.combination_id)
+        console.log(`[generate-hero-image] Stale job ${row.combination_id} FAILED: ${STALE_FAILURE_REASON} after ${reclaims} reclaim(s)`)
+      }
+    } else {
+      const { data: reset } = await supabase
+        .from('generation_jobs')
+        .update({ status: 'QUEUED', reclaim_count: reclaims + 1, started_at: null, replicate_id: null })
+        .eq('id', row.id)
+        .eq('status', 'PROCESSING')
+        .eq('reclaim_count', reclaims)
+        .lt('started_at', cutoff)
+        .select('id')
+      if (reset && reset.length > 0) {
+        reclaimed.push(row.combination_id)
+        console.log(`[generate-hero-image] Reclaimed stale job ${row.combination_id} (reclaim ${reclaims + 1}/${STALE_MAX_RECLAIMS})`)
+      }
+    }
+  }
+
+  return { reclaimed, staleFailed }
+}
+
+// Failure classes for the automatic retry. Gate failures are the
+// RW-176 gate verdicts (their job-level messages all start 'RW-176');
+// stale_processing_timeout is terminal by design (its reclaim budget
+// was already spent); everything else — Replicate 429 throttling,
+// prediction timeouts, network and transfer errors — is transient.
+function classifyJobError(errorMessage: string | null): 'gate' | 'stale' | 'transient' {
+  const msg = errorMessage ?? ''
+  if (msg.startsWith(STALE_FAILURE_REASON)) return 'stale'
+  if (msg.startsWith('RW-176')) return 'gate'
+  return 'transient'
+}
+
+// Automatic FAILED retry: for each combination whose LATEST job is
+// FAILED (and which has no QUEUED/PROCESSING successor), insert a
+// fresh QUEUED clone of the failed job — the same fresh-row pattern
+// the manual re-queue sweeps used, so the FAILED row itself is never
+// mutated and its error_message remains as the failure history.
+// Bounds are the RETRY_* constants above; combinations that hit the
+// gate-failure cap are returned (and logged) by name.
+async function requeueFailedJobs(): Promise<{ requeued: string[], terminalGate: string[] }> {
+  const { data: rows, error } = await supabase
+    .from('generation_jobs')
+    .select('combination_id, status, error_message, requested_at')
+    .order('requested_at', { ascending: false })
+    .limit(10000)
+
+  if (error) {
+    console.error('[generate-hero-image] Retry scan failed:', error)
+    return { requeued: [], terminalGate: [] }
+  }
+
+  type JobRow = { combination_id: string, status: string, error_message: string | null, requested_at: string }
+  const byCombo = new Map<string, JobRow[]>()
+  for (const row of (rows ?? []) as JobRow[]) {
+    const list = byCombo.get(row.combination_id)
+    if (list) list.push(row)
+    else byCombo.set(row.combination_id, [row])
+  }
+
+  const requeued: string[] = []
+  const terminalGate: string[] = []
+
+  for (const [combo, list] of byCombo) {
+    // Rows arrive newest-first per combination, so list[0] is its
+    // latest job. Only a combination whose latest job is FAILED is a
+    // retry candidate at all.
+    const latest = list[0]
+    if (latest.status !== 'FAILED') continue
+    // A QUEUED/PROCESSING row anywhere in the list (e.g. a backdated
+    // successor) means the cell is already covered — never stack
+    // another attempt on top of it.
+    if (list.some(r => r.status === 'QUEUED' || r.status === 'PROCESSING')) continue
+
+    const latestClass = classifyJobError(latest.error_message)
+    if (latestClass === 'stale') continue
+
+    const failedRows = list.filter(r => r.status === 'FAILED')
+    const gateFailures = failedRows.filter(r => classifyJobError(r.error_message) === 'gate').length
+
+    if (latestClass === 'gate' && gateFailures >= RETRY_GATE_MAX_FAILURES) {
+      // Gate-failure cap reached: the combination stays FAILED and is
+      // named in the log and the drain response.
+      terminalGate.push(combo)
+      continue
+    }
+    if (failedRows.length >= RETRY_TOTAL_MAX_FAILURES) continue
+    if (requeued.length >= RETRY_PER_DRAIN_MAX) continue
+
+    const { data: src } = await supabase
+      .from('generation_jobs')
+      .select('prompt')
+      .eq('combination_id', combo)
+      .eq('status', 'FAILED')
+      .order('requested_at', { ascending: false })
+      .limit(1)
+
+    if (!src || src.length === 0) continue
+
+    const { error: insertError } = await supabase
+      .from('generation_jobs')
+      .insert({ combination_id: combo, prompt: src[0].prompt })
+
+    if (insertError) {
+      console.error(`[generate-hero-image] Auto-requeue failed for ${combo}:`, insertError)
+      continue
+    }
+
+    requeued.push(combo)
+    console.log(`[generate-hero-image] Auto-requeued FAILED job for ${combo} (${latestClass}; gate failures ${gateFailures}, total failures ${failedRows.length})`)
+  }
+
+  if (terminalGate.length > 0) {
+    console.log(`[generate-hero-image] Combinations at the gate-failure cap, staying FAILED: ${terminalGate.join(', ')}`)
+  }
+
+  return { requeued, terminalGate }
+}
+
 // Legacy single-job mode: process ONE queued job (the oldest). Response
 // shapes are unchanged from the original implementation — the manual
 // scripts branch on { success } / { message: 'No queued jobs' } / 500.
+// The { message } shape also carries the two v39 stand-downs (another
+// invocation holds the drain lock; the daily cap is reached) — both
+// mean "no work done by this call", which is what the shape is for.
 async function processQueuedJobs() {
   console.log('[generate-hero-image] Processing queued jobs...')
 
-  const { data: jobs, error } = await supabase
-    .from('generation_jobs')
-    .select('*')
-    .eq('status', 'QUEUED')
-    .order('requested_at', { ascending: true })
-    .limit(1)
-
-  if (error) {
-    console.error('[generate-hero-image] Error fetching jobs:', error)
-    throw error
+  const lock = await acquireDrainLock()
+  if (lock === 'busy') {
+    return jsonResponse({ message: 'Generation already in progress' })
   }
 
-  if (!jobs || jobs.length === 0) {
+  try {
+    await reclaimStaleJobs()
+
+    // The daily cap binds legacy calls too (v39). Before this, the
+    // legacy path never read the counter, so the per-row insert
+    // webhook's invocations could spend straight through the cap.
+    const generatedToday = await countTodaysGenerations()
+    if (generatedToday >= DAILY_GENERATION_CAP) {
+      return jsonResponse({ message: 'Daily generation cap reached' })
+    }
+
+    // Fetch-claim loop: if the oldest QUEUED job was claimed by a
+    // concurrent invocation between fetch and claim (processJob
+    // reports it SKIPPED), move on to the next one instead of failing.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const { data: jobs, error } = await supabase
+        .from('generation_jobs')
+        .select('*')
+        .eq('status', 'QUEUED')
+        .order('requested_at', { ascending: true })
+        .limit(1)
+
+      if (error) {
+        console.error('[generate-hero-image] Error fetching jobs:', error)
+        throw error
+      }
+
+      if (!jobs || jobs.length === 0) {
+        return jsonResponse({ message: 'No queued jobs' })
+      }
+
+      const job = jobs[0]
+      const result = await processJob(job)
+
+      if (!result.ok && result.skipped) continue
+
+      if (result.ok) {
+        return jsonResponse({
+          success: true,
+          combination_id: result.combination_id,
+          image_url: result.image_url
+        })
+      }
+
+      return jsonResponse({
+        error: result.error,
+        job_id: job.id
+      }, 500)
+    }
+
     return jsonResponse({ message: 'No queued jobs' })
+  } finally {
+    await releaseDrainLock(lock)
   }
-
-  const job = jobs[0]
-  const result = await processJob(job, { guardedClaim: false })
-
-  if (result.ok) {
-    return jsonResponse({
-      success: true,
-      combination_id: result.combination_id,
-      image_url: result.image_url
-    })
-  }
-
-  return jsonResponse({
-    error: result.error,
-    job_id: job.id
-  }, 500)
 }
 
 // Batch drain mode: process up to `limit` queued jobs, oldest first. The
 // batch is clamped by whatever is left of today's spend cap. Each job is
 // claimed with a QUEUED-status guard so a concurrent invocation cannot
 // process the same job twice, and each job succeeds or fails on its own.
+//
+// The wrapper serializes drains on the drain lock: a concurrent drain
+// (pg_cron overlapping a manual drain, a webhook burst) stands down
+// with a lock_busy summary instead of racing the cap counter. Queue
+// hygiene — the stale-PROCESSING reclaim and the automatic FAILED
+// retry — runs first, inside the lock, on every drain, including
+// cap-exhausted ones: recovery must not wait for spend headroom.
 async function drainQueuedJobs(limit: number) {
+  const lock = await acquireDrainLock()
+  if (lock === 'busy') {
+    return jsonResponse({
+      drained: true,
+      skipped: 'lock_busy',
+      attempted: 0,
+      completed: 0,
+      failed: 0,
+      results: []
+    })
+  }
+
+  try {
+    const { reclaimed, staleFailed } = await reclaimStaleJobs()
+    const { requeued, terminalGate } = await requeueFailedJobs()
+    const hygiene = {
+      reclaimed,
+      stale_failed: staleFailed,
+      retried: requeued,
+      retry_terminal_gate: terminalGate
+    }
+    return await drainQueuedJobsInner(limit, hygiene)
+  } finally {
+    await releaseDrainLock(lock)
+  }
+}
+
+async function drainQueuedJobsInner(limit: number, hygiene: Record<string, unknown>) {
   console.log(`[generate-hero-image] Draining up to ${limit} queued jobs...`)
 
   const generatedTodayBefore = await countTodaysGenerations()
@@ -361,7 +699,8 @@ async function drainQueuedJobs(limit: number) {
     drained: true,
     daily_cap: DAILY_GENERATION_CAP,
     generated_today_before: generatedTodayBefore,
-    cap_reached: remainingByCap <= 0
+    cap_reached: remainingByCap <= 0,
+    ...hygiene
   }
 
   if (batchSize === 0) {
@@ -403,7 +742,7 @@ async function drainQueuedJobs(limit: number) {
   let failed = 0
 
   for (const job of jobs) {
-    const result = await processJob(job, { guardedClaim: true })
+    const result = await processJob(job)
     if (!result.ok && result.skipped) {
       // Another invocation claimed this job first; not a failure.
       results.push({
@@ -454,42 +793,41 @@ type ProcessJobResult = {
 // Replicate, store the image, insert it into the pool as 'approved'
 // (auto-replenishment), and mark the job COMPLETED — or mark it FAILED and
 // report the error. Never throws; the caller decides how to present the
-// outcome. With guardedClaim, the claim only lands if the job is still
-// QUEUED, so concurrent drains cannot double-process it.
-async function processJob(job: Record<string, unknown> & { id: unknown, combination_id: string, prompt: string },
-                          options: { guardedClaim: boolean }): Promise<ProcessJobResult> {
+// outcome.
+async function processJob(job: Record<string, unknown> & { id: unknown, combination_id: string, prompt: string }): Promise<ProcessJobResult> {
   console.log(`[generate-hero-image] Processing: ${job.combination_id}`)
 
   try {
-    // Claim the job (status -> PROCESSING)
-    let claim = supabase
+    // Claim the job (status -> PROCESSING). The claim is guarded on
+    // QUEUED in BOTH invocation modes (v39): it is a single atomic
+    // UPDATE, so exactly one concurrent invocation can win it and the
+    // rest report the job SKIPPED. The pre-v39 legacy path claimed
+    // unconditionally — and because the insert webhook fires one
+    // legacy invocation per inserted job row, a batch insert launched
+    // N simultaneous invocations that all fetched the same oldest
+    // QUEUED job and all processed it, generating (and inserting) the
+    // same job N times. That was the RW-176 duplicate-rows mechanism
+    // for single-job combinations; see the REPORT's diagnosis.
+    const { data: claimed, error: claimError } = await supabase
       .from('generation_jobs')
       .update({
         status: 'PROCESSING',
         started_at: new Date().toISOString()
       })
       .eq('id', job.id)
+      .eq('status', 'QUEUED')
+      .select('id')
 
-    if (options.guardedClaim) {
-      const { data: claimed, error: claimError } = await claim
-        .eq('status', 'QUEUED')
-        .select('id')
-
-      if (claimError) {
-        throw new Error(`Claim failed: ${claimError.message}`)
+    if (claimError) {
+      throw new Error(`Claim failed: ${claimError.message}`)
+    }
+    if (!claimed || claimed.length === 0) {
+      return {
+        ok: false,
+        skipped: true,
+        combination_id: job.combination_id,
+        error: 'Job was already claimed by another invocation'
       }
-      if (!claimed || claimed.length === 0) {
-        return {
-          ok: false,
-          skipped: true,
-          combination_id: job.combination_id,
-          error: 'Job was already claimed by another invocation'
-        }
-      }
-    } else {
-      // Legacy path: the original implementation updated unconditionally
-      // and ignored the result. Kept exactly that way.
-      await claim
     }
 
     const prompt = ensureBeanieClause(ensureEarWarmerClause(ensureQualitySuffix(job.prompt)))
