@@ -144,6 +144,62 @@ function stripEarWarmer(prompt: string): string {
   return p
 }
 
+// Beanie proportion (RW-176 class extension, 2026-11-17). The beanie
+// renders oversized and tall — a high watch-cap silhouette with excess
+// crown height — from the same root cause as the ear warmer: the prompt
+// names the garment with no proportion anchor. Sol approved the hybrid
+// treatment for beanies on 2026-11-17 ("productionise it with the
+// hair-tuft guard") after the phase-1C validation
+// (release-prep/rw176-production-2026-11-17/REPORT.md §1C): tuned-prompt
+// Gemini beanies transplanted with this function's strip extractor read
+// beanie:face 0.93x / 1.10x against 1.38x for the flagged render.
+//
+// The route mirrors the ear warmer exactly: stage 1 generates the
+// runner WITHOUT the beanie, stage 2 draws it on with Gemini and
+// transplants only the beanie strip. The marker clause below is the
+// server-side detection hook (queued jobs are covered regardless of
+// which client or script queued them); the clause's wording never
+// reaches a served image — stage 1 strips it with the garment.
+const BEANIE_MARKER = 'BEANIE PLACEMENT:'
+const BEANIE_CLAUSE =
+  ` ${BEANIE_MARKER} the beanie is a thin light running beanie, snug and ` +
+  `low-profile, sitting low on the crown with no excess height above the head.`
+
+function ensureBeanieClause(prompt: string): string {
+  if (prompt.includes(BEANIE_MARKER)) return prompt
+  if (!/beanie/i.test(prompt)) return prompt
+  return prompt + BEANIE_CLAUSE
+}
+
+// The phase-1C proportion-tuned beanie prompt, verbatim (the exact text
+// the validated draws were made with).
+const BEANIE_GEMINI_PROMPT =
+  'Add a thin light running beanie to the runner in this photo. ' +
+  'The beanie is SNUG and LOW-PROFILE: it follows the shape of the skull ' +
+  'closely and sits low on the crown, with NO excess fabric, NO slouch and ' +
+  'NO extra height above the head - the top of the beanie is no more than ' +
+  'about 1 inch (2.5 cm) above the top of the head. Its bottom edge sits ' +
+  'at the ears, covering the top half of each ear, and just above the ' +
+  'eyebrows at the front. Thin smooth matte knit, dark colour, no ' +
+  'pom-pom, no folded cuff, no logo. Photorealistic. Change nothing ' +
+  'else: same person, same face, same hair below the beanie line, same ' +
+  'outfit, same pose, same background, same lighting.'
+
+// Remove the beanie from a hardened prompt for the stage-1 base
+// generation: drop the placement clause and every beanie mention, then
+// tidy the separators the removal leaves behind.
+function stripBeanie(prompt: string): string {
+  let p = prompt.replace(BEANIE_CLAUSE, '')
+  p = p.replace(/thermal beanie/gi, '').replace(/light beanie/gi, '').replace(/beanie/gi, '')
+  p = p
+    .replace(/:\s*,/g, ': ')
+    .replace(/\s+,/g, ',')
+    .replace(/,\s*,/g, ',')
+    .replace(/,\s*\./g, '.')
+    .replace(/\s{2,}/g, ' ')
+  return p
+}
+
 async function createPrediction(body: Record<string, unknown>): Promise<Record<string, any>> {
   const response = await fetch('https://api.replicate.com/v1/predictions', {
     method: 'POST',
@@ -436,12 +492,17 @@ async function processJob(job: Record<string, unknown> & { id: unknown, combinat
       await claim
     }
 
-    const prompt = ensureEarWarmerClause(ensureQualitySuffix(job.prompt))
+    const prompt = ensureBeanieClause(ensureEarWarmerClause(ensureQualitySuffix(job.prompt)))
 
-    // Ear-warmer jobs take the two-stage route (see stripEarWarmer):
-    // stage 1 generates the runner without the head item.
+    // Ear-warmer and beanie jobs take the two-stage hybrid route (see
+    // stripEarWarmer / stripBeanie): stage 1 generates the runner
+    // without the head item. The two classes are mutually exclusive —
+    // an outfit carries one head item — and the ear warmer wins the
+    // check so its behaviour is unchanged.
     const isEarWarmerJob = prompt.includes(EAR_WARMER_MARKER)
-    const stage1Prompt = isEarWarmerJob ? stripEarWarmer(prompt) : prompt
+    const isBeanieJob = !isEarWarmerJob && prompt.includes(BEANIE_MARKER)
+    const stage1Prompt = isEarWarmerJob ? stripEarWarmer(prompt)
+      : isBeanieJob ? stripBeanie(prompt) : prompt
 
     // Call Replicate API (synchronous mode - no webhook)
     const prediction = await createPrediction({
@@ -475,8 +536,9 @@ async function processJob(job: Record<string, unknown> & { id: unknown, combinat
       throw new Error('No image URL in output')
     }
 
-    // Final image bytes for ear-warmer jobs come from the hybrid
-    // composite, not from a download (see the stage-2 block below).
+    // Final image bytes for hybrid-route jobs (ear warmer, beanie)
+    // come from the strip composite, not from a download (see the
+    // stage-2 blocks below).
     let finalBytes: Uint8Array | null = null
 
     if (isEarWarmerJob) {
@@ -554,6 +616,93 @@ async function processJob(job: Record<string, unknown> & { id: unknown, combinat
 
       if (!acceptedPng) {
         throw new Error(`RW-176: no Gemini draw passed the band gates in ${RW176_MAX_DRAWS} draws`)
+      }
+      finalBytes = acceptedPng
+    }
+
+    if (isBeanieJob) {
+      // Stage 2 (hybrid, v38): Gemini draws the beanie on the stage-1
+      // base with the phase-1C tuned prompt, the beanie gates judge the
+      // draw (presence, crown proportion, hair-tuft guard), and only
+      // the beanie strip is transplanted onto the original base. Any
+      // failure after the retries fails the job — a tall beanie, a
+      // tufted transplant, a missing garment, or the unedited base is
+      // never what gets stored or served.
+      const baseResponse = await fetch(imageUrl)
+      if (!baseResponse.ok) {
+        throw new Error(`Failed to download stage-1 base: ${baseResponse.status}`)
+      }
+      const baseImg = await decodePng(new Uint8Array(await baseResponse.arrayBuffer()))
+
+      let acceptedPng: Uint8Array | null = null
+      for (let draw = 1; draw <= RW176_MAX_DRAWS; draw++) {
+        let result: HybridResult | null = null
+        let drawImg: RgbImage | null = null
+        try {
+          const edit = await createModelPrediction('google/nano-banana-pro', {
+            prompt: BEANIE_GEMINI_PROMPT,
+            image_input: [imageUrl],
+            aspect_ratio: 'match_input_image',
+            resolution: '1K',
+            output_format: 'png',
+            allow_fallback_model: false
+          })
+          console.log(`[generate-hero-image] Beanie Gemini draw ${draw} created: ${edit.id}`)
+
+          await supabase
+            .from('generation_jobs')
+            .update({ replicate_id: edit.id })
+            .eq('id', job.id)
+
+          const editResult = await pollForCompletion(edit.id, 240000)
+          if (editResult.status !== 'succeeded') {
+            throw new Error(`prediction ${editResult.error || editResult.status}`)
+          }
+          const drawUrl = Array.isArray(editResult.output) ? editResult.output[0] : editResult.output
+          if (!drawUrl) {
+            throw new Error('prediction returned no image URL')
+          }
+          const drawResponse = await fetch(drawUrl)
+          if (!drawResponse.ok) {
+            throw new Error(`draw download failed: ${drawResponse.status}`)
+          }
+          drawImg = await decodePng(new Uint8Array(await drawResponse.arrayBuffer()))
+          result = analyseHybrid(baseImg, drawImg)
+        } catch (drawError) {
+          // A failed, timed-out, undecodable or beanie-less draw
+          // consumes one of the retries; it never reaches the pool.
+          console.warn(`[generate-hero-image] Beanie draw ${draw} unusable: ${(drawError as Error).message}`)
+          continue
+        }
+        if (!result || !drawImg) continue
+
+        const m = result.meas
+        const b = beanieMeasurements(baseImg, drawImg, result.strip)
+        console.log(`[generate-hero-image] Beanie draw ${draw} gates: crown=${b.crownHMedianNorm} width=${b.stripWidthNorm} tuft=${b.tuftMaxNorm}/${b.tuftColsOver12} outsideDiff=${m.outsideMaxDiff}`)
+
+        // The composite must be bit-identical to the stage-1 base
+        // outside the feathered strip (true by construction — the
+        // feather kernel is finite — and asserted here on every job).
+        if (m.outsideMaxDiff !== 0) {
+          throw new Error(`RW-176 assertion failed: outside-strip diff ${m.outsideMaxDiff} != 0`)
+        }
+        if (b.crownHMedianNorm !== null && b.crownHMedianNorm > RW176_BEANIE_HARD_CROWN_NORM) {
+          throw new Error(`RW-176 hard reject: beanie crown ${b.crownHMedianNorm} norm over hard limit ${RW176_BEANIE_HARD_CROWN_NORM}`)
+        }
+        const present = b.crownHMedianNorm !== null &&
+          b.crownHMedianNorm >= RW176_BEANIE_MIN_CROWN_NORM &&
+          b.stripWidthNorm >= RW176_BEANIE_MIN_STRIP_WIDTH_NORM
+        if (present && b.crownHMedianNorm !== null &&
+            b.crownHMedianNorm <= RW176_BEANIE_ACCEPT_CROWN_MAX_NORM &&
+            !b.tuftFires) {
+          acceptedPng = await encodePng(result.composite)
+          break
+        }
+        console.warn(`[generate-hero-image] Beanie draw ${draw} rejected by gates (present=${present}, tuftFires=${b.tuftFires})`)
+      }
+
+      if (!acceptedPng) {
+        throw new Error(`RW-176: no Gemini draw passed the beanie gates in ${RW176_MAX_DRAWS} draws`)
       }
       finalBytes = acceptedPng
     }
@@ -737,6 +886,11 @@ export interface HybridMeasurements {
 export interface HybridResult {
   composite: RgbImage;
   meas: HybridMeasurements;
+  // The final per-column strip [top, bot] the composite was built from.
+  // Additive in v38: the ear-warmer gates ignore it; the beanie gates
+  // (crown proportion + hair-tuft guard) consume it via
+  // beanieMeasurements below.
+  strip: Map<number, [number, number]>;
 }
 
 // ---------------------------------------------------------------- PNG codec
@@ -1347,6 +1501,106 @@ export function analyseHybrid(base: RgbImage, gem: RgbImage): HybridResult {
     stripXNorm: [Math.round(xs[0] / S), Math.round(xs[xs.length - 1] / S)],
     seedCentreNorm: Math.round((centre / S) * 10) / 10,
   };
-  return { composite: { width: W, height: H, data: compData }, meas };
+  return { composite: { width: W, height: H, data: compData }, meas, strip };
+}
+
+// ------------------------------------------------- beanie gates (v38)
+//
+// The beanie route reuses the same strip extraction + transplant (the
+// phase-1C validation ran this exact algorithm on beanie draws). Its
+// gates are beanie-specific and were calibrated on (base, draw) pairs —
+// see release-prep/rw176-production-2026-11-17/beanie/
+// beanie_gate_calibration.json:
+//
+//   tuned-prompt draws (6):  crown median 48.8 – 95.7 norm
+//   tall-prompt draws (2):   crown median 108.4 / 131.8 norm (visually
+//                            absurd towers — the reject ground truth)
+//   Sol's flagged render:    beanie:face grounding ratio 1.38x, vs
+//                            0.93x / 1.10x for the tuned hybrids.
+//
+// Accept at or below the accept line (every tuned draw passes); a draw
+// in the retry band is never served — it is retried, and the job fails
+// after RW176_MAX_DRAWS; a draw over the hard line fails the job at
+// once, mirroring the ear-band hard reject.
+export const RW176_BEANIE_ACCEPT_CROWN_MAX_NORM = 100.0;
+export const RW176_BEANIE_HARD_CROWN_NORM = 125.0;
+// Presence: a real beanie over the crown reads far above these floors
+// on both instruments (tuned minima: crown 48.8, width 96.7). A draw
+// under either floor is treated as a garment-missing draw.
+export const RW176_BEANIE_MIN_CROWN_NORM = 25.0;
+export const RW176_BEANIE_MIN_STRIP_WIDTH_NORM = 60.0;
+// Hair-tuft guard: fires when a run of base head content the draw
+// removed stands at least RW176_TUFT_FIRE_NORM tall above the strip's
+// top edge in at least RW176_TUFT_MIN_COLS columns (a column counts at
+// RW176_TUFT_COL_MIN_NORM). Calibration: the phase-1C DAWN artifact
+// reads 24.4 norm / 6 columns (fires); the clean DUSK and FEMALE
+// hybrids read at most 7.8 norm / 0 columns (never fires); a narrow
+// 2-column spike on a tall DUSK draw (20.5 norm) does not fire — the
+// column-count term is what separates a silhouette crescent from an
+// edge artefact.
+export const RW176_TUFT_FIRE_NORM = 15.0;
+export const RW176_TUFT_COL_MIN_NORM = 12.0;
+export const RW176_TUFT_MIN_COLS = 4;
+
+export interface BeanieMeasurements {
+  crownHMedianNorm: number | null;
+  crownHMaxNorm: number | null;
+  stripWidthNorm: number;
+  tuftMaxNorm: number;
+  tuftColsOver12: number;
+  tuftFires: boolean;
+}
+
+// Beanie measurements from a completed hybrid analysis: crown height
+// over the central third of strip columns (the phase-1C instrument),
+// strip width, and the hair-tuft scan. The tuft scan walks upward from
+// just above the strip's top edge (skipping the ~9px feather/edge zone)
+// and measures the longest run of pixels where the base still holds
+// content the draw removed — mean-abs channel diff > 25 with base
+// luminance < 170, gap tolerance 2px, scan depth 80 norm. That is the
+// DAWN signature exactly: base hair left standing above the
+// transplanted beanie because the draw's beanie sat inside the base's
+// hair silhouette.
+export function beanieMeasurements(base: RgbImage, gem: RgbImage,
+                                   strip: Map<number, [number, number]>): BeanieMeasurements {
+  const W = base.width, H = base.height;
+  const S = H / 1000;
+  const xs = [...strip.keys()].sort((a, b) => a - b);
+  const heights = xs.map((x) => (strip.get(x)![1] - strip.get(x)![0] + 1) / S);
+  const n = heights.length;
+  const mid = heights.slice(Math.floor(n / 3), Math.floor((2 * n) / 3));
+  let tuftMax = 0;
+  let tuftCols = 0;
+  for (const x of xs) {
+    const top = strip.get(x)![0];
+    const yMin = Math.max(0, top - Math.trunc(80 * S));
+    let best = 0, run = 0, gap = 0;
+    for (let y = top - 9; y >= yMin; y--) {
+      const i = (y * W + x) * 3;
+      const d = (Math.abs(gem.data[i] - base.data[i]) +
+                 Math.abs(gem.data[i + 1] - base.data[i + 1]) +
+                 Math.abs(gem.data[i + 2] - base.data[i + 2])) / 3;
+      const lumB = 0.299 * base.data[i] + 0.587 * base.data[i + 1] + 0.114 * base.data[i + 2];
+      if (d > 25 && lumB < 170) {
+        run++; gap = 0;
+        if (run > best) best = run;
+      } else {
+        gap++;
+        if (gap > 2) break;
+      }
+    }
+    const v = best / S;
+    if (v > tuftMax) tuftMax = v;
+    if (v >= RW176_TUFT_COL_MIN_NORM) tuftCols++;
+  }
+  const tuftMaxNorm = Math.round(tuftMax * 10) / 10;
+  return {
+    crownHMedianNorm: mid.length ? Math.round(median(mid) * 10) / 10 : null,
+    crownHMaxNorm: mid.length ? Math.round(Math.max(...mid) * 10) / 10 : null,
+    stripWidthNorm: Math.round(((xs[xs.length - 1] - xs[0]) / S) * 10) / 10,
+    tuftMaxNorm,
+    tuftColsOver12: tuftCols,
+    tuftFires: tuftMaxNorm >= RW176_TUFT_FIRE_NORM && tuftCols >= RW176_TUFT_MIN_COLS,
+  };
 }
 // === RW176_HYBRID_CORE_END ===
