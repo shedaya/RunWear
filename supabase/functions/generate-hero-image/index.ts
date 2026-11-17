@@ -87,22 +87,47 @@ function ensureEarWarmerClause(prompt: string): string {
   return inlined + EAR_WARMER_CLAUSE
 }
 
-// Two-stage ear-warmer route (RW-176 method change, 2026-11-16).
-// Text-to-image alone could not serve this garment: across the RW-176
-// validation draws flux-schnell omitted the ear warmer in 5 of 6 (and
-// placed it above the ears in the sixth, pre-hardening). The method is
-// therefore changed for ear-warmer jobs only: stage 1 generates the
-// runner WITHOUT the head item (the garment is stripped from the
-// prompt), stage 2 adds the ear warmer with a flux-kontext-pro edit,
-// which places it reliably — 6 of 6 validation edits rendered the band
-// worn low, covering both ears, with the rest of the image unchanged
-// (record: release-prep/rw176-method2-2026-11-16/REPORT.md). If the edit
-// stage fails the job fails with it: serving the stage-1 image would
-// silently serve an outfit missing a prescribed garment.
-const EAR_WARMER_EDIT_PROMPT =
-  'Add a wide fleece ear-warmer band worn low across the lower forehead, ' +
-  'covering both ears completely. Keep the rest of the image unchanged: ' +
-  'same runner, same face, same outfit, same pose, same background, same lighting.'
+// Two-stage ear-warmer route (RW-176). Text-to-image alone could not
+// serve this garment: across the RW-176 validation draws flux-schnell
+// omitted the ear warmer in 5 of 6 (and placed it above the ears in the
+// sixth, pre-hardening). Stage 1 therefore generates the runner WITHOUT
+// the head item (the garment is stripped from the prompt).
+//
+// Stage 2 is the HYBRID (v37, 2026-11-17; Sol accepted the method
+// 2026-11-17 after the hybrid lane proved it on all three validation
+// bases — record: release-prep/rw176-hybrid-2026-11-17/REPORT.md,
+// production record: release-prep/rw176-production-2026-11-17/REPORT.md):
+// Gemini 3 Pro Image (google/nano-banana-pro) edits the band onto the
+// stage-1 base with the research lane's tuned prompt, then ONLY the
+// band strip is transplanted onto the original base with the
+// deterministic extractor in the RW176_HYBRID_CORE section below —
+// everything outside the strip is bit-identical to the stage-1 image,
+// so the runner's face, hair and body are never repainted. (The v36
+// Kontext edit route was rejected by Sol on sight: it rendered a thick
+// plush band, and on Kontext-class routes band height and ear coverage
+// are coupled — a shorter band always lifts off the ears.)
+//
+// Every draw is gated BEFORE transplant (see RW176_* constants in the
+// core): band front height at pixel level and an ear-coverage dip
+// statistic. A draw over the hard height limit fails the job at once;
+// a draw in the retry band or short on coverage is retried up to
+// RW176_MAX_DRAWS draws total; if no draw passes, the job FAILS — a
+// bad band, a missing garment, or the unedited base is never served.
+// allow_fallback_model is pinned false: at capacity Replicate would
+// otherwise silently substitute Seedream, whose band renders failed
+// every RW-176 validation (0 of 6).
+const EAR_WARMER_GEMINI_PROMPT =
+  'Add a slim black microfiber running ear band to the runner in this photo. ' +
+  'The band is a NARROW STRIP: at the front it is only about 1 inch (2.5 cm) ' +
+  'tall - roughly one third of the forehead\'s height - with its top edge ' +
+  'exactly at the hairline, so most of the forehead and all of the hair ' +
+  'above it stay bare and visible. The strip wraps around the head and on ' +
+  'each side dips just low enough to cover the ear, ending AT the earlobe: ' +
+  'the fabric must not hang below the earlobes and must not reach the jaw. ' +
+  'Smooth matte black microfiber, no pile, no fuzz, no logo, flat and snug ' +
+  'against the head and hair. Photorealistic. Change nothing else: same ' +
+  'person, same face, same hair, same outfit, same pose, same background, ' +
+  'same lighting.'
 
 // Remove the ear warmer from a hardened prompt for the stage-1 base
 // generation: drop the placement clause and the inline descriptor, then
@@ -450,44 +475,103 @@ async function processJob(job: Record<string, unknown> & { id: unknown, combinat
       throw new Error('No image URL in output')
     }
 
+    // Final image bytes for ear-warmer jobs come from the hybrid
+    // composite, not from a download (see the stage-2 block below).
+    let finalBytes: Uint8Array | null = null
+
     if (isEarWarmerJob) {
-      // Stage 2: add the ear warmer with a Kontext edit of the stage-1
-      // image. A failed edit fails the job (see the route note above) —
-      // the garment-missing base is never what gets stored or served.
-      const edit = await createModelPrediction('black-forest-labs/flux-kontext-pro', {
-        prompt: EAR_WARMER_EDIT_PROMPT,
-        input_image: imageUrl,
-        aspect_ratio: 'match_input_image',
-        output_format: 'png'
-      })
-      console.log(`[generate-hero-image] Ear-warmer edit created: ${edit.id}`)
+      // Stage 2 (hybrid): Gemini draws the band on the stage-1 base,
+      // the gates judge the draw, and only the band strip is
+      // transplanted onto the original base. Any failure after the
+      // retries fails the job — the garment-missing base is never
+      // what gets stored or served.
+      const baseResponse = await fetch(imageUrl)
+      if (!baseResponse.ok) {
+        throw new Error(`Failed to download stage-1 base: ${baseResponse.status}`)
+      }
+      const baseImg = await decodePng(new Uint8Array(await baseResponse.arrayBuffer()))
 
-      await supabase
-        .from('generation_jobs')
-        .update({ replicate_id: edit.id })
-        .eq('id', job.id)
+      let acceptedPng: Uint8Array | null = null
+      for (let draw = 1; draw <= RW176_MAX_DRAWS; draw++) {
+        let result: HybridResult | null = null
+        try {
+          const edit = await createModelPrediction('google/nano-banana-pro', {
+            prompt: EAR_WARMER_GEMINI_PROMPT,
+            image_input: [imageUrl],
+            aspect_ratio: 'match_input_image',
+            resolution: '1K',
+            output_format: 'png',
+            allow_fallback_model: false
+          })
+          console.log(`[generate-hero-image] Ear-warmer Gemini draw ${draw} created: ${edit.id}`)
 
-      const editResult = await pollForCompletion(edit.id, 120000)
+          await supabase
+            .from('generation_jobs')
+            .update({ replicate_id: edit.id })
+            .eq('id', job.id)
 
-      if (editResult.status !== 'succeeded') {
-        throw new Error(`Ear-warmer edit failed: ${editResult.error || editResult.status}`)
+          const editResult = await pollForCompletion(edit.id, 240000)
+          if (editResult.status !== 'succeeded') {
+            throw new Error(`prediction ${editResult.error || editResult.status}`)
+          }
+          const drawUrl = Array.isArray(editResult.output) ? editResult.output[0] : editResult.output
+          if (!drawUrl) {
+            throw new Error('prediction returned no image URL')
+          }
+          const drawResponse = await fetch(drawUrl)
+          if (!drawResponse.ok) {
+            throw new Error(`draw download failed: ${drawResponse.status}`)
+          }
+          const drawImg = await decodePng(new Uint8Array(await drawResponse.arrayBuffer()))
+          result = analyseHybrid(baseImg, drawImg)
+        } catch (drawError) {
+          // A failed, timed-out, undecodable or band-less draw consumes
+          // one of the retries; it never reaches the pool.
+          console.warn(`[generate-hero-image] Ear-warmer draw ${draw} unusable: ${(drawError as Error).message}`)
+          continue
+        }
+        if (!result) continue
+
+        const m = result.meas
+        console.log(`[generate-hero-image] Ear-warmer draw ${draw} gates: front=${m.frontHNorm} dipP90=${m.dipP90Norm} outsideDiff=${m.outsideMaxDiff} strip=${m.stripXNorm}`)
+
+        // The composite must be bit-identical to the stage-1 base
+        // outside the feathered strip (true by construction — the
+        // feather kernel is finite — and asserted here on every job).
+        if (m.outsideMaxDiff !== 0) {
+          throw new Error(`RW-176 assertion failed: outside-strip diff ${m.outsideMaxDiff} != 0`)
+        }
+        if (m.frontHNorm !== null && m.frontHNorm > RW176_HARD_FRONT_NORM) {
+          throw new Error(`RW-176 hard reject: band front ${m.frontHNorm} norm over hard limit ${RW176_HARD_FRONT_NORM}`)
+        }
+        if (m.frontHNorm !== null && m.frontHNorm <= RW176_ACCEPT_FRONT_MAX_NORM &&
+            m.dipP90Norm !== null && m.dipP90Norm >= RW176_MIN_DIP_P90_NORM) {
+          acceptedPng = await encodePng(result.composite)
+          break
+        }
+        console.warn(`[generate-hero-image] Ear-warmer draw ${draw} in retry band or short on coverage`)
       }
 
-      const editedUrl = Array.isArray(editResult.output) ? editResult.output[0] : editResult.output
-      if (!editedUrl) {
-        throw new Error('Ear-warmer edit returned no image URL')
+      if (!acceptedPng) {
+        throw new Error(`RW-176: no Gemini draw passed the band gates in ${RW176_MAX_DRAWS} draws`)
       }
-      imageUrl = editedUrl
+      finalBytes = acceptedPng
     }
 
-    console.log(`[generate-hero-image] Downloading from: ${imageUrl}`)
+    let imageBlob: Blob
+    if (finalBytes) {
+      console.log('[generate-hero-image] Storing RW-176 hybrid composite')
+      imageBlob = new Blob([finalBytes as BlobPart], { type: 'image/png' })
+    } else {
+      console.log(`[generate-hero-image] Downloading from: ${imageUrl}`)
 
-    // Download the image
-    const imageResponse = await fetch(imageUrl)
-    if (!imageResponse.ok) {
-      throw new Error(`Failed to download: ${imageResponse.status}`)
+      // Download the image
+      const imageResponse = await fetch(imageUrl)
+      if (!imageResponse.ok) {
+        throw new Error(`Failed to download: ${imageResponse.status}`)
+      }
+      imageBlob = await imageResponse.blob()
     }
-    const imageBlob = await imageResponse.blob()
 
     // Upload to Supabase Storage
     const storagePath = `${job.combination_id}/${job.combination_id}.png`
@@ -614,3 +698,655 @@ async function pollForCompletion(predictionId: string, maxWaitMs = 60000) {
 
   throw new Error('Prediction timed out')
 }
+
+// === RW176_HYBRID_CORE_BEGIN ===
+// RW-176 hybrid core: deterministic ear-band strip extraction + composite.
+// Ported 1:1 from the validated Python reference implementation
+// (release-prep/rw176-production-2026-11-17/scripts/proto_auto.py, itself a
+// port of the hybrid lane's composite2/composite3). Pure per-pixel math +
+// connected components; no external dependencies. PNG decode/encode is a
+// minimal hand-rolled codec (8-bit, non-interlaced; colour types 0/2/3/4/6)
+// using the platform Deflate streams.
+//
+// The gate thresholds below are the production calibration of the research
+// lane's ratio gates (accept <= 0.65x, hard-reject > 0.85x of the look-2
+// reference) on THIS instrument; see the production REPORT for the
+// calibration table and the known FEMALE template limitation.
+
+export const RW176_ACCEPT_FRONT_MAX_NORM = 27.0;
+export const RW176_HARD_FRONT_NORM = 34.0;
+export const RW176_MIN_DIP_P90_NORM = 22.0;
+export const RW176_MAX_DRAWS = 3;
+
+export interface RgbImage {
+  width: number;
+  height: number;
+  data: Uint8Array; // RGB, 3 bytes per pixel, row-major
+}
+
+export interface HybridMeasurements {
+  frontHNorm: number | null;
+  frontBotNorm: number;
+  dipP90Norm: number | null;
+  dipMaxNorm: number;
+  outsideMaxDiff: number;
+  stripXNorm: [number, number];
+  seedCentreNorm: number;
+}
+
+export interface HybridResult {
+  composite: RgbImage;
+  meas: HybridMeasurements;
+}
+
+// ---------------------------------------------------------------- PNG codec
+
+const CRC_TABLE = (() => {
+  const t = new Int32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    t[n] = c;
+  }
+  return t;
+})();
+
+function crc32(bytes: Uint8Array): number {
+  let c = 0xffffffff;
+  for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+async function zlibInflate(data: Uint8Array): Promise<Uint8Array> {
+  const stream = new Blob([data as BlobPart]).stream()
+    .pipeThrough(new DecompressionStream("deflate"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+async function zlibDeflate(data: Uint8Array): Promise<Uint8Array> {
+  const stream = new Blob([data as BlobPart]).stream()
+    .pipeThrough(new CompressionStream("deflate"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+export async function decodePng(bytes: Uint8Array): Promise<RgbImage> {
+  if (bytes.length < 8 || bytes[0] !== 0x89 || bytes[1] !== 0x50) {
+    throw new Error("RW176: not a PNG");
+  }
+  let pos = 8;
+  let width = 0, height = 0, bitDepth = 0, colorType = 0, interlace = 0;
+  let palette: Uint8Array | null = null;
+  const idat: Uint8Array[] = [];
+  while (pos + 8 <= bytes.length) {
+    const len = ((bytes[pos] << 24) | (bytes[pos + 1] << 16) | (bytes[pos + 2] << 8) | bytes[pos + 3]) >>> 0;
+    const type = String.fromCharCode(bytes[pos + 4], bytes[pos + 5], bytes[pos + 6], bytes[pos + 7]);
+    const chunk = bytes.subarray(pos + 8, pos + 8 + len);
+    if (type === "IHDR") {
+      width = ((chunk[0] << 24) | (chunk[1] << 16) | (chunk[2] << 8) | chunk[3]) >>> 0;
+      height = ((chunk[4] << 24) | (chunk[5] << 16) | (chunk[6] << 8) | chunk[7]) >>> 0;
+      bitDepth = chunk[8]; colorType = chunk[9]; interlace = chunk[12];
+    } else if (type === "PLTE") {
+      palette = chunk.slice();
+    } else if (type === "IDAT") {
+      idat.push(chunk.slice());
+    } else if (type === "IEND") {
+      break;
+    }
+    pos += 12 + len;
+  }
+  if (!width || bitDepth !== 8 || interlace !== 0 ||
+      ![0, 2, 3, 4, 6].includes(colorType)) {
+    throw new Error(`RW176: unsupported PNG (bitDepth=${bitDepth} colorType=${colorType} interlace=${interlace})`);
+  }
+  const bpp = colorType === 2 ? 3 : colorType === 6 ? 4 : colorType === 4 ? 2 : 1;
+  const raw = await zlibInflate(concatBytes(idat));
+  const stride = width * bpp;
+  const px = new Uint8Array(height * stride);
+  let rp = 0;
+  for (let y = 0; y < height; y++) {
+    const filter = raw[rp++];
+    const rowOff = y * stride;
+    const upOff = rowOff - stride;
+    for (let i = 0; i < stride; i++) {
+      const v = raw[rp++];
+      const a = i >= bpp ? px[rowOff + i - bpp] : 0;
+      const b = y > 0 ? px[upOff + i] : 0;
+      const c = y > 0 && i >= bpp ? px[upOff + i - bpp] : 0;
+      let out: number;
+      switch (filter) {
+        case 0: out = v; break;
+        case 1: out = v + a; break;
+        case 2: out = v + b; break;
+        case 3: out = v + ((a + b) >> 1); break;
+        case 4: {
+          const p = a + b - c;
+          const pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
+          out = v + (pa <= pb && pa <= pc ? a : pb <= pc ? b : c);
+          break;
+        }
+        default: throw new Error(`RW176: bad PNG filter ${filter}`);
+      }
+      px[rowOff + i] = out & 0xff;
+    }
+  }
+  const rgb = new Uint8Array(width * height * 3);
+  for (let i = 0, n = width * height; i < n; i++) {
+    const s = i * bpp, d = i * 3;
+    if (colorType === 2 || colorType === 6) {
+      rgb[d] = px[s]; rgb[d + 1] = px[s + 1]; rgb[d + 2] = px[s + 2];
+    } else if (colorType === 0 || colorType === 4) {
+      rgb[d] = rgb[d + 1] = rgb[d + 2] = px[s];
+    } else { // palette
+      const p = px[s] * 3;
+      if (!palette || p + 2 >= palette.length) throw new Error("RW176: bad palette index");
+      rgb[d] = palette[p]; rgb[d + 1] = palette[p + 1]; rgb[d + 2] = palette[p + 2];
+    }
+  }
+  return { width, height, data: rgb };
+}
+
+function concatBytes(parts: Uint8Array[]): Uint8Array {
+  let total = 0;
+  for (const p of parts) total += p.length;
+  const out = new Uint8Array(total);
+  let o = 0;
+  for (const p of parts) { out.set(p, o); o += p.length; }
+  return out;
+}
+
+function pngChunk(type: string, data: Uint8Array): Uint8Array {
+  const out = new Uint8Array(12 + data.length);
+  const dv = new DataView(out.buffer);
+  dv.setUint32(0, data.length);
+  for (let i = 0; i < 4; i++) out[4 + i] = type.charCodeAt(i);
+  out.set(data, 8);
+  dv.setUint32(8 + data.length, crc32(out.subarray(4, 8 + data.length)));
+  return out;
+}
+
+export async function encodePng(img: RgbImage): Promise<Uint8Array> {
+  const { width, height, data } = img;
+  const stride = width * 3;
+  const raw = new Uint8Array(height * (stride + 1));
+  for (let y = 0; y < height; y++) {
+    const rowOff = y * stride, rawOff = y * (stride + 1);
+    // Pick the filter (None/Sub/Up/Avg/Paeth) minimising sum |signed byte|.
+    let bestFilter = 0, bestScore = Infinity, bestRow: Uint8Array | null = null;
+    for (let f = 0; f <= 4; f++) {
+      const cand = new Uint8Array(stride);
+      let score = 0;
+      for (let i = 0; i < stride; i++) {
+        const v = data[rowOff + i];
+        const a = i >= 3 ? data[rowOff + i - 3] : 0;
+        const b = y > 0 ? data[rowOff - stride + i] : 0;
+        const c = y > 0 && i >= 3 ? data[rowOff - stride + i - 3] : 0;
+        let pred = 0;
+        if (f === 1) pred = a;
+        else if (f === 2) pred = b;
+        else if (f === 3) pred = (a + b) >> 1;
+        else if (f === 4) {
+          const p = a + b - c;
+          const pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
+          pred = pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
+        }
+        const d = (v - pred) & 0xff;
+        cand[i] = d;
+        score += d < 128 ? d : 256 - d;
+      }
+      if (score < bestScore) { bestScore = score; bestFilter = f; bestRow = cand; }
+    }
+    raw[rawOff] = bestFilter;
+    raw.set(bestRow!, rawOff + 1);
+  }
+  const idat = await zlibDeflate(raw);
+  const ihdr = new Uint8Array(13);
+  const dv = new DataView(ihdr.buffer);
+  dv.setUint32(0, width); dv.setUint32(4, height);
+  ihdr[8] = 8; ihdr[9] = 2; // 8-bit RGB
+  return concatBytes([
+    new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk("IHDR", ihdr),
+    pngChunk("IDAT", idat),
+    pngChunk("IEND", new Uint8Array(0)),
+  ]);
+}
+
+// ------------------------------------------------------- mask / array utils
+// Masks are Uint8Array of 0/1, row-major, length W*H.
+
+function dilate(mask: Uint8Array, W: number, H: number, offsets: Array<[number, number]>): Uint8Array {
+  const out = new Uint8Array(W * H);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      if (!mask[y * W + x]) continue;
+      for (const [dy, dx] of offsets) {
+        const yy = y + dy, xx = x + dx;
+        if (yy >= 0 && yy < H && xx >= 0 && xx < W) out[yy * W + xx] = 1;
+      }
+    }
+  }
+  return out;
+}
+
+function erode(mask: Uint8Array, W: number, H: number, offsets: Array<[number, number]>): Uint8Array {
+  const out = new Uint8Array(W * H);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      let ok = 1;
+      for (const [dy, dx] of offsets) {
+        const yy = y + dy, xx = x + dx;
+        if (yy < 0 || yy >= H || xx < 0 || xx >= W || !mask[yy * W + xx]) { ok = 0; break; }
+      }
+      out[y * W + x] = ok;
+    }
+  }
+  return out;
+}
+
+const OFF_3X3: Array<[number, number]> = [
+  [-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 0], [0, 1], [1, -1], [1, 0], [1, 1],
+];
+function offVert(n: number): Array<[number, number]> {
+  const o: Array<[number, number]> = [];
+  const r = (n - 1) / 2;
+  for (let dy = -r; dy <= r; dy++) o.push([dy, 0]);
+  return o;
+}
+function closing(mask: Uint8Array, W: number, H: number, offsets: Array<[number, number]>): Uint8Array {
+  return erode(dilate(mask, W, H, offsets), W, H, offsets);
+}
+
+// 8-connected component labelling (two-pass union-find). Returns labels
+// (Int32Array, 0 = background, 1..n components) and the component count.
+function label8(mask: Uint8Array, W: number, H: number): { lab: Int32Array; n: number } {
+  const lab = new Int32Array(W * H);
+  const parent: number[] = [0];
+  const find = (a: number): number => {
+    let r = a;
+    while (parent[r] !== r) r = parent[r];
+    while (parent[a] !== r) { const nxt = parent[a]; parent[a] = r; a = nxt; }
+    return r;
+  };
+  let next = 1;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const idx = y * W + x;
+      if (!mask[idx]) continue;
+      const neigh: number[] = [];
+      if (x > 0 && y > 0 && lab[idx - W - 1]) neigh.push(lab[idx - W - 1]);
+      if (y > 0 && lab[idx - W]) neigh.push(lab[idx - W]);
+      if (x < W - 1 && y > 0 && lab[idx - W + 1]) neigh.push(lab[idx - W + 1]);
+      if (x > 0 && lab[idx - 1]) neigh.push(lab[idx - 1]);
+      if (neigh.length === 0) {
+        lab[idx] = next;
+        parent.push(next);
+        next++;
+      } else {
+        let m = neigh[0];
+        for (const v of neigh) if (v < m) m = v;
+        lab[idx] = m;
+        for (const v of neigh) {
+          const rv = find(v), rm = find(m);
+          if (rv !== rm) parent[Math.max(rv, rm)] = Math.min(rv, rm);
+        }
+      }
+    }
+  }
+  // Compact labels to 1..n via root mapping.
+  const remap = new Map<number, number>();
+  let n = 0;
+  for (let i = 0; i < lab.length; i++) {
+    if (!lab[i]) continue;
+    const r = find(lab[i]);
+    let c = remap.get(r);
+    if (c === undefined) { c = ++n; remap.set(r, c); }
+    lab[i] = c;
+  }
+  return { lab, n };
+}
+
+function runsOfColumn(mask: Uint8Array, W: number, H: number, x: number,
+                       y0 = 0, y1 = -1): Array<[number, number]> {
+  if (y1 < 0) y1 = H - 1;
+  const out: Array<[number, number]> = [];
+  let i = y0;
+  while (i <= y1) {
+    if (mask[i * W + x]) {
+      let j = i;
+      while (j + 1 <= y1 && mask[(j + 1) * W + x]) j++;
+      out.push([i, j]);
+      i = j + 1;
+    } else i++;
+  }
+  return out;
+}
+
+function interp(x: number, xs: ArrayLike<number>, ys: ArrayLike<number>): number {
+  const n = xs.length;
+  if (x <= xs[0]) return ys[0];
+  if (x >= xs[n - 1]) return ys[n - 1];
+  let lo = 0, hi = n - 1;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (xs[mid] <= x) lo = mid; else hi = mid;
+  }
+  const t = (x - xs[lo]) / (xs[hi] - xs[lo]);
+  return ys[lo] + t * (ys[hi] - ys[lo]);
+}
+
+function median(vals: number[]): number {
+  const s = [...vals].sort((a, b) => a - b);
+  const m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+function percentile(vals: number[], q: number): number {
+  const s = [...vals].sort((a, b) => a - b);
+  const pos = (q / 100) * (s.length - 1);
+  const lo = Math.floor(pos), hi = Math.ceil(pos);
+  return lo === hi ? s[lo] : s[lo] + (pos - lo) * (s[hi] - s[lo]);
+}
+
+// scipy median_filter(size=5, mode='nearest') then gaussian_filter1d
+// (sigma=1, mode='reflect', truncate=4) — the prototype's curve smoothing.
+function smoothCurve(vals: number[]): number[] {
+  const n = vals.length;
+  const med = new Array<number>(n);
+  for (let i = 0; i < n; i++) {
+    const w: number[] = [];
+    for (let k = -2; k <= 2; k++) w.push(vals[Math.min(n - 1, Math.max(0, i + k))]);
+    med[i] = median(w);
+  }
+  const radius = 4;
+  const kernel: number[] = [];
+  let ksum = 0;
+  for (let k = -radius; k <= radius; k++) {
+    const v = Math.exp(-(k * k) / 2);
+    kernel.push(v); ksum += v;
+  }
+  const out = new Array<number>(n);
+  for (let i = 0; i < n; i++) {
+    let acc = 0;
+    for (let k = -radius; k <= radius; k++) {
+      let j = i + k;
+      // reflect (half-sample symmetric), scipy 'reflect'
+      while (j < 0 || j >= n) j = j < 0 ? -j - 1 : 2 * n - 1 - j;
+      acc += med[j] * kernel[k + radius];
+    }
+    out[i] = acc / ksum;
+  }
+  return out;
+}
+
+function fillSmooth(strip: Map<number, [number, number]>): Map<number, [number, number]> {
+  const xs = [...strip.keys()].sort((a, b) => a - b);
+  const tops = xs.map((x) => strip.get(x)![0]);
+  const bots = xs.map((x) => strip.get(x)![1]);
+  const filled = new Map<number, [number, number]>();
+  const allX: number[] = [];
+  for (let x = xs[0]; x <= xs[xs.length - 1]; x++) {
+    filled.set(x, [Math.round(interp(x, xs, tops)), Math.round(interp(x, xs, bots))]);
+    allX.push(x);
+  }
+  const smT = smoothCurve(allX.map((x) => filled.get(x)![0]));
+  const smB = smoothCurve(allX.map((x) => filled.get(x)![1]));
+  allX.forEach((x, i) => filled.set(x, [Math.round(smT[i]), Math.round(smB[i])]));
+  return filled;
+}
+
+// ------------------------------------------------------------- the analysis
+
+function strictFab(img: RgbImage): { fab: Uint8Array; lum: Float32Array } {
+  const { width: W, height: H, data } = img;
+  const fab = new Uint8Array(W * H);
+  const lum = new Float32Array(W * H);
+  for (let i = 0, n = W * H; i < n; i++) {
+    const r = data[i * 3], g = data[i * 3 + 1], b = data[i * 3 + 2];
+    const l = 0.299 * r + 0.587 * g + 0.114 * b;
+    lum[i] = l;
+    fab[i] = l < 72 && b - r >= -2 ? 1 : 0;
+  }
+  return { fab, lum };
+}
+
+// Port of proto_auto.analyse(): derive the band strip from (base, draw),
+// feather it, composite the draw's strip onto the base, and measure the
+// band (front height + flap dip) on the draw. Throws when no band can be
+// found — the caller treats that as a failed draw.
+export function analyseHybrid(base: RgbImage, gem: RgbImage): HybridResult {
+  if (base.width !== gem.width || base.height !== gem.height) {
+    throw new Error("RW176: base/draw size mismatch");
+  }
+  const W = base.width, H = base.height;
+  const S = H / 1000;
+  const { fab: fabG, lum: lumG } = strictFab(gem);
+  const { fab: fabB } = strictFab(base);
+  const cand = new Uint8Array(W * H);
+  const loose = new Uint8Array(W * H);
+  for (let i = 0, n = W * H; i < n; i++) {
+    const d = (Math.abs(gem.data[i * 3] - base.data[i * 3]) +
+               Math.abs(gem.data[i * 3 + 1] - base.data[i * 3 + 1]) +
+               Math.abs(gem.data[i * 3 + 2] - base.data[i * 3 + 2])) / 3;
+    if (d > 20 && lumG[i] < 140) cand[i] = 1;
+    if (d > 10 && lumG[i] < 160) loose[i] = 1;
+  }
+
+  // Seed: changed fabric in the head rows, largest 8-connected component.
+  const fabBDil = dilate(fabB, W, H, OFF_3X3);
+  const changed = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i++) changed[i] = cand[i] && fabG[i] && !fabBDil[i] ? 1 : 0;
+  const seedMask = closing(changed, W, H, OFF_3X3);
+  const headRows = Math.floor(0.45 * H);
+  for (let y = headRows; y < H; y++) seedMask.fill(0, y * W, (y + 1) * W);
+  const { lab, n } = label8(seedMask, W, H);
+  if (n === 0) throw new Error("RW176: no band seed (no changed fabric in head rows)");
+  const sizes = new Float64Array(n + 1);
+  for (let i = 0; i < W * H; i++) if (lab[i]) sizes[lab[i]]++;
+  let seedId = 1;
+  for (let i = 2; i <= n; i++) if (sizes[i] > sizes[seedId]) seedId = i;
+  if (sizes[seedId] < 120) throw new Error(`RW176: band seed too small (${sizes[seedId]}px)`);
+  let sxMin = W, sxMax = -1, syMin = H, syMax = -1;
+  const seedYs: number[] = [];
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      if (lab[y * W + x] === seedId) {
+        if (x < sxMin) sxMin = x;
+        if (x > sxMax) sxMax = x;
+        if (y < syMin) syMin = y;
+        if (y > syMax) syMax = y;
+        seedYs.push(y);
+      }
+    }
+  }
+  const centre = median(seedYs);
+  const zx0 = Math.max(0, Math.trunc(sxMin - 60 * S));
+  const zx1 = Math.min(W - 1, Math.trunc(sxMax + 60 * S));
+  const zy0 = Math.max(0, Math.trunc(syMin - 30 * S));
+  const zy1 = Math.min(H - 1, Math.trunc(syMax + 70 * S));
+
+  const fabzFull = new Uint8Array(W * H);
+  for (let y = zy0; y <= zy1; y++) {
+    for (let x = zx0; x <= zx1; x++) fabzFull[y * W + x] = fabG[y * W + x];
+  }
+  const fabz = closing(fabzFull, W, H, offVert(5));
+
+  // v3 strip: per-column core/candp run picking around the seed centre.
+  const core = new Map<number, [number, number]>();
+  const candp = new Map<number, [number, number]>();
+  for (let x = zx0; x <= zx1; x++) {
+    const runs = runsOfColumn(fabz, W, H, x).filter(([a, b]) => b - a + 1 >= 8);
+    if (runs.length) {
+      let best = runs[0];
+      for (const r of runs) {
+        if (Math.abs((r[0] + r[1]) / 2 - centre) < Math.abs((best[0] + best[1]) / 2 - centre)) best = r;
+      }
+      core.set(x, [best[0], best[1]]);
+    }
+    const cruns = runsOfColumn(cand, W, H, x, zy0, zy1).filter(([a, b]) => b - a + 1 >= 6);
+    if (cruns.length) {
+      let best = cruns[0];
+      for (const r of cruns) {
+        if (Math.abs((r[0] + r[1]) / 2 - centre) < Math.abs((best[0] + best[1]) / 2 - centre)) best = r;
+      }
+      let a2 = best[0];
+      while (a2 - 1 >= 0 && best[0] - a2 < 10 && loose[(a2 - 1) * W + x]) a2--;
+      let b2 = best[1];
+      while (b2 + 1 < H && b2 - best[1] < 10 && loose[(b2 + 1) * W + x]) b2++;
+      candp.set(x, [a2, b2]);
+    }
+  }
+  if (core.size === 0 && candp.size === 0) throw new Error("RW176: v3 found no core/cand columns");
+  const xsRef = [...new Set([...core.keys(), ...candp.keys()])].sort((a, b) => a - b);
+  const topRef = xsRef.map((x) => Math.min((core.get(x) ?? candp.get(x)!)[0], (candp.get(x) ?? core.get(x)!)[0]));
+  const botRef = xsRef.map((x) => Math.max((core.get(x) ?? candp.get(x)!)[1], (candp.get(x) ?? core.get(x)!)[1]));
+  const strip3Raw = new Map<number, [number, number]>();
+  for (let x = xsRef[0] - 55; x <= xsRef[xsRef.length - 1] + 55; x++) {
+    if (x < 0 || x >= W) continue;
+    const ti = interp(x, xsRef, topRef);
+    const bi = interp(x, xsRef, botRef);
+    const parts = [core.get(x), candp.get(x)].filter((p) => p !== undefined) as Array<[number, number]>;
+    if (parts.length) {
+      const a = Math.max(Math.min(...parts.map((p) => p[0])), Math.trunc(ti) - 20);
+      const bb = Math.min(Math.max(...parts.map((p) => p[1])), Math.trunc(bi) + 26);
+      if (bb - a + 1 >= 8) strip3Raw.set(x, [a, bb]);
+    }
+  }
+  const strip3 = fillSmooth(strip3Raw);
+
+  // v4 completion: connected component of (fabz | cand) inside a corridor
+  // around the v3 strip.
+  const xs3 = [...strip3.keys()].sort((a, b) => a - b);
+  const top3 = xs3.map((x) => strip3.get(x)![0]);
+  const bot3 = xs3.map((x) => strip3.get(x)![1]);
+  const corr = new Uint8Array(W * H);
+  for (let x = Math.max(0, xs3[0] - 30); x < Math.min(W, xs3[xs3.length - 1] + 31); x++) {
+    const t = Math.trunc(Math.max(0, interp(x, xs3, top3) - 12));
+    const b = Math.trunc(Math.min(H, interp(x, xs3, bot3) + 50));
+    for (let y = t; y <= Math.min(H - 1, b); y++) corr[y * W + x] = 1;
+  }
+  let P: Uint8Array = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i++) P[i] = (fabz[i] || cand[i]) && corr[i] ? 1 : 0;
+  P = closing(P, W, H, OFF_3X3);
+  P = closing(P, W, H, offVert(9));
+  const v3mask = new Uint8Array(W * H);
+  for (const [x, [a, bb]] of strip3) {
+    for (let y = a; y <= bb; y++) v3mask[y * W + x] = 1;
+  }
+  const labP = label8(P, W, H);
+  let strip = strip3;
+  if (labP.n > 0) {
+    const overlap = new Float64Array(labP.n + 1);
+    for (let i = 0; i < W * H; i++) if (v3mask[i] && labP.lab[i]) overlap[labP.lab[i]]++;
+    let compId = 1;
+    for (let i = 2; i <= labP.n; i++) if (overlap[i] > overlap[compId]) compId = i;
+    const filled = new Map<number, [number, number]>();
+    for (let x = 0; x < W; x++) {
+      let mn = -1, mx = -1;
+      for (let y = 0; y < H; y++) {
+        const i = y * W + x;
+        if ((labP.lab[i] === compId || v3mask[i]) && (corr[i] || v3mask[i])) {
+          if (mn < 0) mn = y;
+          mx = y;
+        }
+      }
+      if (mn >= 0 && mx - mn + 1 >= 8) filled.set(x, [mn, mx]);
+    }
+    if (filled.size) strip = fillSmooth(filled);
+  }
+
+  // Alpha (separable Gaussian, sigma 1.7, finite radius ceil(4*sigma) = 7,
+  // so alpha is exactly 0 beyond the feather and the composite there is
+  // bit-identical to the base) + composite.
+  const mask = new Float32Array(W * H);
+  for (const [x, [a, bb]] of strip) {
+    for (let y = a; y <= bb; y++) mask[y * W + x] = 1;
+  }
+  const sigma = 1.7, radius = Math.ceil(4 * sigma);
+  const kernel: number[] = [];
+  let ksum = 0;
+  for (let k = -radius; k <= radius; k++) {
+    const v = Math.exp(-(k * k) / (2 * sigma * sigma));
+    kernel.push(v); ksum += v;
+  }
+  const tmp = new Float32Array(W * H);
+  const alpha = new Float32Array(W * H);
+  const reflect = (j: number, n: number) => {
+    while (j < 0 || j >= n) j = j < 0 ? -j - 1 : 2 * n - 1 - j;
+    return j;
+  };
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      let acc = 0;
+      for (let k = -radius; k <= radius; k++) acc += mask[y * W + reflect(x + k, W)] * kernel[k + radius];
+      tmp[y * W + x] = acc / ksum;
+    }
+  }
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      let acc = 0;
+      for (let k = -radius; k <= radius; k++) acc += tmp[reflect(y + k, H) * W + x] * kernel[k + radius];
+      const a = (acc / ksum) * 1.15;
+      alpha[y * W + x] = a < 0 ? 0 : a > 1 ? 1 : a;
+    }
+  }
+  const compData = new Uint8Array(W * H * 3);
+  let outsideMaxDiff = 0;
+  for (let i = 0, n = W * H; i < n; i++) {
+    const a = alpha[i];
+    for (let c = 0; c < 3; c++) {
+      const v = Math.round(base.data[i * 3 + c] * (1 - a) + gem.data[i * 3 + c] * a);
+      compData[i * 3 + c] = v < 0 ? 0 : v > 255 ? 255 : v;
+    }
+    if (a === 0) {
+      const d = Math.abs(compData[i * 3] - base.data[i * 3]);
+      if (d > outsideMaxDiff) outsideMaxDiff = d;
+    }
+  }
+
+  // Measurements (the prototype's shallow-bottom front rule).
+  const xs = [...strip.keys()].sort((a, b) => a - b);
+  const botsAll = xs.map((x) => strip.get(x)![1]);
+  const shallowCut = percentile(botsAll, 25) + 12 * S;
+  const candCols: Array<[number, number]> = [];
+  for (const x of xs) {
+    const [sa, sb] = strip.get(x)!;
+    const cen = (sa + sb) / 2;
+    const runs = runsOfColumn(fabz, W, H, x).filter(([a, b]) => b - a + 1 >= 8);
+    if (!runs.length) continue;
+    let best = runs[0];
+    for (const r of runs) {
+      if (Math.abs((r[0] + r[1]) / 2 - cen) < Math.abs((best[0] + best[1]) / 2 - cen)) best = r;
+    }
+    const ov = Math.min(best[1], sb) - Math.max(best[0], sa) + 1;
+    if (ov >= 0.5 * (best[1] - best[0] + 1)) candCols.push([x, best[1] - best[0] + 1]);
+  }
+  let frontCols = candCols.filter(([x]) => strip.get(x)![1] <= shallowCut).map(([x]) => x);
+  if (frontCols.length < 5) {
+    const byBot = [...candCols].sort((p, q) => strip.get(p[0])![1] - strip.get(q[0])![1]);
+    frontCols = byBot.slice(0, Math.max(5, Math.floor(byBot.length / 4))).map(([x]) => x);
+  }
+  const hmap = new Map(candCols);
+  let heights = frontCols.map((x) => hmap.get(x)!);
+  let frontH: number | null = null;
+  if (heights.length) {
+    const med = median(heights);
+    heights = heights.filter((h) => h <= 1.5 * med);
+    if (!heights.length) heights = frontCols.map((x) => hmap.get(x)!);
+    frontH = median(heights) / S;
+  }
+  const frontBot = median(frontCols.map((x) => strip.get(x)![1])) / S;
+  const frontSet = new Set(frontCols);
+  const nonfront = xs.filter((x) => !frontSet.has(x)).map((x) => strip.get(x)![1] / S - frontBot);
+  const allDips = xs.map((x) => strip.get(x)![1] / S - frontBot);
+  const meas: HybridMeasurements = {
+    frontHNorm: frontH !== null ? Math.round(frontH * 10) / 10 : null,
+    frontBotNorm: Math.round(frontBot * 10) / 10,
+    dipP90Norm: nonfront.length ? Math.round(percentile(nonfront, 90) * 10) / 10 : null,
+    dipMaxNorm: Math.round(Math.max(...allDips) * 10) / 10,
+    outsideMaxDiff,
+    stripXNorm: [Math.round(xs[0] / S), Math.round(xs[xs.length - 1] / S)],
+    seedCentreNorm: Math.round((centre / S) * 10) / 10,
+  };
+  return { composite: { width: W, height: H, data: compData }, meas };
+}
+// === RW176_HYBRID_CORE_END ===
