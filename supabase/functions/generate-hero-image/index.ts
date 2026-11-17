@@ -925,7 +925,10 @@ async function processJob(job: Record<string, unknown> & { id: unknown, combinat
             throw new Error(`draw download failed: ${drawResponse.status}`)
           }
           const drawImg = await decodePng(new Uint8Array(await drawResponse.arrayBuffer()))
-          result = analyseHybrid(baseImg, drawImg)
+          // nano-banana-pro returns its 2:3 edit at 848x1264, not the
+          // base's 832x1216 — resample onto the base grid before the
+          // gates measure it (v42; see resampleToGrid in the core).
+          result = analyseHybrid(baseImg, resampleToGrid(drawImg, baseImg.width, baseImg.height))
         } catch (drawError) {
           // A failed, timed-out, undecodable or band-less draw consumes
           // one of the retries; it never reaches the pool.
@@ -1007,6 +1010,10 @@ async function processJob(job: Record<string, unknown> & { id: unknown, combinat
             throw new Error(`draw download failed: ${drawResponse.status}`)
           }
           drawImg = await decodePng(new Uint8Array(await drawResponse.arrayBuffer()))
+          // Same resample as the ear-warmer route (v42): the draw is
+          // measured (analyseHybrid + beanieMeasurements) on the
+          // base's grid, never on nano-banana-pro's 848x1264 grid.
+          drawImg = resampleToGrid(drawImg, baseImg.width, baseImg.height)
           result = analyseHybrid(baseImg, drawImg)
         } catch (drawError) {
           // A failed, timed-out, undecodable or beanie-less draw
@@ -1403,6 +1410,54 @@ export async function encodePng(img: RgbImage): Promise<Uint8Array> {
     pngChunk("IDAT", idat),
     pngChunk("IEND", new Uint8Array(0)),
   ]);
+}
+
+// ------------------------------------------------------- draw resampling
+//
+// RW-176 follow-up (2026-11-17, v42): google/nano-banana-pro does NOT
+// return its edit at the input's pixel size. In the square era it
+// returned exactly 1024x1024 for a 1024x1024 input, so base and draw
+// grids coincided and analyseHybrid could compare them pixel for
+// pixel. On the v40 portrait recipe (stage-1 base 832x1216) the same
+// call returns 848x1264, and analyseHybrid threw "base/draw size
+// mismatch" on every draw — every hybrid job burned its 3 draws and
+// failed without a single gate measurement ever running. Neither
+// model's 2:3 output size can be forced to the other's, so the draw
+// is resampled onto the base's grid before any analysis: bilinear
+// interpolation on pixel centres (the standard align_corners=false
+// mapping), which is an exact identity when the grids already match,
+// so the square-era calibration is untouched. All gate measurements
+// then run on the base grid with S = base height / 1000, exactly as
+// calibrated.
+export function resampleToGrid(img: RgbImage, width: number, height: number): RgbImage {
+  if (img.width === width && img.height === height) return img;
+  const out = new Uint8Array(width * height * 3);
+  const xScale = img.width / width;
+  const yScale = img.height / height;
+  for (let y = 0; y < height; y++) {
+    let sy = (y + 0.5) * yScale - 0.5;
+    if (sy < 0) sy = 0;
+    if (sy > img.height - 1) sy = img.height - 1;
+    const y0 = Math.floor(sy);
+    const y1 = Math.min(y0 + 1, img.height - 1);
+    const fy = sy - y0;
+    for (let x = 0; x < width; x++) {
+      let sx = (x + 0.5) * xScale - 0.5;
+      if (sx < 0) sx = 0;
+      if (sx > img.width - 1) sx = img.width - 1;
+      const x0 = Math.floor(sx);
+      const x1 = Math.min(x0 + 1, img.width - 1);
+      const fx = sx - x0;
+      const d = (y * width + x) * 3;
+      const row0 = y0 * img.width, row1 = y1 * img.width;
+      for (let c = 0; c < 3; c++) {
+        const top = img.data[(row0 + x0) * 3 + c] * (1 - fx) + img.data[(row0 + x1) * 3 + c] * fx;
+        const bot = img.data[(row1 + x0) * 3 + c] * (1 - fx) + img.data[(row1 + x1) * 3 + c] * fx;
+        out[d + c] = Math.round(top * (1 - fy) + bot * fy);
+      }
+    }
+  }
+  return { width, height, data: out };
 }
 
 // ------------------------------------------------------- mask / array utils
