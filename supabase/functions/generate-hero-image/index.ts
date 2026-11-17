@@ -37,7 +37,14 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 // remaining capacity — the pre-v39 "concurrent invocations can overshoot
 // by a few" race (61 completions against this 50 cap on 2026-11-17) is
 // closed, and the legacy path checks the same cap.
-const DAILY_GENERATION_CAP = 50
+//
+// TEMPORARY RAISE to 500 (2026-11-17, Sol's directive): the pilot
+// replacement batch (~100 census-FAIL combinations x 2 draws, on top of
+// the ear-warmer refill queue) runs under this allowance today.
+// Programme-temporary — reinstate 50 when the replacement programme
+// ends or if Sol kills it after the pilot evaluation. Do not treat 500
+// as the new standing value.
+const DAILY_GENERATION_CAP = 500
 
 // Batch drain sizing. Each job can take up to ~60s of polling, so the
 // batch must stay small enough to finish inside the edge-function wall
