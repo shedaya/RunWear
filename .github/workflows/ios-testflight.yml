@@ -126,11 +126,21 @@ jobs:
       - name: Build the XCFramework
         run: bash scripts/build-engine-framework.sh
 
+      # Zip handoff: the framework's moko resource bundle is named
+      # "RunWear:engine.bundle" (moko's <rootProject>:<module>
+      # convention, loaded by that exact name at runtime) and
+      # upload-artifact rejects paths containing a colon. See
+      # ios-tests.yml for the full note.
+      - name: Zip the XCFramework for the artifact handoff
+        run: |
+          cd RunWear-iOS/Frameworks
+          zip -qry RunWearEngine.xcframework.zip RunWearEngine.xcframework
+
       - name: Upload the XCFramework
         uses: actions/upload-artifact@v4
         with:
           name: RunWearEngine-xcframework
-          path: RunWear-iOS/Frameworks/RunWearEngine.xcframework
+          path: RunWear-iOS/Frameworks/RunWearEngine.xcframework.zip
           if-no-files-found: error
 
   archive-and-upload:
@@ -159,7 +169,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: RunWearEngine-xcframework
-          path: RunWear-iOS/Frameworks/RunWearEngine.xcframework
+          path: RunWear-iOS/Frameworks
+
+      - name: Unzip the XCFramework
+        run: |
+          cd RunWear-iOS/Frameworks
+          unzip -q RunWearEngine.xcframework.zip
+          rm RunWearEngine.xcframework.zip
 
       - name: Tool versions
         run: |

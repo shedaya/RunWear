@@ -75,11 +75,24 @@ jobs:
           fi
           exit "$code"
 
+      # The framework contains moko's Apple resource bundle, named
+      # "RunWear:engine.bundle" (moko's <rootProject>:<module>
+      # convention; the generated code loads it by that exact name, so
+      # it must not be renamed). upload-artifact rejects file paths
+      # containing a colon, so the XCFramework crosses the job boundary
+      # as a single zip file (first fired on the Kotlin 2.2.21 /
+      # moko 0.27.1 train, 2026-11-25 — the framework build itself had
+      # succeeded; only the artifact upload failed).
+      - name: Zip the XCFramework for the artifact handoff
+        run: |
+          cd RunWear-iOS/Frameworks
+          zip -qry RunWearEngine.xcframework.zip RunWearEngine.xcframework
+
       - name: Upload the XCFramework
         uses: actions/upload-artifact@v4
         with:
           name: RunWearEngine-xcframework
-          path: RunWear-iOS/Frameworks/RunWearEngine.xcframework
+          path: RunWear-iOS/Frameworks/RunWearEngine.xcframework.zip
           if-no-files-found: error
 
   test:
@@ -100,7 +113,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: RunWearEngine-xcframework
-          path: RunWear-iOS/Frameworks/RunWearEngine.xcframework
+          path: RunWear-iOS/Frameworks
+
+      - name: Unzip the XCFramework
+        run: |
+          cd RunWear-iOS/Frameworks
+          unzip -q RunWearEngine.xcframework.zip
+          rm RunWearEngine.xcframework.zip
 
       - name: Tool versions
         run: |
