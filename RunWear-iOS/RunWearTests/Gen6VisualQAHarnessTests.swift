@@ -83,6 +83,54 @@ final class Gen6VisualQAHarnessTests: XCTestCase {
     }
 
     @MainActor
+    func testVQ17MiniBarNarration() throws {
+        let miami = WearIveRunMiniBarView(
+            state: .updated(payload: .place("Miami, FL")),
+            entry: collectionEntry(place: "Miami, FL"),
+            formattedFeelsLike: "82°", cueCount: 0,
+            onOpenCollection: {}, onTrash: {})
+            .background(AppTheme.background)
+        try writeRender(miami, size: CGSize(width: 390, height: 110),
+                        name: "VQ-1.7-ios-minibar-updated-default.png")
+        let longPlace = WearIveRunMiniBarView(
+            state: .updated(payload: .place("Truth or Consequences, New Mexico")),
+            entry: collectionEntry(place: "Truth or Consequences, New Mexico"),
+            formattedFeelsLike: "57°", cueCount: 0,
+            onOpenCollection: {}, onTrash: {})
+            .environment(\.dynamicTypeSize, .accessibility5)
+            .background(AppTheme.background)
+        // RW-138: fitting height (the RW-67 probe method) — the
+        // wrap-and-grow dock at AX5 is taller than the fixed
+        // 150 pt canvas this render used, and a fixed canvas
+        // would clip the very growth the fix exists to show.
+        let probe = ImageRenderer(content: longPlace)
+        probe.scale = 2
+        probe.proposedSize = ProposedViewSize(width: 390, height: nil)
+        let needed = probe.uiImage?.size.height ?? 182
+        try writeRender(longPlace, size: CGSize(width: 390, height: max(needed, 60)),
+                        name: "VQ-2.10-ios-minibar-F-LONGPLACE-max.png")
+    }
+
+    func testVQ17MiniBarNarration_Hosted() throws {
+        let miami = WearIveRunMiniBarView(
+            state: .updated(payload: .place("Miami, FL")),
+            entry: collectionEntry(place: "Miami, FL"),
+            formattedFeelsLike: "82°", cueCount: 0,
+            onOpenCollection: {}, onTrash: {})
+            .background(AppTheme.background)
+        try writeHostedRender(miami, size: CGSize(width: 390, height: 110),
+                              name: "VQ-1.7-ios-minibar-updated-default.png")
+        let longPlace = WearIveRunMiniBarView(
+            state: .updated(payload: .place("Truth or Consequences, New Mexico")),
+            entry: collectionEntry(place: "Truth or Consequences, New Mexico"),
+            formattedFeelsLike: "57°", cueCount: 0,
+            onOpenCollection: {}, onTrash: {})
+            .environment(\.dynamicTypeSize, .accessibility5)
+            .background(AppTheme.background)
+        try writeHostedRender(longPlace, size: CGSize(width: 390, height: 150),
+                              name: "VQ-2.10-ios-minibar-F-LONGPLACE-max.png")
+    }
+
     func testVQ21HeroNumeral_PlanFixtures() throws {
         try renderHeroNumeral(feelsLikeF: 108, type: .large,
                               name: "VQ-2.1-ios-F-HOT108-default.png")
@@ -932,6 +980,49 @@ extension Gen6VisualQAHarnessTests {
     // "Get unlimited" in the dynamic pine (hosted, light mode —
     // the mode Sol circled).
     @MainActor
+    func testFixWave_MinibarMini_Hosted() throws {
+        let entry = collectionEntry(place: "New York, NY")
+        let mini = WearIveRunMiniBarView(
+            state: .updated(payload: .place("New York, NY")),
+            entry: entry,
+            formattedFeelsLike: "57°", cueCount: 0,
+            onOpenCollection: {}, onTrash: {})
+            .background(AppTheme.background)
+        try writeHostedRender(mini, size: CGSize(width: 390, height: 110),
+                              name: "FIX-RW86-ios-minibar-mini-light.png")
+        let miniDark = WearIveRunMiniBarView(
+            state: .updated(payload: .place("New York, NY")),
+            entry: entry,
+            formattedFeelsLike: "57°", cueCount: 0,
+            onOpenCollection: {}, onTrash: {})
+            .preferredColorScheme(.dark)
+            .background(AppTheme.background)
+        try writeHostedRender(miniDark, size: CGSize(width: 390, height: 110),
+                              name: "FIX-RW86-ios-minibar-mini-dark.png")
+        // RW-135 §7.0 (Direction A): the RW-88 viewed-state
+        // override is REMOVED from the bar — these renders now
+        // pin the record-derived forms that replaced it: the
+        // settled-today "Updated to {place}" form (the entry
+        // itself moved to Miami) and the future-day "Planned
+        // for" form. No live-view input reaches the bar.
+        let updatedPlace = WearIveRunMiniBarView(
+            state: .updated(payload: .place("Miami, FL")),
+            entry: collectionEntry(place: "Miami, FL"),
+            formattedFeelsLike: "82°", cueCount: 0,
+            onOpenCollection: {}, onTrash: {})
+            .background(AppTheme.background)
+        try writeHostedRender(updatedPlace, size: CGSize(width: 390, height: 110),
+                              name: "FIX-RW135-ios-minibar-updated-place.png")
+        let planned = WearIveRunMiniBarView(
+            state: .planned(place: "Miami, FL", dayLabel: "Tomorrow", moment: .now),
+            entry: collectionEntry(place: "Miami, FL"),
+            formattedFeelsLike: "82°", cueCount: 0,
+            onOpenCollection: {}, onTrash: {})
+            .background(AppTheme.background)
+        try writeHostedRender(planned, size: CGSize(width: 390, height: 110),
+                              name: "FIX-RW135-ios-minibar-planned.png")
+    }
+
     func testFixWave_PillGreen() throws {
         try writeHostedRender(
             HeroImageView(
