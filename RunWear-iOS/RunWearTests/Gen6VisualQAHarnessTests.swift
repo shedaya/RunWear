@@ -571,6 +571,16 @@ final class Gen6VisualQAHarnessTests: XCTestCase {
         }
         host.view.setNeedsLayout()
         host.view.layoutIfNeeded()
+        // Force the layer tree to actually DISPLAY before it is
+        // rasterised: a hosting view commits its SwiftUI content
+        // to its layers on the display pass, and a tree that has
+        // only been laid out can rasterise empty (the hero's tree
+        // did exactly this in run 45686630707 — fully transparent
+        // captures while the mini bar's already-displayed tree
+        // rasterised with content).
+        host.view.setNeedsDisplay()
+        host.view.layer.displayIfNeeded()
+        CATransaction.flush()
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = 2
         let image = UIGraphicsImageRenderer(size: size, format: format).image { context in
