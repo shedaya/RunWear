@@ -13,7 +13,12 @@
 		A10000052334567800000010 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A10000062334567800000010 /* PrivacyInfo.xcprivacy */; };
 		F10002000000000000000001 /* hero_fallback in Resources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000001 /* hero_fallback */; };
 		F10002000000000000000002 /* hero_fallback in Resources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000001 /* hero_fallback */; };
+		F10002000000000000000010 /* GreatVibes-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000010 /* GreatVibes-Regular.ttf */; };
+		F10002000000000000000011 /* GreatVibes-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000010 /* GreatVibes-Regular.ttf */; };
 		A1000007233456780000004 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000008233456780000004 /* AppTheme.swift */; };
+		F10000000000000000000002 /* AppThemeTemperature.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000001 /* AppThemeTemperature.swift */; };
+		F10000000000000000000003 /* AppThemeTemperature.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000001 /* AppThemeTemperature.swift */; };
+		F10000000000000000000004 /* AppThemeTemperature.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000001 /* AppThemeTemperature.swift */; };
 		A1000009233456780000005 /* Weather.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000A233456780000005 /* Weather.swift */; };
 		A100000B233456780000006 /* Outfit.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000C233456780000006 /* Outfit.swift */; };
 		A100000D233456780000007 /* WeatherService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000E233456780000007 /* WeatherService.swift */; };
@@ -49,6 +54,20 @@
 		A10002000000000000000010 /* GlassMorphismModifiers.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000010 /* GlassMorphismModifiers.swift */; };
 		A10002000000000000000011 /* StaggeredAnimation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000011 /* StaggeredAnimation.swift */; };
 		A10002000000000000000012 /* HeroImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000012 /* HeroImageView.swift */; };
+		R67002000000000000000001 /* HomeHeroNumeralRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = R67001000000000000000001 /* HomeHeroNumeralRow.swift */; };
+		R67002000000000000000002 /* HomeHeroNumeralRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = R67001000000000000000001 /* HomeHeroNumeralRow.swift */; };
+		W14402000000000000000001 /* FirstScreenHero.swift in Sources */ = {isa = PBXBuildFile; fileRef = W14401000000000000000001 /* FirstScreenHero.swift */; };
+		W14402000000000000000002 /* FirstScreenHero.swift in Sources */ = {isa = PBXBuildFile; fileRef = W14401000000000000000001 /* FirstScreenHero.swift */; };
+		W14402000000000000000003 /* FirstScreenSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = W14401000000000000000002 /* FirstScreenSheet.swift */; };
+		W14402000000000000000004 /* FirstScreenSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = W14401000000000000000002 /* FirstScreenSheet.swift */; };
+		W14402000000000000000005 /* RW144FirstScreenTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = W14401000000000000000004 /* RW144FirstScreenTests.swift */; };
+		W14502000000000000000005 /* RW145147FixTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = W14501000000000000000004 /* RW145147FixTests.swift */; };
+		W14502000000000000000006 /* LocationPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000017 /* LocationPickerSheet.swift */; };
+		W14402000000000000000010 /* garment_tiles_light in Resources */ = {isa = PBXBuildFile; fileRef = W14401000000000000000003 /* garment_tiles_light */; };
+		D10002000000000000000001 /* WearIveRunMiniBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10001000000000000000001 /* WearIveRunMiniBar.swift */; };
+		D10002000000000000000002 /* WearIveRunMiniBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10001000000000000000001 /* WearIveRunMiniBar.swift */; };
+		C10002000000000000000040 /* RW25NextGenHomeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000031 /* RW25NextGenHomeTests.swift */; };
+		C10002000000000000000041 /* GreatVibesFontTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000032 /* GreatVibesFontTests.swift */; };
 		A10002000000000000000090 /* HeroPhoto.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000090 /* HeroPhoto.swift */; };
 		C10002000000000000000090 /* HeroPhoto.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000090 /* HeroPhoto.swift */; };
 		C10002000000000000000033 /* FieldFindingsFixTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000010 /* FieldFindingsFixTests.swift */; };
@@ -91,6 +110,9 @@
 		C10002000000000000000007 /* HeroImageModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000003 /* HeroImageModels.swift */; };
 		C10002000000000000000008 /* EngineBoundaryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000002 /* EngineBoundaryTests.swift */; };
 		C10002000000000000000009 /* WeatherViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000014233456780000010 /* WeatherViewModel.swift */; };
+		C10002000000000000000103 /* DayChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = G40001000000000000000002 /* DayChartView.swift */; };
+		C10002000000000000000102 /* DatePickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000016 /* DatePickerSheet.swift */; };
+		C10002000000000000000101 /* TimePickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000020 /* TimePickerSheet.swift */; };
 		C10002000000000000000010 /* WeatherService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000E233456780000007 /* WeatherService.swift */; };
 		C10002000000000000000011 /* HeroImageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000007 /* HeroImageService.swift */; };
 		C10002000000000000000012 /* SupabaseClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000008 /* SupabaseClient.swift */; };
@@ -105,7 +127,6 @@
 		C10002000000000000000022 /* DataParityFixTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000005 /* DataParityFixTests.swift */; };
 		C10002000000000000000023 /* WatchGlyphRenderingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000006 /* WatchGlyphRenderingTests.swift */; };
 		C10002000000000000000024 /* HomePresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000007 /* HomePresentationTests.swift */; };
-		C10002000000000000000025 /* ShareTextCompositionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000008 /* ShareTextCompositionTests.swift */; };
 		C10002000000000000000026 /* WatchOutfitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000006233456780000003 /* WatchOutfitView.swift */; };
 		C10002000000000000000027 /* WatchViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000008233456780000004 /* WatchViewModel.swift */; };
 		C10002000000000000000028 /* WatchSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10001000000000000000002 /* WatchSettingsView.swift */; };
@@ -126,13 +147,58 @@
 		E10002000000000000000015 /* engine_fixtures.json in Resources */ = {isa = PBXBuildFile; fileRef = E10001000000000000000004 /* engine_fixtures.json */; };
 		D1000001233456780000001 /* RunWear Watch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = B1000000233456780000000 /* RunWear Watch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 
-		/* RW-14 "Make it me" — added 2026-10-31 */
+		/* RW-14 "Make It Me" — added 2026-10-31 */
 		F10002000000000000000101 /* PersonalHeroModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000101 /* PersonalHeroModels.swift */; };
 		F10002000000000000000102 /* SupabaseAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000102 /* SupabaseAuthService.swift */; };
 		F10002000000000000000103 /* PersonalHeroAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000103 /* PersonalHeroAPI.swift */; };
 		F10002000000000000000104 /* PhotoQualityChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000104 /* PhotoQualityChecker.swift */; };
 		F10002000000000000000135 /* PhotoQualityChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000104 /* PhotoQualityChecker.swift */; };
 		F10002000000000000000105 /* MakeItMeBilling.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000105 /* MakeItMeBilling.swift */; };
+		F10002000000000000000138 /* MakeItMePriceLabels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000138 /* MakeItMePriceLabels.swift */; };
+		F10002000000000000000139 /* MakeItMePriceLabels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000138 /* MakeItMePriceLabels.swift */; };
+		H10002000000000000000001 /* SimplePlace.swift in Sources */ = {isa = PBXBuildFile; fileRef = H10001000000000000000001 /* SimplePlace.swift */; };
+		H10002000000000000000002 /* SimplePlace.swift in Sources */ = {isa = PBXBuildFile; fileRef = H10001000000000000000001 /* SimplePlace.swift */; };
+		G10002000000000000000001 /* RW26CollectionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = G10001000000000000000001 /* RW26CollectionModels.swift */; };
+		G10002000000000000000002 /* RW26CollectionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = G10001000000000000000001 /* RW26CollectionModels.swift */; };
+		Q10002000000000000000001 /* ShareCardRenderStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = Q10001000000000000000001 /* ShareCardRenderStore.swift */; };
+		Q10002000000000000000002 /* ShareCardRenderStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = Q10001000000000000000001 /* ShareCardRenderStore.swift */; };
+		S60002000000000000000001 /* ShareStudioModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = S60001000000000000000001 /* ShareStudioModels.swift */; };
+		S60002000000000000000002 /* ShareStudioModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = S60001000000000000000001 /* ShareStudioModels.swift */; };
+		S60002000000000000000003 /* Gen6WaveBShareTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = S60001000000000000000002 /* Gen6WaveBShareTests.swift */; };
+		G10002000000000000000003 /* GuidedSelfieCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = G10001000000000000000002 /* GuidedSelfieCaptureView.swift */; };
+		G10002000000000000000004 /* WearIveRunCollectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = G10001000000000000000003 /* WearIveRunCollectionView.swift */; };
+		G10002000000000000000005 /* RW26Phase2Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = G10001000000000000000004 /* RW26Phase2Tests.swift */; };
+		H10002000000000000000003 /* SimplePlaceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = H10001000000000000000002 /* SimplePlaceTests.swift */; };
+		J10002000000000000000003 /* StateTruthTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = J10001000000000000000002 /* StateTruthTests.swift */; };
+		K10002000000000000000001 /* HomeHandoffGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = K10001000000000000000001 /* HomeHandoffGeometry.swift */; };
+		K10002000000000000000002 /* HomeHandoffGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = K10001000000000000000001 /* HomeHandoffGeometry.swift */; };
+		G40002000000000000000001 /* DayChartModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = G40001000000000000000001 /* DayChartModel.swift */; };
+		G40002000000000000000002 /* DayChartModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = G40001000000000000000001 /* DayChartModel.swift */; };
+		G40002000000000000000003 /* DayChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = G40001000000000000000002 /* DayChartView.swift */; };
+		G40002000000000000000004 /* Gen4DayChartTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = G40001000000000000000003 /* Gen4DayChartTests.swift */; };
+		G41002000000000000000001 /* Gen4LocationNowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = G41001000000000000000001 /* Gen4LocationNowTests.swift */; };
+		G51002000000000000000001 /* Gen5FidelityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = G51001000000000000000001 /* Gen5FidelityTests.swift */; };
+		G61002000000000000000001 /* Gen6WaveATests.swift in Sources */ = {isa = PBXBuildFile; fileRef = G61001000000000000000001 /* Gen6WaveATests.swift */; };
+		G61006000000000000000001 /* Gen6WaveCTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = G61005000000000000000001 /* Gen6WaveCTests.swift */; };
+		RW7900000000000000000002 /* Gen6RW78RW79Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = RW7900000000000000000001 /* Gen6RW78RW79Tests.swift */; };
+		RW7300000000000000000002 /* Gen6DetentRenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = RW7300000000000000000001 /* Gen6DetentRenderTests.swift */; };
+		G61004000000000000000001 /* Gen6RW66RenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = G61003000000000000000001 /* Gen6RW66RenderTests.swift */; };
+		R67004000000000000000001 /* Gen6RW67RenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = R67003000000000000000001 /* Gen6RW67RenderTests.swift */; };
+		D60000000000000000000011 /* Gen6WidgetRenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D60000000000000000000001 /* Gen6WidgetRenderTests.swift */; };
+		D60000000000000000000012 /* Gen6PickerWatchRenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D60000000000000000000002 /* Gen6PickerWatchRenderTests.swift */; };
+		VQ2000000000000000000001 /* Gen6VisualQAHarnessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = VQ1000000000000000000001 /* Gen6VisualQAHarnessTests.swift */; };
+		VQ2000000000000000000002 /* HeroImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000012 /* HeroImageView.swift */; };
+		RW8100000000000000000001 /* PreferenceControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000013 /* PreferenceControls.swift */; };
+		VQ2000000000000000000003 /* GlassMorphismModifiers.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000010 /* GlassMorphismModifiers.swift */; };
+		G42002000000000000000001 /* Gen4BundledReplenishmentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = G42001000000000000000001 /* Gen4BundledReplenishmentTests.swift */; };
+		K10002000000000000000003 /* HomeCompositionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = K10001000000000000000002 /* HomeCompositionTests.swift */; };
+		L10002000000000000000001 /* WearIveRunElementMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10001000000000000000001 /* WearIveRunElementMachine.swift */; };
+		L10002000000000000000002 /* WearIveRunElementMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10001000000000000000001 /* WearIveRunElementMachine.swift */; };
+		L10002000000000000000003 /* WearIveRunElementMachineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10001000000000000000002 /* WearIveRunElementMachineTests.swift */; };
+		W50002000000000000000001 /* SettingsInventory.swift in Sources */ = {isa = PBXBuildFile; fileRef = W50001000000000000000001 /* SettingsInventory.swift */; };
+		W50002000000000000000002 /* SettingsInventory.swift in Sources */ = {isa = PBXBuildFile; fileRef = W50001000000000000000001 /* SettingsInventory.swift */; };
+		W50002000000000000000003 /* SettingsInventoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = W50001000000000000000002 /* SettingsInventoryTests.swift */; };
+		W50002000000000000000004 /* SheetDisciplineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = W50001000000000000000003 /* SheetDisciplineTests.swift */; };
 		F10002000000000000000106 /* PersonalHeroStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000106 /* PersonalHeroStore.swift */; };
 		F10002000000000000000107 /* MakeItMeFlowViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000107 /* MakeItMeFlowViews.swift */; };
 		F10002000000000000000108 /* MakeItMeSettingsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000108 /* MakeItMeSettingsViews.swift */; };
@@ -147,9 +213,58 @@
 		C10002000000000000000035 /* ReferenceTileLoaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000026 /* ReferenceTileLoaderTests.swift */; };
 		F10002000000000000000111 /* MakeItMePresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000111 /* MakeItMePresentation.swift */; };
 		F10002000000000000000133 /* MakeItMePresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000111 /* MakeItMePresentation.swift */; };
+		F10002000000000000000136 /* MakeItMeAvailability.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000113 /* MakeItMeAvailability.swift */; };
+		F10002000000000000000137 /* MakeItMeAvailability.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000113 /* MakeItMeAvailability.swift */; };
+		C10002000000000000000038 /* MakeItMeAvailabilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000029 /* MakeItMeAvailabilityTests.swift */; };
+		C10002000000000000000039 /* HeroPointGrainTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000030 /* HeroPointGrainTests.swift */; };
+		C1000200000000000000003A /* HeroFallbackGenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000100000000000000003B /* HeroFallbackGenderTests.swift */; };
+		C10002000000000000000091 /* Gen3HeroServingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000091 /* Gen3HeroServingTests.swift */; };
+		G40002000000000000000005 /* Gen4HeroFallbackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = G40001000000000000000004 /* Gen4HeroFallbackTests.swift */; };
+		C10002000000000000000095 /* Gen3TrainDeltaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000095 /* Gen3TrainDeltaTests.swift */; };
 		C10002000000000000000036 /* MakeItMePresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000027 /* MakeItMePresentationTests.swift */; };
 		C10002000000000000000037 /* PhotoIntakeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000028 /* PhotoIntakeTests.swift */; };
 		F10002000000000000000130 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = F10003000000000000000102 /* RevenueCat */; };
+		N10002000000000000000001 /* HeroServeTelemetry.swift in Sources */ = {isa = PBXBuildFile; fileRef = N10001000000000000000001 /* HeroServeTelemetry.swift */; };
+		N10002000000000000000002 /* HeroServeTelemetry.swift in Sources */ = {isa = PBXBuildFile; fileRef = N10001000000000000000001 /* HeroServeTelemetry.swift */; };
+		N10002000000000000000003 /* HeroFallbackProvenanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = N10001000000000000000002 /* HeroFallbackProvenanceTests.swift */; };
+		N10002000000000000000004 /* HeroServeTelemetryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = N10001000000000000000003 /* HeroServeTelemetryTests.swift */; };
+		W60002000000000000000001 /* WS6PipelinesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = W60001000000000000000001 /* WS6PipelinesTests.swift */; };
+		X10002000000000000000001 /* OnboardingSequence.swift in Sources */ = {isa = PBXBuildFile; fileRef = X10001000000000000000001 /* OnboardingSequence.swift */; };
+		X10002000000000000000002 /* OnboardingSequence.swift in Sources */ = {isa = PBXBuildFile; fileRef = X10001000000000000000001 /* OnboardingSequence.swift */; };
+		W70002000000000000000001 /* WS10CopyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = W70001000000000000000001 /* WS10CopyTests.swift */; };
+		G30002000000000000000001 /* Gen2I3OnboardingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = G30001000000000000000001 /* Gen2I3OnboardingTests.swift */; };
+		Z30002000000000000000001 /* Gen3ISmallTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = Z30001000000000000000001 /* Gen3ISmallTests.swift */; };
+		Z40002000000000000000001 /* Gen3ShareRenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = Z40001000000000000000001 /* Gen3ShareRenderTests.swift */; };
+		AA1000000000000000003001 /* RunWearWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000001001 /* RunWearWidget.swift */; };
+		AA1000000000000000003010 /* RunWearWidgetViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000001010 /* RunWearWidgetViews.swift */; };
+		AA1000000000000000003011 /* RunWearWidgetViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000001010 /* RunWearWidgetViews.swift */; };
+		AA1000000000000000003002 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000008233456780000004 /* AppTheme.swift */; };
+		AA1000000000000000003003 /* WidgetLastGood.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000001006 /* WidgetLastGood.swift */; };
+		AA1000000000000000003004 /* WidgetLastGood.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000001006 /* WidgetLastGood.swift */; };
+		AA1000000000000000003005 /* WidgetLastGood.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000001006 /* WidgetLastGood.swift */; };
+		AA1000000000000000003006 /* GreatVibes-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000010 /* GreatVibes-Regular.ttf */; };
+		AA1000000000000000003007 /* RunWearWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = AA1000000000000000001005 /* RunWearWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		AA1000000000000000003008 /* Gen5WidgetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000001007 /* Gen5WidgetTests.swift */; };
+		AA1000000000000000003009 /* HeroPhoto.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000090 /* HeroPhoto.swift */; };
+		1C0000000000000000000021 /* AppStrings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000011 /* AppStrings.swift */; };
+		1C0000000000000000000022 /* AppEnglish.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000012 /* AppEnglish.swift */; };
+		1C0000000000000000000023 /* LocaleUnits.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000013 /* LocaleUnits.swift */; };
+		1C0000000000000000000024 /* LocaleFormats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000014 /* LocaleFormats.swift */; };
+		1C0000000000000000000025 /* AppStrings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000011 /* AppStrings.swift */; };
+		1C0000000000000000000026 /* AppEnglish.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000012 /* AppEnglish.swift */; };
+		1C0000000000000000000027 /* LocaleUnits.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000013 /* LocaleUnits.swift */; };
+		1C0000000000000000000028 /* LocaleFormats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000014 /* LocaleFormats.swift */; };
+		1C0000000000000000000029 /* AppStrings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000011 /* AppStrings.swift */; };
+		1C000000000000000000002A /* AppEnglish.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000012 /* AppEnglish.swift */; };
+		1C000000000000000000002B /* LocaleUnits.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000013 /* LocaleUnits.swift */; };
+		1C000000000000000000002C /* LocaleFormats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000014 /* LocaleFormats.swift */; };
+		1C000000000000000000002D /* AppStrings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000011 /* AppStrings.swift */; };
+		1C000000000000000000002E /* AppEnglish.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000012 /* AppEnglish.swift */; };
+		1C0000000000000000000030 /* LocaleFormats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000014 /* LocaleFormats.swift */; };
+		1C0000000000000000000041 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000015 /* Localizable.xcstrings */; };
+		1C0000000000000000000042 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000016 /* Localizable.xcstrings */; };
+		1C0000000000000000000043 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000017 /* Localizable.xcstrings */; };
+		1C0000000000000000000044 /* LocalizationCorpusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000018 /* LocalizationCorpusTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -159,6 +274,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = B10000FE233456780000000;
 			remoteInfo = "RunWear Watch";
+		};
+		AA1000000000000000005001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A10000F8233456780000000 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AA1000000000000000006001;
+			remoteInfo = RunWearWidget;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -207,6 +329,17 @@
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AA1000000000000000004004 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				AA1000000000000000003007 /* RunWearWidget.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
@@ -215,8 +348,10 @@
 		A1000004233456780000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		A1000006233456780000003 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		F10001000000000000000001 /* hero_fallback */ = {isa = PBXFileReference; lastKnownFileType = folder; path = hero_fallback; sourceTree = "<group>"; };
+		F10001000000000000000010 /* GreatVibes-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "GreatVibes-Regular.ttf"; sourceTree = "<group>"; };
 		A10000062334567800000010 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		A1000008233456780000004 /* AppTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTheme.swift; sourceTree = "<group>"; };
+		F10000000000000000000001 /* AppThemeTemperature.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppThemeTemperature.swift; sourceTree = "<group>"; };
 		A100000A233456780000005 /* Weather.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Weather.swift; sourceTree = "<group>"; };
 		A100000C233456780000006 /* Outfit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Outfit.swift; sourceTree = "<group>"; };
 		A100000E233456780000007 /* WeatherService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherService.swift; sourceTree = "<group>"; };
@@ -247,6 +382,15 @@
 		A10001000000000000000010 /* GlassMorphismModifiers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassMorphismModifiers.swift; sourceTree = "<group>"; };
 		A10001000000000000000011 /* StaggeredAnimation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StaggeredAnimation.swift; sourceTree = "<group>"; };
 		A10001000000000000000012 /* HeroImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroImageView.swift; sourceTree = "<group>"; };
+		R67001000000000000000001 /* HomeHeroNumeralRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeHeroNumeralRow.swift; sourceTree = "<group>"; };
+		W14401000000000000000001 /* FirstScreenHero.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirstScreenHero.swift; sourceTree = "<group>"; };
+		W14401000000000000000002 /* FirstScreenSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirstScreenSheet.swift; sourceTree = "<group>"; };
+		W14401000000000000000004 /* RW144FirstScreenTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RW144FirstScreenTests.swift; sourceTree = "<group>"; };
+		W14501000000000000000004 /* RW145147FixTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RW145147FixTests.swift; sourceTree = "<group>"; };
+		W14401000000000000000003 /* garment_tiles_light */ = {isa = PBXFileReference; lastKnownFileType = folder; path = garment_tiles_light; sourceTree = "<group>"; };
+		D10001000000000000000001 /* WearIveRunMiniBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WearIveRunMiniBar.swift; sourceTree = "<group>"; };
+		C10001000000000000000031 /* RW25NextGenHomeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RW25NextGenHomeTests.swift; sourceTree = "<group>"; };
+		C10001000000000000000032 /* GreatVibesFontTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GreatVibesFontTests.swift; sourceTree = "<group>"; };
 		A10001000000000000000090 /* HeroPhoto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroPhoto.swift; sourceTree = "<group>"; };
 		C10001000000000000000010 /* FieldFindingsFixTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldFindingsFixTests.swift; sourceTree = "<group>"; };
 		A10001000000000000000013 /* PreferenceControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferenceControls.swift; sourceTree = "<group>"; };
@@ -276,7 +420,6 @@
 		C10001000000000000000005 /* DataParityFixTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataParityFixTests.swift; sourceTree = "<group>"; };
 		C10001000000000000000006 /* WatchGlyphRenderingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchGlyphRenderingTests.swift; sourceTree = "<group>"; };
 		C10001000000000000000007 /* HomePresentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomePresentationTests.swift; sourceTree = "<group>"; };
-		C10001000000000000000008 /* ShareTextCompositionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareTextCompositionTests.swift; sourceTree = "<group>"; };
 		C10001000000000000000009 /* WeatherServicePrivacyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherServicePrivacyTests.swift; sourceTree = "<group>"; };
 		/* Shared engine framework + Stage 2 bridge/test files — added 2026-10-29 */
 		E10001000000000000000001 /* RunWearEngine.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = Frameworks/RunWearEngine.xcframework; sourceTree = "<group>"; };
@@ -284,13 +427,55 @@
 		E10001000000000000000003 /* EngineFixtureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineFixtureTests.swift; sourceTree = "<group>"; };
 		E10001000000000000000004 /* engine_fixtures.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = engine_fixtures.json; sourceTree = "<group>"; };
 
-		/* RW-14 "Make it me" — added 2026-10-31 */
+		/* RW-14 "Make It Me" — added 2026-10-31 */
 		F10001000000000000000101 /* PersonalHeroModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalHeroModels.swift; sourceTree = "<group>"; };
 		F10001000000000000000102 /* SupabaseAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseAuthService.swift; sourceTree = "<group>"; };
 		F10001000000000000000103 /* PersonalHeroAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalHeroAPI.swift; sourceTree = "<group>"; };
 		F10001000000000000000109 /* ReferencePhotosLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReferencePhotosLoader.swift; sourceTree = "<group>"; };
 		F10001000000000000000104 /* PhotoQualityChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoQualityChecker.swift; sourceTree = "<group>"; };
 		F10001000000000000000105 /* MakeItMeBilling.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMeBilling.swift; sourceTree = "<group>"; };
+		F10001000000000000000138 /* MakeItMePriceLabels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMePriceLabels.swift; sourceTree = "<group>"; };
+		H10001000000000000000001 /* SimplePlace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimplePlace.swift; sourceTree = "<group>"; };
+		G10001000000000000000001 /* RW26CollectionModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RW26CollectionModels.swift; sourceTree = "<group>"; };
+		Q10001000000000000000001 /* ShareCardRenderStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareCardRenderStore.swift; sourceTree = "<group>"; };
+		S60001000000000000000001 /* ShareStudioModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareStudioModels.swift; sourceTree = "<group>"; };
+		S60001000000000000000002 /* Gen6WaveBShareTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen6WaveBShareTests.swift; sourceTree = "<group>"; };
+		G10001000000000000000002 /* GuidedSelfieCaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuidedSelfieCaptureView.swift; sourceTree = "<group>"; };
+		G10001000000000000000003 /* WearIveRunCollectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WearIveRunCollectionView.swift; sourceTree = "<group>"; };
+		G10001000000000000000004 /* RW26Phase2Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RW26Phase2Tests.swift; sourceTree = "<group>"; };
+		H10001000000000000000002 /* SimplePlaceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimplePlaceTests.swift; sourceTree = "<group>"; };
+		J10001000000000000000002 /* StateTruthTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateTruthTests.swift; sourceTree = "<group>"; };
+		K10001000000000000000001 /* HomeHandoffGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeHandoffGeometry.swift; sourceTree = "<group>"; };
+		G40001000000000000000001 /* DayChartModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayChartModel.swift; sourceTree = "<group>"; };
+		G40001000000000000000002 /* DayChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayChartView.swift; sourceTree = "<group>"; };
+		G40001000000000000000003 /* Gen4DayChartTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen4DayChartTests.swift; sourceTree = "<group>"; };
+		G41001000000000000000001 /* Gen4LocationNowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen4LocationNowTests.swift; sourceTree = "<group>"; };
+		G51001000000000000000001 /* Gen5FidelityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen5FidelityTests.swift; sourceTree = "<group>"; };
+		G61001000000000000000001 /* Gen6WaveATests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen6WaveATests.swift; sourceTree = "<group>"; };
+		G61005000000000000000001 /* Gen6WaveCTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen6WaveCTests.swift; sourceTree = "<group>"; };
+		RW7900000000000000000001 /* Gen6RW78RW79Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen6RW78RW79Tests.swift; sourceTree = "<group>"; };
+		RW7300000000000000000001 /* Gen6DetentRenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen6DetentRenderTests.swift; sourceTree = "<group>"; };
+		G61003000000000000000001 /* Gen6RW66RenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen6RW66RenderTests.swift; sourceTree = "<group>"; };
+		R67003000000000000000001 /* Gen6RW67RenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen6RW67RenderTests.swift; sourceTree = "<group>"; };
+		D60000000000000000000001 /* Gen6WidgetRenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen6WidgetRenderTests.swift; sourceTree = "<group>"; };
+		D60000000000000000000002 /* Gen6PickerWatchRenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen6PickerWatchRenderTests.swift; sourceTree = "<group>"; };
+		VQ1000000000000000000001 /* Gen6VisualQAHarnessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen6VisualQAHarnessTests.swift; sourceTree = "<group>"; };
+		G42001000000000000000001 /* Gen4BundledReplenishmentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen4BundledReplenishmentTests.swift; sourceTree = "<group>"; };
+		K10001000000000000000002 /* HomeCompositionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeCompositionTests.swift; sourceTree = "<group>"; };
+		L10001000000000000000001 /* WearIveRunElementMachine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WearIveRunElementMachine.swift; sourceTree = "<group>"; };
+		L10001000000000000000002 /* WearIveRunElementMachineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WearIveRunElementMachineTests.swift; sourceTree = "<group>"; };
+		W50001000000000000000001 /* SettingsInventory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsInventory.swift; sourceTree = "<group>"; };
+		W50001000000000000000002 /* SettingsInventoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsInventoryTests.swift; sourceTree = "<group>"; };
+		W50001000000000000000003 /* SheetDisciplineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SheetDisciplineTests.swift; sourceTree = "<group>"; };
+		N10001000000000000000001 /* HeroServeTelemetry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroServeTelemetry.swift; sourceTree = "<group>"; };
+		N10001000000000000000002 /* HeroFallbackProvenanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroFallbackProvenanceTests.swift; sourceTree = "<group>"; };
+		N10001000000000000000003 /* HeroServeTelemetryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroServeTelemetryTests.swift; sourceTree = "<group>"; };
+		W60001000000000000000001 /* WS6PipelinesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WS6PipelinesTests.swift; sourceTree = "<group>"; };
+		X10001000000000000000001 /* OnboardingSequence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingSequence.swift; sourceTree = "<group>"; };
+		W70001000000000000000001 /* WS10CopyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WS10CopyTests.swift; sourceTree = "<group>"; };
+		G30001000000000000000001 /* Gen2I3OnboardingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen2I3OnboardingTests.swift; sourceTree = "<group>"; };
+		Z30001000000000000000001 /* Gen3ISmallTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen3ISmallTests.swift; sourceTree = "<group>"; };
+		Z40001000000000000000001 /* Gen3ShareRenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen3ShareRenderTests.swift; sourceTree = "<group>"; };
 		F10001000000000000000106 /* PersonalHeroStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalHeroStore.swift; sourceTree = "<group>"; };
 		F10001000000000000000107 /* MakeItMeFlowViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMeFlowViews.swift; sourceTree = "<group>"; };
 		F10001000000000000000108 /* MakeItMeSettingsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMeSettingsViews.swift; sourceTree = "<group>"; };
@@ -300,8 +485,31 @@
 		F10001000000000000000112 /* CameraCaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraCaptureView.swift; sourceTree = "<group>"; };
 		C10001000000000000000026 /* ReferenceTileLoaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReferenceTileLoaderTests.swift; sourceTree = "<group>"; };
 		F10001000000000000000111 /* MakeItMePresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMePresentation.swift; sourceTree = "<group>"; };
+		F10001000000000000000113 /* MakeItMeAvailability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMeAvailability.swift; sourceTree = "<group>"; };
 		C10001000000000000000027 /* MakeItMePresentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMePresentationTests.swift; sourceTree = "<group>"; };
 		C10001000000000000000028 /* PhotoIntakeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoIntakeTests.swift; sourceTree = "<group>"; };
+		C10001000000000000000029 /* MakeItMeAvailabilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMeAvailabilityTests.swift; sourceTree = "<group>"; };
+		C10001000000000000000030 /* HeroPointGrainTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroPointGrainTests.swift; sourceTree = "<group>"; };
+		C1000100000000000000003B /* HeroFallbackGenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroFallbackGenderTests.swift; sourceTree = "<group>"; };
+		C10001000000000000000091 /* Gen3HeroServingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen3HeroServingTests.swift; sourceTree = "<group>"; };
+		G40001000000000000000004 /* Gen4HeroFallbackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen4HeroFallbackTests.swift; sourceTree = "<group>"; };
+		C10001000000000000000095 /* Gen3TrainDeltaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen3TrainDeltaTests.swift; sourceTree = "<group>"; };
+		AA1000000000000000001005 /* RunWearWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = RunWearWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA1000000000000000001001 /* RunWearWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunWearWidget.swift; sourceTree = "<group>"; };
+		AA1000000000000000001010 /* RunWearWidgetViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunWearWidgetViews.swift; sourceTree = "<group>"; };
+		AA1000000000000000001002 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		AA1000000000000000001003 /* RunWearWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RunWearWidget.entitlements; sourceTree = "<group>"; };
+		AA1000000000000000001004 /* RunWear.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RunWear.entitlements; sourceTree = "<group>"; };
+		AA1000000000000000001006 /* WidgetLastGood.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetLastGood.swift; sourceTree = "<group>"; };
+		AA1000000000000000001007 /* Gen5WidgetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen5WidgetTests.swift; sourceTree = "<group>"; };
+		1C0000000000000000000011 /* AppStrings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStrings.swift; sourceTree = "<group>"; };
+		1C0000000000000000000012 /* AppEnglish.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppEnglish.swift; sourceTree = "<group>"; };
+		1C0000000000000000000013 /* LocaleUnits.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocaleUnits.swift; sourceTree = "<group>"; };
+		1C0000000000000000000014 /* LocaleFormats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocaleFormats.swift; sourceTree = "<group>"; };
+		1C0000000000000000000015 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		1C0000000000000000000016 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		1C0000000000000000000017 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		1C0000000000000000000018 /* LocalizationCorpusTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationCorpusTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -330,12 +538,20 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AA1000000000000000004002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		A1000020233456780000001 /* RunWear */ = {
 			isa = PBXGroup;
 			children = (
+				AA1000000000000000001004 /* RunWear.entitlements */,
 				A1000002233456780000001 /* RunWearApp.swift */,
 				A1000021233456780000002 /* Models */,
 				A1000022233456780000003 /* Views */,
@@ -344,7 +560,11 @@
 				A1000025233456780000006 /* Theme */,
 				A1000006233456780000003 /* Assets.xcassets */,
 				F10001000000000000000001 /* hero_fallback */,
+				W14401000000000000000003 /* garment_tiles_light */,
+				F10001000000000000000010 /* GreatVibes-Regular.ttf */,
 				A10000062334567800000010 /* PrivacyInfo.xcprivacy */,
+				1C0000000000000000000001 /* Localization */,
+				1C0000000000000000000015 /* Localizable.xcstrings */,
 			);
 			path = RunWear;
 			sourceTree = "<group>";
@@ -359,6 +579,12 @@
 				A10001000000000000000003 /* HeroImageModels.swift */,
 				A10001000000000000000004 /* TemperatureUnit.swift */,
 				A10001000000000000000023 /* HeroFlag.swift */,
+				H10001000000000000000001 /* SimplePlace.swift */,
+				K10001000000000000000001 /* HomeHandoffGeometry.swift */,
+				G40001000000000000000001 /* DayChartModel.swift */,
+				L10001000000000000000001 /* WearIveRunElementMachine.swift */,
+				W50001000000000000000001 /* SettingsInventory.swift */,
+				X10001000000000000000001 /* OnboardingSequence.swift */,
 				F10001000000000000000101 /* PersonalHeroModels.swift */,
 			);
 			path = Models;
@@ -373,6 +599,12 @@
 				A10004000000000000000002 /* DuoArrangement.swift */,
 				A1000018233456780000012 /* SupportingViews.swift */,
 				A10001000000000000000012 /* HeroImageView.swift */,
+				R67001000000000000000001 /* HomeHeroNumeralRow.swift */,
+				W14401000000000000000001 /* FirstScreenHero.swift */,
+				W14401000000000000000002 /* FirstScreenSheet.swift */,
+				D10001000000000000000001 /* WearIveRunMiniBar.swift */,
+				G10001000000000000000002 /* GuidedSelfieCaptureView.swift */,
+				G10001000000000000000003 /* WearIveRunCollectionView.swift */,
 				A10001000000000000000090 /* HeroPhoto.swift */,
 				A10003000000000000000001 /* Components */,
 				A10003000000000000000002 /* Modals */,
@@ -412,8 +644,15 @@
 				F10001000000000000000109 /* ReferencePhotosLoader.swift */,
 				F10001000000000000000110 /* ReferenceTileLoader.swift */,
 				F10001000000000000000111 /* MakeItMePresentation.swift */,
+				F10001000000000000000113 /* MakeItMeAvailability.swift */,
 				F10001000000000000000104 /* PhotoQualityChecker.swift */,
 				F10001000000000000000105 /* MakeItMeBilling.swift */,
+				F10001000000000000000138 /* MakeItMePriceLabels.swift */,
+				G10001000000000000000001 /* RW26CollectionModels.swift */,
+				Q10001000000000000000001 /* ShareCardRenderStore.swift */,
+				S60001000000000000000001 /* ShareStudioModels.swift */,
+				AA1000000000000000001006 /* WidgetLastGood.swift */,
+				N10001000000000000000001 /* HeroServeTelemetry.swift */,
 				F10001000000000000000106 /* PersonalHeroStore.swift */,
 			);
 			path = Services;
@@ -424,6 +663,7 @@
 			isa = PBXGroup;
 			children = (
 				A1000008233456780000004 /* AppTheme.swift */,
+				F10000000000000000000001 /* AppThemeTemperature.swift */,
 				A10001000000000000000010 /* GlassMorphismModifiers.swift */,
 				A10001000000000000000011 /* StaggeredAnimation.swift */,
 			);
@@ -433,6 +673,7 @@
 		A10000F7233456780000000 = {
 			isa = PBXGroup;
 			children = (
+				AA1000000000000000002001 /* RunWearWidget */,
 				A1000020233456780000001 /* RunWear */,
 				B1000020233456780000001 /* RunWearWatch */,
 				C1000020233456780000001 /* RunWearTests */,
@@ -444,6 +685,7 @@
 		A10000FF233456780000000 /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				AA1000000000000000001005 /* RunWearWidget.appex */,
 				A1000000233456780000000 /* RunWear.app */,
 				B1000000233456780000000 /* RunWear Watch.app */,
 				C1000000233456780000000 /* RunWearTests.xctest */,
@@ -462,6 +704,7 @@
 				B100000A2334567800000010 /* PrivacyInfo.xcprivacy */,
 				B10001000000000000000001 /* WatchConnectivityManager.swift */,
 				B10001000000000000000002 /* WatchSettingsView.swift */,
+				1C0000000000000000000016 /* Localizable.xcstrings */,
 			);
 			path = RunWearWatch;
 			sourceTree = "<group>";
@@ -472,6 +715,7 @@
 				A10001000000000000000013 /* PreferenceControls.swift */,
 				A10001000000000000000014 /* WeatherPill.swift */,
 				A10001000000000000000015 /* WeatherPillsRow.swift */,
+				G40001000000000000000002 /* DayChartView.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -500,6 +744,7 @@
 		C1000020233456780000001 /* RunWearTests */ = {
 			isa = PBXGroup;
 			children = (
+				AA1000000000000000001007 /* Gen5WidgetTests.swift */,
 				C10001000000000000000001 /* OutfitRulesSweepTest.swift */,
 				C10001000000000000000002 /* EngineBoundaryTests.swift */,
 				C10001000000000000000003 /* HeroFlagPayloadTests.swift */,
@@ -507,7 +752,6 @@
 				C10001000000000000000005 /* DataParityFixTests.swift */,
 				C10001000000000000000006 /* WatchGlyphRenderingTests.swift */,
 				C10001000000000000000007 /* HomePresentationTests.swift */,
-				C10001000000000000000008 /* ShareTextCompositionTests.swift */,
 				C10001000000000000000009 /* WeatherServicePrivacyTests.swift */,
 				C10001000000000000000010 /* FieldFindingsFixTests.swift */,
 				C10001000000000000000023 /* PremiumPassTests.swift */,
@@ -516,10 +760,72 @@
 				C10001000000000000000026 /* ReferenceTileLoaderTests.swift */,
 				C10001000000000000000027 /* MakeItMePresentationTests.swift */,
 				C10001000000000000000028 /* PhotoIntakeTests.swift */,
+				C10001000000000000000029 /* MakeItMeAvailabilityTests.swift */,
+				C10001000000000000000030 /* HeroPointGrainTests.swift */,
+				C10001000000000000000031 /* RW25NextGenHomeTests.swift */,
+				G10001000000000000000004 /* RW26Phase2Tests.swift */,
+				H10001000000000000000002 /* SimplePlaceTests.swift */,
+				J10001000000000000000002 /* StateTruthTests.swift */,
+				K10001000000000000000002 /* HomeCompositionTests.swift */,
+				G40001000000000000000003 /* Gen4DayChartTests.swift */,
+				G41001000000000000000001 /* Gen4LocationNowTests.swift */,
+				G51001000000000000000001 /* Gen5FidelityTests.swift */,
+				G61001000000000000000001 /* Gen6WaveATests.swift */,
+				G61005000000000000000001 /* Gen6WaveCTests.swift */,
+				RW7900000000000000000001 /* Gen6RW78RW79Tests.swift */,
+				RW7300000000000000000001 /* Gen6DetentRenderTests.swift */,
+				G61003000000000000000001 /* Gen6RW66RenderTests.swift */,
+				R67003000000000000000001 /* Gen6RW67RenderTests.swift */,
+				D60000000000000000000001 /* Gen6WidgetRenderTests.swift */,
+				D60000000000000000000002 /* Gen6PickerWatchRenderTests.swift */,
+				VQ1000000000000000000001 /* Gen6VisualQAHarnessTests.swift */,
+				W14401000000000000000004 /* RW144FirstScreenTests.swift */,
+				W14501000000000000000004 /* RW145147FixTests.swift */,
+				G42001000000000000000001 /* Gen4BundledReplenishmentTests.swift */,
+				L10001000000000000000002 /* WearIveRunElementMachineTests.swift */,
+				W50001000000000000000002 /* SettingsInventoryTests.swift */,
+				W50001000000000000000003 /* SheetDisciplineTests.swift */,
+				C10001000000000000000032 /* GreatVibesFontTests.swift */,
+				C1000100000000000000003B /* HeroFallbackGenderTests.swift */,
+				C10001000000000000000091 /* Gen3HeroServingTests.swift */,
+				G40001000000000000000004 /* Gen4HeroFallbackTests.swift */,
+				C10001000000000000000095 /* Gen3TrainDeltaTests.swift */,
+				N10001000000000000000002 /* HeroFallbackProvenanceTests.swift */,
+				N10001000000000000000003 /* HeroServeTelemetryTests.swift */,
+				W60001000000000000000001 /* WS6PipelinesTests.swift */,
+				W70001000000000000000001 /* WS10CopyTests.swift */,
+				G30001000000000000000001 /* Gen2I3OnboardingTests.swift */,
+				Z30001000000000000000001 /* Gen3ISmallTests.swift */,
+				Z40001000000000000000001 /* Gen3ShareRenderTests.swift */,
+				S60001000000000000000002 /* Gen6WaveBShareTests.swift */,
 				E10001000000000000000003 /* EngineFixtureTests.swift */,
 				E10001000000000000000004 /* engine_fixtures.json */,
+				1C0000000000000000000018 /* LocalizationCorpusTests.swift */,
 			);
 			path = RunWearTests;
+			sourceTree = "<group>";
+		};
+		AA1000000000000000002001 /* RunWearWidget */ = {
+			isa = PBXGroup;
+			children = (
+				AA1000000000000000001001 /* RunWearWidget.swift */,
+				AA1000000000000000001010 /* RunWearWidgetViews.swift */,
+				AA1000000000000000001002 /* Info.plist */,
+				AA1000000000000000001003 /* RunWearWidget.entitlements */,
+				1C0000000000000000000017 /* Localizable.xcstrings */,
+			);
+			path = RunWearWidget;
+			sourceTree = "<group>";
+		};
+		1C0000000000000000000001 /* Localization */ = {
+			isa = PBXGroup;
+			children = (
+				1C0000000000000000000011 /* AppStrings.swift */,
+				1C0000000000000000000012 /* AppEnglish.swift */,
+				1C0000000000000000000013 /* LocaleUnits.swift */,
+				1C0000000000000000000014 /* LocaleFormats.swift */,
+			);
+			path = Localization;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -533,11 +839,13 @@
 				A10000FD233456780000000 /* Frameworks */,
 				A10000FE233456790000000 /* Resources */,
 				D10000FC233456780000001 /* Embed Watch Content */,
+				AA1000000000000000004004 /* Embed App Extensions */,
 				E10000FC2334567800000001 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				AA1000000000000000005002 /* PBXTargetDependency */,
 				D1000100233456780000001 /* PBXTargetDependency */,
 			);
 			name = RunWear;
@@ -584,6 +892,23 @@
 			productReference = C1000000233456780000000 /* RunWearTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		AA1000000000000000006001 /* RunWearWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AA1000000000000000007001 /* Build configuration list for PBXNativeTarget "RunWearWidget" */;
+			buildPhases = (
+				AA1000000000000000004001 /* Sources */,
+				AA1000000000000000004002 /* Frameworks */,
+				AA1000000000000000004003 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = RunWearWidget;
+			productName = RunWearWidget;
+			productReference = AA1000000000000000001005 /* RunWearWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -603,6 +928,9 @@
 					C10000FE233456780000000 = {
 						CreatedOnToolsVersion = 15.0;
 					};
+					AA1000000000000000006001 = {
+						CreatedOnToolsVersion = 15.0;
+					};
 				};
 			};
 			buildConfigurationList = A10000FB233456780000000 /* Build configuration list for PBXProject "RunWear" */;
@@ -612,6 +940,7 @@
 			knownRegions = (
 				en,
 				Base,
+				es,
 			);
 			mainGroup = A10000F7233456780000000;
 			packageReferences = (
@@ -623,6 +952,7 @@
 			targets = (
 				A10000FE233456780000000 /* RunWear */,
 				B10000FE233456780000000 /* RunWear Watch */,
+				AA1000000000000000006001 /* RunWearWidget */,
 				C10000FE233456780000000 /* RunWearTests */,
 			);
 		};
@@ -654,7 +984,10 @@
 			files = (
 				A1000005233456780000003 /* Assets.xcassets in Resources */,
 				F10002000000000000000001 /* hero_fallback in Resources */,
+				W14402000000000000000010 /* garment_tiles_light in Resources */,
+				F10002000000000000000010 /* GreatVibes-Regular.ttf in Resources */,
 				A10000052334567800000010 /* PrivacyInfo.xcprivacy in Resources */,
+				1C0000000000000000000041 /* Localizable.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -665,6 +998,7 @@
 				B1000009233456780000005 /* Assets.xcassets in Resources */,
 				F10002000000000000000002 /* hero_fallback in Resources */,
 				B10000092334567800000010 /* PrivacyInfo.xcprivacy in Resources */,
+				1C0000000000000000000042 /* Localizable.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -673,6 +1007,16 @@
 			buildActionMask = 2147483647;
 			files = (
 				E10002000000000000000015 /* engine_fixtures.json in Resources */,
+				F10002000000000000000011 /* GreatVibes-Regular.ttf in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA1000000000000000004003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA1000000000000000003006 /* GreatVibes-Regular.ttf in Resources */,
+				1C0000000000000000000043 /* Localizable.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -683,9 +1027,11 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA1000000000000000003004 /* WidgetLastGood.swift in Sources */,
 				A1000001233456780000001 /* RunWearApp.swift in Sources */,
 				A1000003233456780000002 /* ContentView.swift in Sources */,
 				A1000007233456780000004 /* AppTheme.swift in Sources */,
+				F10000000000000000000002 /* AppThemeTemperature.swift in Sources */,
 				A1000009233456780000005 /* Weather.swift in Sources */,
 				A100000B233456780000006 /* Outfit.swift in Sources */,
 				A100000D233456780000007 /* WeatherService.swift in Sources */,
@@ -708,6 +1054,10 @@
 				A10002000000000000000010 /* GlassMorphismModifiers.swift in Sources */,
 				A10002000000000000000011 /* StaggeredAnimation.swift in Sources */,
 				A10002000000000000000012 /* HeroImageView.swift in Sources */,
+				R67002000000000000000001 /* HomeHeroNumeralRow.swift in Sources */,
+				W14402000000000000000001 /* FirstScreenHero.swift in Sources */,
+				W14402000000000000000003 /* FirstScreenSheet.swift in Sources */,
+				D10002000000000000000001 /* WearIveRunMiniBar.swift in Sources */,
 				A10002000000000000000090 /* HeroPhoto.swift in Sources */,
 				A10002000000000000000013 /* PreferenceControls.swift in Sources */,
 				A10002000000000000000014 /* WeatherPill.swift in Sources */,
@@ -728,12 +1078,31 @@
 				F10002000000000000000109 /* ReferencePhotosLoader.swift in Sources */,
 				F10002000000000000000110 /* ReferenceTileLoader.swift in Sources */,
 				F10002000000000000000111 /* MakeItMePresentation.swift in Sources */,
+				F10002000000000000000136 /* MakeItMeAvailability.swift in Sources */,
 				F10002000000000000000104 /* PhotoQualityChecker.swift in Sources */,
 				F10002000000000000000105 /* MakeItMeBilling.swift in Sources */,
+				F10002000000000000000138 /* MakeItMePriceLabels.swift in Sources */,
+				H10002000000000000000001 /* SimplePlace.swift in Sources */,
+				X10002000000000000000001 /* OnboardingSequence.swift in Sources */,
+				K10002000000000000000001 /* HomeHandoffGeometry.swift in Sources */,
+				G40002000000000000000001 /* DayChartModel.swift in Sources */,
+				G40002000000000000000003 /* DayChartView.swift in Sources */,
+				L10002000000000000000001 /* WearIveRunElementMachine.swift in Sources */,
+				W50002000000000000000001 /* SettingsInventory.swift in Sources */,
+				G10002000000000000000001 /* RW26CollectionModels.swift in Sources */,
+				Q10002000000000000000001 /* ShareCardRenderStore.swift in Sources */,
+				S60002000000000000000001 /* ShareStudioModels.swift in Sources */,
+				N10002000000000000000001 /* HeroServeTelemetry.swift in Sources */,
+				G10002000000000000000003 /* GuidedSelfieCaptureView.swift in Sources */,
+				G10002000000000000000004 /* WearIveRunCollectionView.swift in Sources */,
 				F10002000000000000000106 /* PersonalHeroStore.swift in Sources */,
 				F10002000000000000000107 /* MakeItMeFlowViews.swift in Sources */,
 				F10002000000000000000108 /* MakeItMeSettingsViews.swift in Sources */,
 				F10002000000000000000134 /* CameraCaptureView.swift in Sources */,
+				1C0000000000000000000021 /* AppStrings.swift in Sources */,
+				1C0000000000000000000022 /* AppEnglish.swift in Sources */,
+				1C0000000000000000000023 /* LocaleUnits.swift in Sources */,
+				1C0000000000000000000024 /* LocaleFormats.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -741,11 +1110,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA1000000000000000003009 /* HeroPhoto.swift in Sources */,
 				B1000001233456780000001 /* RunWearWatchApp.swift in Sources */,
 				B1000003233456780000002 /* WatchContentView.swift in Sources */,
 				B1000005233456780000003 /* WatchOutfitView.swift in Sources */,
 				B1000007233456780000004 /* WatchViewModel.swift in Sources */,
 				B100000B233456780000006 /* AppTheme.swift in Sources */,
+				F10000000000000000000003 /* AppThemeTemperature.swift in Sources */,
 				B100000C233456780000007 /* Weather.swift in Sources */,
 				B100000D233456780000008 /* Outfit.swift in Sources */,
 				B100000E233456780000009 /* WeatherService.swift in Sources */,
@@ -761,6 +1132,10 @@
 				B10002000000000000000106 /* FallbackImageProvider.swift in Sources */,
 				B10002000000000000000107 /* SupabaseClient.swift in Sources */,
 				B10002000000000000000108 /* HeroFlag.swift in Sources */,
+				1C0000000000000000000025 /* AppStrings.swift in Sources */,
+				1C0000000000000000000026 /* AppEnglish.swift in Sources */,
+				1C0000000000000000000027 /* LocaleUnits.swift in Sources */,
+				1C0000000000000000000028 /* LocaleFormats.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -768,6 +1143,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA1000000000000000003008 /* Gen5WidgetTests.swift in Sources */,
+				AA1000000000000000003011 /* RunWearWidgetViews.swift in Sources */,
+				AA1000000000000000003005 /* WidgetLastGood.swift in Sources */,
 				C10002000000000000000001 /* OutfitRulesSweepTest.swift in Sources */,
 				C10002000000000000000002 /* OutfitRecommendationService.swift in Sources */,
 				E10002000000000000000013 /* EngineBridge.swift in Sources */,
@@ -779,6 +1157,9 @@
 				C10002000000000000000007 /* HeroImageModels.swift in Sources */,
 				C10002000000000000000008 /* EngineBoundaryTests.swift in Sources */,
 				C10002000000000000000009 /* WeatherViewModel.swift in Sources */,
+				C10002000000000000000103 /* DayChartView.swift in Sources */,
+				C10002000000000000000102 /* DatePickerSheet.swift in Sources */,
+				C10002000000000000000101 /* TimePickerSheet.swift in Sources */,
 				C10002000000000000000010 /* WeatherService.swift in Sources */,
 				C10002000000000000000011 /* HeroImageService.swift in Sources */,
 				C10002000000000000000012 /* SupabaseClient.swift in Sources */,
@@ -792,13 +1173,19 @@
 				C10002000000000000000022 /* DataParityFixTests.swift in Sources */,
 				C10002000000000000000023 /* WatchGlyphRenderingTests.swift in Sources */,
 				C10002000000000000000024 /* HomePresentationTests.swift in Sources */,
-				C10002000000000000000025 /* ShareTextCompositionTests.swift in Sources */,
+				R67002000000000000000002 /* HomeHeroNumeralRow.swift in Sources */,
+				W14402000000000000000002 /* FirstScreenHero.swift in Sources */,
+				W14402000000000000000004 /* FirstScreenSheet.swift in Sources */,
+				W14402000000000000000005 /* RW144FirstScreenTests.swift in Sources */,
+				W14502000000000000000005 /* RW145147FixTests.swift in Sources */,
+				W14502000000000000000006 /* LocationPickerSheet.swift in Sources */,
 				C10002000000000000000026 /* WatchOutfitView.swift in Sources */,
 				C10002000000000000000027 /* WatchViewModel.swift in Sources */,
 				C10002000000000000000028 /* WatchSettingsView.swift in Sources */,
 				C10002000000000000000029 /* WeatherServicePrivacyTests.swift in Sources */,
 				C10002000000000000000020 /* WeatherDetailSheet.swift in Sources */,
 				C10002000000000000000021 /* AppTheme.swift in Sources */,
+				F10000000000000000000004 /* AppThemeTemperature.swift in Sources */,
 				C10002000000000000000030 /* PremiumPassTests.swift in Sources */,
 				C10002000000000000000031 /* UserEngagement.swift in Sources */,
 				C10002000000000000000032 /* StaggeredAnimation.swift in Sources */,
@@ -812,8 +1199,79 @@
 				C10002000000000000000034 /* ReferencePhotosLoaderTests.swift in Sources */,
 				C10002000000000000000035 /* ReferenceTileLoaderTests.swift in Sources */,
 				F10002000000000000000133 /* MakeItMePresentation.swift in Sources */,
+				F10002000000000000000137 /* MakeItMeAvailability.swift in Sources */,
+				F10002000000000000000139 /* MakeItMePriceLabels.swift in Sources */,
+				H10002000000000000000002 /* SimplePlace.swift in Sources */,
+				X10002000000000000000002 /* OnboardingSequence.swift in Sources */,
+				K10002000000000000000002 /* HomeHandoffGeometry.swift in Sources */,
+				G40002000000000000000002 /* DayChartModel.swift in Sources */,
+				G40002000000000000000004 /* Gen4DayChartTests.swift in Sources */,
+				G41002000000000000000001 /* Gen4LocationNowTests.swift in Sources */,
+				G51002000000000000000001 /* Gen5FidelityTests.swift in Sources */,
+				G61002000000000000000001 /* Gen6WaveATests.swift in Sources */,
+				G61006000000000000000001 /* Gen6WaveCTests.swift in Sources */,
+				RW7900000000000000000002 /* Gen6RW78RW79Tests.swift in Sources */,
+				RW7300000000000000000002 /* Gen6DetentRenderTests.swift in Sources */,
+				G61004000000000000000001 /* Gen6RW66RenderTests.swift in Sources */,
+				R67004000000000000000001 /* Gen6RW67RenderTests.swift in Sources */,
+				D60000000000000000000011 /* Gen6WidgetRenderTests.swift in Sources */,
+				VQ2000000000000000000001 /* Gen6VisualQAHarnessTests.swift in Sources */,
+				VQ2000000000000000000002 /* HeroImageView.swift in Sources */,
+				RW8100000000000000000001 /* PreferenceControls.swift in Sources */,
+				VQ2000000000000000000003 /* GlassMorphismModifiers.swift in Sources */,
+				D60000000000000000000012 /* Gen6PickerWatchRenderTests.swift in Sources */,
+				G42002000000000000000001 /* Gen4BundledReplenishmentTests.swift in Sources */,
+				L10002000000000000000002 /* WearIveRunElementMachine.swift in Sources */,
+				W50002000000000000000002 /* SettingsInventory.swift in Sources */,
+				G10002000000000000000002 /* RW26CollectionModels.swift in Sources */,
+				Q10002000000000000000002 /* ShareCardRenderStore.swift in Sources */,
+				S60002000000000000000002 /* ShareStudioModels.swift in Sources */,
+				G10002000000000000000005 /* RW26Phase2Tests.swift in Sources */,
+				H10002000000000000000003 /* SimplePlaceTests.swift in Sources */,
+				J10002000000000000000003 /* StateTruthTests.swift in Sources */,
+				K10002000000000000000003 /* HomeCompositionTests.swift in Sources */,
+				L10002000000000000000003 /* WearIveRunElementMachineTests.swift in Sources */,
+				W50002000000000000000003 /* SettingsInventoryTests.swift in Sources */,
+				W50002000000000000000004 /* SheetDisciplineTests.swift in Sources */,
 				C10002000000000000000036 /* MakeItMePresentationTests.swift in Sources */,
 				C10002000000000000000037 /* PhotoIntakeTests.swift in Sources */,
+				C10002000000000000000038 /* MakeItMeAvailabilityTests.swift in Sources */,
+				C10002000000000000000039 /* HeroPointGrainTests.swift in Sources */,
+				D10002000000000000000002 /* WearIveRunMiniBar.swift in Sources */,
+				C10002000000000000000040 /* RW25NextGenHomeTests.swift in Sources */,
+				C10002000000000000000041 /* GreatVibesFontTests.swift in Sources */,
+				C1000200000000000000003A /* HeroFallbackGenderTests.swift in Sources */,
+				C10002000000000000000091 /* Gen3HeroServingTests.swift in Sources */,
+				G40002000000000000000005 /* Gen4HeroFallbackTests.swift in Sources */,
+				C10002000000000000000095 /* Gen3TrainDeltaTests.swift in Sources */,
+				N10002000000000000000002 /* HeroServeTelemetry.swift in Sources */,
+				N10002000000000000000003 /* HeroFallbackProvenanceTests.swift in Sources */,
+				N10002000000000000000004 /* HeroServeTelemetryTests.swift in Sources */,
+				W60002000000000000000001 /* WS6PipelinesTests.swift in Sources */,
+				W70002000000000000000001 /* WS10CopyTests.swift in Sources */,
+				G30002000000000000000001 /* Gen2I3OnboardingTests.swift in Sources */,
+				Z30002000000000000000001 /* Gen3ISmallTests.swift in Sources */,
+				Z40002000000000000000001 /* Gen3ShareRenderTests.swift in Sources */,
+				S60002000000000000000003 /* Gen6WaveBShareTests.swift in Sources */,
+				1C0000000000000000000029 /* AppStrings.swift in Sources */,
+				1C000000000000000000002A /* AppEnglish.swift in Sources */,
+				1C000000000000000000002B /* LocaleUnits.swift in Sources */,
+				1C000000000000000000002C /* LocaleFormats.swift in Sources */,
+				1C0000000000000000000044 /* LocalizationCorpusTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA1000000000000000004001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA1000000000000000003001 /* RunWearWidget.swift in Sources */,
+				AA1000000000000000003010 /* RunWearWidgetViews.swift in Sources */,
+				AA1000000000000000003002 /* AppTheme.swift in Sources */,
+				AA1000000000000000003003 /* WidgetLastGood.swift in Sources */,
+				1C000000000000000000002D /* AppStrings.swift in Sources */,
+				1C000000000000000000002E /* AppEnglish.swift in Sources */,
+				1C0000000000000000000030 /* LocaleFormats.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -824,6 +1282,11 @@
 			isa = PBXTargetDependency;
 			target = B10000FE233456780000000 /* RunWear Watch */;
 			targetProxy = D10000FF233456780000001 /* PBXContainerItemProxy */;
+		};
+		AA1000000000000000005002 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = AA1000000000000000006001 /* RunWearWidget */;
+			targetProxy = AA1000000000000000005001 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -952,7 +1415,8 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Manual;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
-				CURRENT_PROJECT_VERSION = 1;
+				CODE_SIGN_ENTITLEMENTS = RunWear/RunWear.entitlements;
+				CURRENT_PROJECT_VERSION = 28;
 				DEVELOPMENT_TEAM = L2D8SN7BJ4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -960,7 +1424,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = RunWear;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.weather";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "RunWear needs your location to provide weather-based outfit recommendations for your area.";
-				INFOPLIST_KEY_NSCameraUsageDescription = "RunWear uses the camera so you can take your own photo for Make it me outfit pictures.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "RunWear uses the camera so you can take your own photo for Make It Me outfit pictures.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -990,7 +1454,8 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Manual;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
-				CURRENT_PROJECT_VERSION = 1;
+				CODE_SIGN_ENTITLEMENTS = RunWear/RunWear.entitlements;
+				CURRENT_PROJECT_VERSION = 28;
 				DEVELOPMENT_TEAM = L2D8SN7BJ4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -998,7 +1463,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = RunWear;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.weather";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "RunWear needs your location to provide weather-based outfit recommendations for your area.";
-				INFOPLIST_KEY_NSCameraUsageDescription = "RunWear uses the camera so you can take your own photo for Make it me outfit pictures.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "RunWear uses the camera so you can take your own photo for Make It Me outfit pictures.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -1028,7 +1493,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Manual;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 28;
 				DEVELOPMENT_TEAM = L2D8SN7BJ4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1061,7 +1526,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Manual;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 28;
 				DEVELOPMENT_TEAM = L2D8SN7BJ4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1091,7 +1556,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 28;
 				DEVELOPMENT_TEAM = Q3FS685XN8;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
@@ -1115,7 +1580,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 28;
 				DEVELOPMENT_TEAM = Q3FS685XN8;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
@@ -1129,6 +1594,64 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		AA1000000000000000008001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = RunWearWidget/RunWearWidget.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 28;
+				DEVELOPMENT_TEAM = L2D8SN7BJ4;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = RunWearWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.uptimeventures.runwear.widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "RunWear Widget App Store";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		AA1000000000000000008002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = RunWearWidget/RunWearWidget.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 28;
+				DEVELOPMENT_TEAM = L2D8SN7BJ4;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = RunWearWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.uptimeventures.runwear.widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "RunWear Widget App Store";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -1169,6 +1692,15 @@
 			buildConfigurations = (
 				C1000108233456780000000 /* Debug */,
 				C1000109233456780000000 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AA1000000000000000007001 /* Build configuration list for PBXNativeTarget "RunWearWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA1000000000000000008001 /* Debug */,
+				AA1000000000000000008002 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

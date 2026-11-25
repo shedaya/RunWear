@@ -9,8 +9,8 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
-            // Use dark background for the new design
-            AppTheme.darkBackground
+            // RW-25: dynamic theme background (light #F5F5F5 / dark #0A0A0A)
+            AppTheme.background
                 .ignoresSafeArea()
 
             Group {
@@ -18,7 +18,11 @@ struct ContentView: View {
                 case .notDetermined:
                     if hasManualWeather {
                         outfitView
-                    } else {
+                    } else if LaunchGateResolution.showsPermissionGate(
+                        status: locationService.authorizationStatus,
+                        hasResolvedAuthorization: locationService.hasResolvedAuthorization,
+                        hasManualWeather: hasManualWeather
+                    ) {
                         LocationPermissionView(
                             onRequestPermission: {
                                 locationService.requestPermission()
@@ -27,6 +31,14 @@ struct ContentView: View {
                                 showManualLocationPicker = true
                             }
                         )
+                    } else {
+                        // RW-93: the status is not yet resolved on
+                        // this launch — a cold relaunch can read
+                        // .notDetermined over a long-granted
+                        // permission until the first authorization
+                        // callback lands. Show the loading skeleton,
+                        // never the gate, on an unproven reading.
+                        LoadingView()
                     }
                 case .denied, .restricted:
                     if hasManualWeather {
@@ -73,7 +85,16 @@ struct ContentView: View {
         .sheet(isPresented: $showManualLocationPicker) {
             LocationPickerSheet(
                 isPresented: $showManualLocationPicker,
-                isUsingGPS: false,
+                // GEN-3 X-13: the Current location row's CURRENT
+                // badge reads the ACTUAL location state, never a
+                // per-sheet constant — this gate sheet hardcoded
+                // `false`, so the row's state followed the sheet
+                // host instead of the selection in use.
+                // RW-146: the marking reads the DISPLAYED truth
+                // (superseding the X-13 feed of the selection
+                // flag): what the app is actually showing.
+                isUsingGPS: viewModel.displayedSourceIsGPS,
+                currentPlaceName: viewModel.displayedSourceIsGPS ? nil : viewModel.displayedPlaceName,
                 onUseCurrentLocation: {
                     viewModel.switchToGPS()
                     locationService.requestPermission()
@@ -104,7 +125,12 @@ struct ContentView: View {
         .onAppear {
             // RW-14: wire the personal-hero store into the view model
             // (it consults the store on every hero resolution).
-            viewModel.personalStore = personalStore
+            // "Make It Me" OFF (see MakeItMeAvailability): never wire
+            // it — a nil personalStore is the view model's documented
+            // personal-layer-off state, so heroes resolve pool-only.
+            if MakeItMeAvailability.isEnabled {
+                viewModel.personalStore = personalStore
+            }
             // RW-6.8: honor the location choice made in onboarding. A
             // user who picked "Set a City Instead" meets the picker
             // directly — the choice was already made, so the permission

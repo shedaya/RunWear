@@ -24,6 +24,10 @@ struct WatchContentView: View {
                 )
             }
         }
+        // GEN-5 design pass: the watch app's ground is the
+        // system's warm charcoal (#16130F family via the shared
+        // dark token), not the watchOS system black.
+        .background(AppTheme.darkBackground.ignoresSafeArea())
         .onAppear {
             viewModel.onAppear()
         }
@@ -35,9 +39,9 @@ struct WatchLoadingView: View {
         VStack(spacing: 8) {
             ProgressView()
                 .tint(AppTheme.primaryColor)
-            Text("Loading...")
+            Text(AppStrings.wearLoading)
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundColor(AppTheme.inkSecondary)
         }
     }
 }
@@ -52,16 +56,16 @@ struct WatchPermissionView: View {
                     .font(.system(size: 40))
                     .foregroundColor(AppTheme.primaryColor)
 
-                Text("Location Needed")
+                Text(AppStrings.wearLocationNeeded)
                     .font(.headline)
 
-                Text("RunWear needs your location for weather-based outfit recommendations.")
+                Text(AppStrings.wearPermissionBody)
                     .font(.caption2)
                     .multilineTextAlignment(.center)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppTheme.inkSecondary)
 
                 Button(action: onRequest) {
-                    Text("Enable")
+                    Text(AppStrings.wearGrant)
                         .font(.caption)
                 }
                 .buttonStyle(.borderedProminent)
@@ -81,18 +85,20 @@ struct WatchErrorView: View {
             VStack(spacing: 12) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 32))
-                    .foregroundColor(.orange)
+                    // GEN-5 (cream map row 62): the paired
+                    // dark-mode warning accent, not system orange.
+                    .foregroundColor(AppTheme.weatherAccentColor(.orange, isDark: true))
 
-                Text("Error")
+                Text(AppStrings.wearErrorTitle)
                     .font(.headline)
 
                 Text(message)
                     .font(.caption2)
                     .multilineTextAlignment(.center)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppTheme.inkSecondary)
 
                 Button(action: onRetry) {
-                    Label("Retry", systemImage: "arrow.clockwise")
+                    Label(AppStrings.wearRetry, systemImage: "arrow.clockwise")
                         .font(.caption)
                 }
                 .buttonStyle(.borderedProminent)

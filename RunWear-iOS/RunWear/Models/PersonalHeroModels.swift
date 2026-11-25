@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-// MARK: - RW-14 "Make it me" — pure model layer
+// MARK: - RW-14 "Make It Me" — pure model layer
 //
 // Foundation-only on purpose: this file is compiled into BOTH the app
 // target and the RunWearTests target (the test target's established
@@ -108,6 +108,14 @@ protocol PersonalHeroResolving: AnyObject {
     /// Polls for this cell's hero to land; nil on timeout — the
     /// caller simply keeps the pool photo (no error state).
     func awaitHero(for combination: PersonalCombination) async -> String?
+    /// RW-79: ONE fresh look-state read for a cell, driven by a
+    /// lifecycle event (foreground, paywall dismissal, Home
+    /// appearing) instead of a hero resolution: folds the
+    /// server's current word into the rendered look state and
+    /// re-arms the cell's poll when the cell is still MAKING
+    /// with no poll running. Returns the hero URL when one
+    /// resolves now (the caller swaps it in); nil otherwise.
+    func revalidateLookState(for combination: PersonalCombination) async -> String?
     /// The id of the verified personalized hero currently held for
     /// this cell, if any — what a "This doesn't look like me" flag
     /// would report (RW-14 acceptance (19)).
@@ -118,13 +126,45 @@ protocol PersonalHeroResolving: AnyObject {
     /// flag landed. Failure is silent — the screen is never
     /// disturbed by a flag that didn't land.
     func flagPersonalHero(combination: PersonalCombination, reason: PersonalHeroFlagReason) async -> Bool
+    /// WS-7: the server's folded look state for this cell, when the
+    /// resolver tracks one — the paint layer reads it to classify a
+    /// personal serve for its serve-source record (scaffold while
+    /// the exact look is still making, personal when it is ready).
+    func lookState(for combination: PersonalCombination) -> PersonalLookState
+    /// RW-117 (successor wave): whether the serve the resolver last
+    /// resolved for this cell was a SCAFFOLD serve — the user's own
+    /// banked photo for a close-by cell standing in for the exact
+    /// look. The fact comes from the serving payload itself
+    /// (get-personal-hero's `scaffold: true`), never from an
+    /// inference off the look state: an exact hero caught in the
+    /// instant before its job's completion folds reads MAKING while
+    /// serving, and the pre-fix inference classified exactly that
+    /// serve as scaffold — while a true scaffold serve, whose
+    /// payload folds READY, classified as the exact personal serve.
+    func serveIsScaffold(for combination: PersonalCombination) -> Bool
+    /// GEN-5 (Addendum 8 follow-up, Defect 1): hand the resolver
+    /// the composed fill set — the forecast's cluster cells
+    /// first, then the canonical core matrix — so a subscription
+    /// fill can name it. Called on every forecast load; the
+    /// resolver re-sends the fill when the named set changes
+    /// under a live subscription.
+    func updateForecastPriorityCells(_ cells: [String])
 }
 
 extension PersonalHeroResolving {
     /// Defaults so lightweight conformers (test doubles) carry no
     /// flag surface; PersonalHeroStore provides the real ones.
+    /// RW-79: the default revalidation is the fresh read alone
+    /// (a double has no poll to re-arm); the store overrides it
+    /// with the poll re-arm.
+    func revalidateLookState(for combination: PersonalCombination) async -> String? {
+        await resolveHero(for: combination)
+    }
     func personalHeroId(for combination: PersonalCombination) -> String? { nil }
     func flagPersonalHero(combination: PersonalCombination, reason: PersonalHeroFlagReason) async -> Bool { false }
+    func lookState(for combination: PersonalCombination) -> PersonalLookState { .none }
+    func serveIsScaffold(for combination: PersonalCombination) -> Bool { false }
+    func updateForecastPriorityCells(_ cells: [String]) {}
 }
 
 // MARK: - Backend DTOs
@@ -152,6 +192,35 @@ struct PersonalHeroLookup: Decodable {
     /// "quality_refused" | "service_refused" | "error". The raw
     /// gate/moderation strings never cross the wire.
     let lookReason: String?
+    /// RW-117 (successor wave): the serving payload's own scaffold
+    /// marker (get-personal-hero's convergence serve, entitled
+    /// callers only): true when the hero in this payload is the
+    /// user's banked photo for a CLOSE-BY cell standing in for the
+    /// requested cell's exact look. Absent (nil) on exact serves
+    /// and on pre-convergence payloads. This — not the look state —
+    /// is what classifies a serve as scaffold: a scaffold payload
+    /// folds look_state "ready", while an exact hero in its
+    /// completion instant folds "making", so the pre-fix inference
+    /// (making ⇒ scaffold) classified both backwards.
+    let scaffold: Bool?
+    /// The cell the scaffold hero actually belongs to, when
+    /// `scaffold` is true.
+    let scaffoldCombinationId: String?
+    /// Fix wave 2026-11-07 (RW-130, architecture review §4.3
+    /// contract v2): the serve tier the server named for THIS
+    /// payload — "exact" | "scaffold" | "similar" | "none".
+    /// Absent on pre-v2 payloads; `serveTier` derives the tier
+    /// from the legacy scaffold marker in that case. An unknown
+    /// future value classifies as `.none` (fall to generic) —
+    /// the forward-compatibility obligation of §4.3.
+    let serveTierRaw: String?
+    /// The cell the served photo actually belongs to; equals
+    /// `combinationId` iff the tier is exact.
+    let servedCombinationId: String?
+    /// True when the server has (or has just enqueued) an exact
+    /// generation job for the requested cell behind a non-exact
+    /// serve — the exact-watch guarantee of §4.5 step 3.
+    let converging: Bool?
 
     enum CodingKeys: String, CodingKey {
         case found
@@ -163,6 +232,49 @@ struct PersonalHeroLookup: Decodable {
         case replenishmentQueued = "replenishment_queued"
         case lookState = "look_state"
         case lookReason = "look_reason"
+        case scaffold
+        case scaffoldCombinationId = "scaffold_combination_id"
+        case serveTierRaw = "serve_tier"
+        case servedCombinationId = "served_combination_id"
+        case converging
+    }
+
+    /// The payload's serve tier (RW-130): the v2 field when the
+    /// server sent one, else the legacy scaffold marker, else
+    /// exact when a hero was found and none otherwise.
+    var serveTier: PersonalServeTier {
+        if let raw = serveTierRaw {
+            return PersonalServeTier(wireValue: raw)
+        }
+        if scaffold == true { return .scaffold }
+        return found ? .exact : .none
+    }
+}
+
+/// The serve tiers of the fallback ladder (architecture review
+/// §4.1): exact, scaffold (same prescription, neighbouring
+/// conditions), similar (nearest personal look), none (generic
+/// pool). Non-exact personal serves are SILENT — no pill, no
+/// narration (settled pill table; RW-130 client half).
+enum PersonalServeTier: Equatable {
+    case exact
+    case scaffold
+    case similar
+    case none
+
+    init(wireValue: String) {
+        switch wireValue {
+        case "exact": self = .exact
+        case "scaffold": self = .scaffold
+        case "similar": self = .similar
+        default: self = .none
+        }
+    }
+
+    /// A personal photo is on screen, but it is not this cell's
+    /// exact look — every exact-serve label must stand down.
+    var isNonExactPersonalServe: Bool {
+        self == .scaffold || self == .similar
     }
 }
 
@@ -229,6 +341,157 @@ enum PersonalLookState: Equatable {
     /// The same mapping, from a decoded lookup.
     static func from(lookup: PersonalHeroLookup) -> PersonalLookState {
         fromServer(found: lookup.found, lookState: lookup.lookState, lookReason: lookup.lookReason)
+    }
+
+    /// RW-115 (successor wave): the fold of one lookup into the
+    /// rendered state, given whether THAT lookup delivered a hero
+    /// into the cell's cache (a new entry, or the stored hero's
+    /// version/id changed — see PersonalCellCache's delivery rule).
+    /// A delivery clears a folded failure: the server's precedence
+    /// can still report the cell's earlier failed cycle in the same
+    /// payload that carries the retry's delivered hero (the Miami
+    /// sequence the item was filed from: attempt one failed at the
+    /// gate, the retry delivered 46 seconds later, and the failure
+    /// block stood over the delivered look). A re-resolve of the
+    /// SAME cached hero is not a delivery and clears nothing — the
+    /// designed keep-serving failure surface (a failed regeneration
+    /// over a hero that still serves) stands until a NEW hero
+    /// actually lands.
+    func reconciledWithDelivery(_ deliveredHero: Bool) -> PersonalLookState {
+        guard deliveredHero, case .failed = self else { return self }
+        return .ready
+    }
+}
+
+/// GEN-6 Wave A (DA-02, RW-38): the client poll horizon for a
+/// MAKING cell. Gen-5 polled 18 × 15 s ≈ 4.5 min and then stopped
+/// with MAKING left on screen — anything the server delivered
+/// later was experienced as "it never arrives", because the poll
+/// was the only thing watching the cell. The horizon now matches
+/// the guaranteed first-cell delivery window the server lane
+/// builds in the same wave: poll until the cell reaches a
+/// TERMINAL state (READY — a verified hero resolves — or FAILED),
+/// with backoff, up to a generous cap. On cap expiry the poll
+/// resolves the cell OUT of MAKING (see
+/// `stateAfterCapExpiry`): the pool photo keeps serving with no
+/// stranded generating pill, and a later display re-looks-up the
+/// cell and picks up whatever the server has since delivered —
+/// the state is honest and usable, never a silently stranded
+/// MAKING.
+///
+/// INTERACTION with the 30-minute bank stall line
+/// (ConvergenceBand.stallThreshold, PersonalHeroModels.swift's
+/// ConvergenceBand): the two clocks govern DIFFERENT scopes and
+/// neither replaces the other. The stall line watches the whole
+/// Premium BANK's ready count (coverage advancing or not, over
+/// 30 min) and only changes the convergence band's copy. This
+/// poll watches ONE cell's look state. The poll cap (20 min)
+/// expires BEFORE the stall threshold, so a single first photo
+/// still MAKING at its cap resolves to the quiet pool serve
+/// while the bank — if it is also not advancing — goes on to
+/// declare itself stalled in the band at 30 min. The stall line
+/// itself is a named parity exception awaiting the owner's
+/// ruling and is NOT changed by this wave.
+enum HeroPollPolicy {
+    /// The generous cap: 20 minutes of total poll time
+    /// (≥ the 15-minute floor the wave brief sets).
+    static let maxDurationSeconds: TimeInterval = 20 * 60
+
+    /// The delay before poll `attempt` (0-based). Backoff:
+    /// 15 s while the job is young (the measured generation is
+    /// 17–40 s, so the first polls stay tight), then 30 s, then
+    /// 60 s for the long tail the queue can impose.
+    static func delay(forAttempt attempt: Int) -> TimeInterval {
+        switch attempt {
+        case ..<8: return 15
+        case ..<16: return 30
+        default: return 60
+        }
+    }
+
+    /// Every delay in the schedule, in order, until the
+    /// cumulative time reaches the cap.
+    static var delays: [TimeInterval] {
+        var out: [TimeInterval] = []
+        var elapsed: TimeInterval = 0
+        var attempt = 0
+        while elapsed < maxDurationSeconds {
+            let d = delay(forAttempt: attempt)
+            out.append(d)
+            elapsed += d
+            attempt += 1
+        }
+        return out
+    }
+
+    /// The schedule's total poll window.
+    static var totalDurationSeconds: TimeInterval {
+        delays.reduce(0, +)
+    }
+
+    /// RW-113 / RW-117 (successor wave): whether one poll fold ends
+    /// the poll. The pre-fix loop ended the moment ANY lookup
+    /// resolved a hero — folding whatever look_state that sample
+    /// carried. The server's precedence reports MAKING whenever a
+    /// look job is active, even in the instant the finished hero
+    /// already serves (the Juneau delivery: hero row inserted,
+    /// job completion recorded 0.54 s later; a lookup inside that
+    /// window returns the exact hero with look_state "making").
+    /// The poll folded MAKING, landed, and ended — nothing ever
+    /// re-folded, so the generating pill stood over the painted
+    /// hero indefinitely and the serve was recorded as a scaffold.
+    /// The rule now: a landing settles the poll only once the fold
+    /// agrees the cell has settled (any state but MAKING); a
+    /// landing under a still-MAKING fold keeps polling on the
+    /// normal schedule and returns the landed URL when the fold
+    /// turns terminal — or, at the cap, returns it anyway (the
+    /// hero is real; a later revalidation settles the state).
+    /// With no landing, the pre-existing rule stands: a terminal
+    /// fold (READY / FAILED) ends the poll, MAKING / NONE poll on.
+    static func shouldEndPoll(landed: Bool, foldedState: PersonalLookState) -> Bool {
+        if foldedState == .making { return false }
+        if landed { return true }
+        return isTerminal(foldedState)
+    }
+
+    /// A look state is terminal for polling when the server has
+    /// spoken finally: READY (including a resolved hero — the
+    /// store breaks on resolution before consulting this) or
+    /// FAILED. MAKING and NONE keep polling.
+    static func isTerminal(_ state: PersonalLookState) -> Bool {
+        switch state {
+        case .ready, .failed: return true
+        case .making, .none: return false
+        }
+    }
+
+    /// The state a cell is left in when the cap expires without a
+    /// terminal word: a MAKING cell resolves to NONE — the pool
+    /// photo serves quietly, no pill claims a generation nobody
+    /// is watching any more, and the next display's lookup folds
+    /// the server's then-current word (which may by then be
+    /// READY). Any other state is already honest and stands.
+    static func stateAfterCapExpiry(_ state: PersonalLookState) -> PersonalLookState {
+        state == .making ? .none : state
+    }
+}
+
+/// RW-79: when a lifecycle revalidation (foreground, paywall
+/// dismissal, Home appearing) must re-arm a cell's poll. The
+/// poll is the only mechanism that keeps folding the server's
+/// word while a generation runs, and it can be gone while the
+/// cell is still MAKING — its schedule consumed during app
+/// suspension (cap expiry resolves the cell out of MAKING and
+/// deletes the poll), or never started for a cell whose
+/// generation another surface requested. The re-arm rule is
+/// deliberately narrow: exactly when the folded state is
+/// MAKING and no poll task is stored for the cell. A terminal
+/// state needs no poll — the revalidation's own fold IS the
+/// resolution the hero renders — and a running poll needs no
+/// second one (awaitHero dedupes by cell regardless).
+enum LookRevalidationPolicy {
+    static func shouldRearmPoll(state: PersonalLookState, pollRunning: Bool) -> Bool {
+        state == .making && !pollRunning
     }
 }
 
@@ -329,15 +592,29 @@ enum PersonalHeroFlagReason: String, CaseIterable {
     /// The stored/validated `reason` value.
     var code: String { rawValue }
 
-    /// The label shown in the flag menu.
+    /// The label shown in the flag menu. GEN-5 (RW-29 FA-18):
+    /// frame 45's personal sheet, verbatim — the lead reason,
+    /// the outfit reason, and the residual; the codes above are
+    /// the server contract and do not change.
     var label: String {
         switch self {
-        case .doesntLookLikeMe: return "This doesn't look like me"
-        case .looksBroken: return "Looks broken"
-        case .inappropriate: return "Inappropriate"
-        case .outfitMismatch: return "Doesn't match the outfit"
+        case .doesntLookLikeMe: return AppStrings.mimFlagDoesntLookLikeMe
+        case .outfitMismatch: return AppStrings.mimFlagWrongOutfit
+        case .looksBroken: return AppStrings.mimFlagSomethingElse
+        case .inappropriate: return AppStrings.mimFlagOther
         }
     }
+
+    /// The personal sheet's presentation (frame 45): exactly
+    /// three reasons — the lead, the outfit reason, and the
+    /// residual, which files under the generic defect code.
+    static var sheetOrder: [PersonalHeroFlagReason] {
+        [.doesntLookLikeMe, .outfitMismatch, .looksBroken]
+    }
+
+    /// What flagging a personal photo does, stated before the
+    /// user commits (frame 45, under the lead reason).
+    static let consequenceLine = AppStrings.mimFlagConsequence
 }
 
 /// The personalized photo on screen, as a personal flag must
@@ -391,7 +668,13 @@ extension PersonalHeroAPIError {
            let name = body.error {
             switch name {
             case "allowance_exhausted":
-                return .allowanceExhausted(freeGenerationsUsed: body.freeGenerationsUsed ?? 5)
+                // RW-148 (counter unification, Nov 9, 2026): a
+                // body that omits the count falls back to the ONE
+                // allowance — never an invented number. (The
+                // pre-fix fallback was a hardcoded 5 from the
+                // pre-RW-128 allowance, written straight into
+                // the shared counter by the store's catch.)
+                return .allowanceExhausted(freeGenerationsUsed: body.freeGenerationsUsed ?? FreeLooksAllowance.value)
             case "consent_required": return .consentRequired
             case "references_required": return .referencesRequired
             case "attestations_required": return .attestationsRequired
@@ -434,10 +717,10 @@ struct CommitFailurePresentation: Equatable {
     /// DEVIATION-COPY: honest, specific, and claims nothing was
     /// sent — because nothing was (anonymous sign-in unavailable
     /// server-side, so no session can be minted).
-    static let serverUnavailableLine = "We can't reach RunWear's server right now, so your photos can't be uploaded yet. Nothing was sent. You can try again later — your recommendations are unchanged."
+    static let serverUnavailableLine = AppStrings.mimServerUnavailable
 
     /// DEVIATION-COPY: the generic upload-failure line.
-    static let uploadFailureLine = "Something went wrong uploading your photos. No look was used. Please try again."
+    static let uploadFailureLine = AppStrings.mimUploadFailed
 
     static func forError(_ error: Error) -> CommitFailurePresentation {
         if let apiError = error as? PersonalHeroAPIError {
@@ -612,6 +895,13 @@ struct PersonalCellCache {
         let heroId: String?
         let imageURL: String
         let fetchedAt: Date
+        /// Fix wave 2026-11-07 (RW-130/RW-134, review §4.5 step 2
+        /// + risk L-3): the tier of the serve this entry caches.
+        /// A NON-EXACT entry is never a terminal cache hit: it
+        /// paints, and every display of it schedules a background
+        /// revalidation of the requested cell, so a stock/similar
+        /// morning answer cannot strand the way RW-134's did.
+        var serveTier: PersonalServeTier = .exact
     }
 
     enum Resolution: Equatable {
@@ -647,11 +937,51 @@ struct PersonalCellCache {
         }
         if let existing = entries[cell],
            existing.version == version,
+           existing.serveTier == lookup.serveTier,
            now.timeIntervalSince(existing.fetchedAt) < Self.urlLifetime {
             return .show(existing.imageURL)
         }
-        entries[cell] = Entry(version: version, heroId: lookup.heroId, imageURL: url, fetchedAt: now)
+        entries[cell] = Entry(version: version, heroId: lookup.heroId, imageURL: url, fetchedAt: now, serveTier: lookup.serveTier)
         return .show(url)
+    }
+
+    /// The tier of the serve cached for a cell, if any entry
+    /// stands (fix wave: the revalidation discipline reads it —
+    /// a non-exact cached serve always re-asks the server).
+    func cachedServeTier(for combinationId: String) -> PersonalServeTier? {
+        entries[combinationId]?.serveTier
+    }
+
+    /// True when a fresh cached entry may serve as a TERMINAL
+    /// hit (no revalidation owed): only an exact serve may.
+    /// Non-exact entries paint from `freshURL` but always owe a
+    /// revalidation (review §4.5 step 2, risk L-3's pin).
+    func isTerminalCacheHit(for combinationId: String, now: Date) -> Bool {
+        guard let entry = entries[combinationId],
+              now.timeIntervalSince(entry.fetchedAt) < Self.urlLifetime
+        else { return false }
+        return entry.serveTier == .exact
+    }
+
+    /// RW-115 (successor wave): `resolve`, additionally reporting
+    /// whether the lookup DELIVERED a hero into the cell — the
+    /// resolve stored an entry where none stood, or the stored
+    /// entry's hero changed (version or hero id). A same-version
+    /// re-resolve (which returns the cached URL, or re-stores the
+    /// same hero under a re-signed URL after the cached one aged
+    /// out) is NOT a delivery: the photo on the cell is the one
+    /// that was already there. The store's fold consumes this to
+    /// clear a stale failure exactly when a new hero lands and
+    /// never before (see PersonalLookState.reconciledWithDelivery).
+    mutating func resolveWithDelivery(lookup: PersonalHeroLookup, now: Date) -> (resolution: Resolution, deliveredHero: Bool) {
+        let cell = lookup.combinationId
+        let before = entries[cell]
+        let resolution = resolve(lookup: lookup, now: now)
+        guard case .show = resolution, let after = entries[cell] else {
+            return (resolution, false)
+        }
+        guard let before else { return (resolution, true) }
+        return (resolution, before.version != after.version || before.heroId != after.heroId)
     }
 
     /// The cached URL for a cell, if still fresh — lets a re-display
@@ -676,6 +1006,624 @@ struct PersonalCellCache {
 
     mutating func removeAll() {
         entries.removeAll()
+    }
+}
+
+// MARK: - Free-looks meter (GEN-2 I2 · W-18: ONE source of truth)
+//
+// The diagnosis (2026-11-04 walkthrough, W-18): frame 34 announced
+// its debit from a HARDCODED line ("That was look 1 of your 5 free
+// looks — 4 remain…") rendered the moment the screen appeared,
+// while Settings rendered the store's `freeGenerationsUsed` — the
+// server profile counter, which the server only increments when a
+// look is DELIVERED (personal-hero-worker: the charge lands with
+// the verified hero insert, for a free_on_demand job on a cell
+// never counted before). The two surfaces kept separate books:
+// frame 34 assumed the debit at presentation time; the store's
+// counter was last read at opt-in (before generation was even
+// queued) and nothing re-read it when the look landed, so Settings
+// stood at 0 for the rest of the session.
+//
+// The fix is structural: there is exactly ONE counter — the
+// store's `freeGenerationsUsed`, bound to the server's
+// `personal_profiles.free_generations_used` — and every surface
+// composes its line from that value through this one seam. The
+// store re-reads the profile when a look lands (awaitHero), which
+// is the moment the server's charge exists to be read.
+/// RW-148 (Sol's counter-unification ruling, Nov 9, 2026): the
+/// free Make It Me allowance — ONE definition for the whole
+/// client, matching the server cap (10 since RW-128, live
+/// Nov 7, 2026). It lives in this model-layer file because this
+/// file compiles into BOTH the app and unit-test targets while
+/// PersonalHeroStore is app-only; `PersonalHeroStore.freeAllowance`
+/// FORWARDS to this value, so the store's name and this one are
+/// two names for the same number, and every count surface —
+/// straddle pill, the "This outfit isn't you — yet" card,
+/// Settings, the paywall, the first-look meter, the error
+/// mapping — reads it. No surface may carry its own number.
+enum FreeLooksAllowance {
+    static let value = 10
+}
+
+enum FreeLooksMeter {
+    /// Settings' state line (frame 37's meter), composed from the
+    /// shared counter. `allowance` renders as the bare number the
+    /// deck uses; at the shipped allowance
+    /// (FreeLooksAllowance.value) these are exactly the strings
+    /// Settings carries.
+    static func settingsLine(used: Int, allowance: Int) -> String {
+        if used >= allowance { return AppStrings.mimSettingsAllUsed(allowance) }
+        return AppStrings.mimSettingsUsedOf(used, allowance)
+    }
+
+    /// RW-148: the "This outfit isn't you — yet" card's body
+    /// line, composed from the SAME shared counter the pill
+    /// reads (the store's `freeGenerationsUsed`). The card's
+    /// sentence structure is the settled one; only its number
+    /// was wrong — it rendered a hardcoded "5 outfits" from the
+    /// pre-RW-128 code while the pill beside it read the true
+    /// counter. The whole sentence lives in this seam so the
+    /// card is a pure render of it and the unification pin can
+    /// assert it end to end.
+    static func upsellBodyLine(used: Int) -> String {
+        let noun = AppStrings.outfitOutfits(used)
+        return AppStrings.mimUpsellBody(used, noun)
+    }
+
+    /// The paywall's free bar line, composed from the same counter
+    /// (it previously interpolated the store value inline — same
+    /// number, second spelling site).
+    static func subscriptionLine(used: Int, allowance: Int) -> String {
+        AppStrings.mimSubscriptionLine(used, allowance)
+    }
+
+    // MARK: In-flight truthfulness (GEN-3 · X-9)
+    //
+    // The gen-2 seam counts only DELIVERED looks — correct, because
+    // the server charges on delivery — but Settings composed its
+    // block from that counter ALONE. While a look was generating
+    // (requested, visibly "making" on the hero), Settings printed
+    // the settled line ("0 of 5 free looks used" before the first
+    // delivery) with nothing marking the in-flight look, so the
+    // block contradicted the flow at the same moment (census X-9:
+    // the Android observation, noted there as "exactly as on iOS
+    // this morning"; frame 34 already refuses to print a meter at
+    // all while making — Settings had no equivalent discipline).
+    // The fix keeps the delivered count as the meter AND carries
+    // the in-flight look in the same status block as a pending
+    // line, so the block as a whole can never read as settled
+    // while a generation is running.
+
+    /// How many looks are in flight right now: cells the server
+    /// last reported as MAKING, unioned with cells holding a
+    /// user-initiated pending request (a cell in both counts once).
+    static func inFlightCount(
+        lookStates: [String: PersonalLookState],
+        userInitiatedPending: Set<String>
+    ) -> Int {
+        var cells = Set(lookStates.filter { $0.value.isMaking }.keys)
+        cells.formUnion(userInitiatedPending)
+        return cells.count
+    }
+
+    /// GEN-6 Wave A (DA-08): the count the FREE meter may ever
+    /// show as "being made" — capped at the allowance remaining
+    /// after the used count. The raw in-flight count can exceed
+    /// the remainder: a cell regenerating after its look was
+    /// already delivered (and counted in `used`) is counted
+    /// AGAIN by the raw union, and bank/other in-flight work can
+    /// push the raw pair past the allowance — composing the
+    /// impossible "9 of 10 used · 4 being made" across the
+    /// Settings block. On the free meter the pair must NEVER
+    /// exceed the allowance: used + capped ≤ allowance, always.
+    static func cappedInFlightCount(
+        used: Int,
+        allowance: Int,
+        lookStates: [String: PersonalLookState],
+        userInitiatedPending: Set<String>
+    ) -> Int {
+        let remaining = max(0, allowance - used)
+        return min(
+            inFlightCount(lookStates: lookStates, userInitiatedPending: userInitiatedPending),
+            remaining
+        )
+    }
+
+    /// The status block's pending line, or nil when nothing is in
+    /// flight (the block then carries the settled meter alone,
+    /// which is true). One look reads as the singular making line
+    /// the flow itself shows; more read as a count.
+    static func settingsPendingLine(inFlight: Int) -> String? {
+        switch inFlight {
+        case ...0: return nil
+        case 1: return AppStrings.mimMakingOne
+        default: return AppStrings.mimMakingMany(inFlight)
+        }
+    }
+}
+
+// MARK: - The hero pill (GEN-3 WS-A(2) / WS-B, 2026-11-04)
+//
+// ONE pill at the bottom of the hero image, state-driven — the
+// home expression of the same truth the first-look screen's W-16
+// seam resolves (FirstLookPresentation): the working state lives
+// ON the photo, and a delivered-look claim appears only when the
+// generated photo is actually displayed. The walkthrough defects
+// this closes: the generating state sat in the scroll content
+// under the hero (census X-8) and appeared for a later place's
+// cell while the requested place showed nothing (X-2); the
+// scaffold treatment was a separate text line under the hero.
+//
+// The state is derived ONLY from the REQUESTED cell's facts: the
+// caller passes the look state of the cell the screen is keyed on
+// (WeatherViewModel.currentPersonalCombination — the cell
+// loadHeroImage resolved for the place on the label), never a
+// global or another cell's state. The four visible states:
+//  (a) making — a personal photo is being generated for this
+//      cell and none is on screen yet: "Making this you…" over
+//      the fallback photo (which stays up — WS-A(1)).
+//  (b) scaffold — the user's own banked photo for close-by
+//      weather is on screen while the exact look makes.
+//      GEN-6 Wave A (RW-34, Sol's ruling Nov 5, 2026): the
+//      scaffold serve is SILENT — no claim label at all. The
+//      GEN-3 "Your photo" scaffold label is REMOVED: the owner
+//      ruled it is not one of the approved pills, superseding
+//      design-spec §3.6's older scaffold text. While the exact
+//      look is making, the generating pill (a) carries the
+//      surface; a scaffold serve with no generation in flight
+//      renders NO pill, and it never receives the exact-serve
+//      labels (free count / Premium / exhausted).
+//  (c) freeLook — the exact personal photo IS displayed, free
+//      tier: the script mark + the look count from the ONE
+//      shared counter (FreeLooksMeter's source), in the mock's
+//      "N of 10 looks" form, + "Get unlimited", which opens the
+//      Premium paywall. Like the W-16/W-18 meter, the count
+//      waits for the counter to confirm the delivery (used > 0)
+//      rather than printing an unverified number.
+//  (d) premium — the exact personal photo is displayed and the
+//      user is subscribed: the script mark + "Premium" + a lock
+//      glyph (the mock's device — NOT the crown I-HERO shipped).
+// Every rendered state carries the Make It Me script mark
+// (Sol's pill clarification, Nov 5, 2026: the script leads
+// EVERY status). A failed look renders NO pill: the standard
+// photo serves and the failure line renders AT THE HERO in
+// the pill's eye line, tappable to retry (RW-111, successor
+// wave — it lived in the personal section at the bottom of
+// the page before, which is the placement RW-111 filed).
+// Not opted in renders no pill. A scaffold serve renders no
+// pill (silent, above).
+enum HeroPillState: Equatable {
+    case hidden
+    /// Generating, subscribed (or otherwise not sellable): the
+    /// clean pill — script + spinner + "Making this you…".
+    case making
+    /// GEN-5 (RW-28, C-4 AMENDED — Sol, Nov 5, 2026): generating
+    /// on the FREE tier, where the user is actually waiting on
+    /// demand — the same clean pill PLUS one small green upsell
+    /// line, "Get it instantly next time" (Premium looks are
+    /// banked ahead, so next time the look is already there).
+    /// Gated to the free generating state ONLY.
+    case makingWithUpsell
+    case freeLook(used: Int, allowance: Int)
+    /// GEN-5 (RW-28, Sol Nov 5, 2026): OUT OF FREE LOOKS — the
+    /// free tier's exhausted status: script lead, the used-up
+    /// count stated honestly, and "Get unlimited" as the pill's
+    /// MAIN message; the whole pill taps to the Premium offer.
+    case exhausted(used: Int, allowance: Int)
+    case premium
+}
+
+enum HeroPill {
+    static let makingLabel = AppStrings.mimPillMaking
+    // GEN-6 Wave A (RW-34): there is NO scaffold label. The
+    // GEN-3 scaffold label constant is removed outright —
+    // the owner ruled Nov 5, 2026 that it is not an approved
+    // pill; a scaffold serve is silent (see the state table
+    // above and `resolve`'s scaffold gate).
+    static let premiumLabel = AppStrings.mimPillPremium
+    static let getUnlimitedLabel = AppStrings.mimPillGetUnlimited
+    /// GEN-5 (C-4 AMENDED): the free generating pill's green
+    /// upsell line — verbatim, unembellished.
+    static let getInstantlyLabel = AppStrings.mimPillGetInstantly
+
+    /// The exhausted pill's honest count, in the free pill's
+    /// count family: "10 of 10 looks used".
+    static func exhaustedCountLabel(used: Int, allowance: Int) -> String {
+        AppStrings.mimPillExhaustedCount(min(used, allowance), allowance)
+    }
+    /// The Make It Me script mark the pill carries in states
+    /// (b)(c)(d) — rendered in Great Vibes wherever the pill is
+    /// drawn (GEN-3 DESIGN DELTA 2).
+    static let scriptMarkText = AppStrings.mimScriptMark
+
+    /// The count half of the free-look pill, in the approved
+    /// mock's "1 of 10 looks" form, clamped to the allowance like
+    /// the W-18 meter.
+    static func freeLookCountLabel(used: Int, allowance: Int) -> String {
+        AppStrings.mimPillCount(min(used, allowance), allowance)
+    }
+
+    static func resolve(
+        optedIn: Bool,
+        lookState: PersonalLookState,
+        personalPhotoDisplayed: Bool,
+        isSubscribed: Bool,
+        freeGenerationsUsed: Int,
+        freeAllowance: Int,
+        isScaffoldServe: Bool = false,
+        isExhaustedCell: Bool = false
+    ) -> HeroPillState {
+        guard optedIn else { return .hidden }
+        // GEN-5 (RW-29 FA-1, parity settlement): a generation in
+        // flight OUTRANKS the scaffold serve — when this cell's
+        // look is making, the pill reports the generation, not
+        // the photo underneath it (Android's HeroPillPolicy is
+        // test-pinned to exactly this precedence; iOS build 25
+        // inverted it, resolving to the scaffold state whenever a
+        // personal photo showed during a generation). The C-4
+        // amendment's gating applies here too: a free user's
+        // generating pill carries the green instantly line, a
+        // subscriber's stays clean. This also discharges the
+        // table's never-rule: a generation window ALWAYS has a
+        // pill — the generating one.
+        if lookState == .making {
+            return isSubscribed ? .making : .makingWithUpsell
+        }
+        // GEN-6 Wave A (RW-34): a scaffold serve — the user's
+        // own banked photo standing in for the exact look — is
+        // SILENT. It carries no claim label, and it never
+        // receives an exact-serve state (free count, Premium,
+        // exhausted): those labels belong to the exact photo
+        // only.
+        if isScaffoldServe {
+            return .hidden
+        }
+        // RW-111 / RW-118 (successor wave): the EXHAUSTED state
+        // belongs to the cell the server refused, whether or not
+        // a personal photo is on screen for it. Before this, the
+        // exhausted branch sat inside `personalPhotoDisplayed`
+        // below, so the very cell that defines exhaustion — one
+        // with no hero, whose request the allowance refused —
+        // fell through to .hidden and the hero carried no status
+        // at all (RW-118's end state), while the exhausted
+        // message rendered as an upsell card at the bottom of
+        // the page (RW-111). The pill now carries it at the
+        // hero, from the same one counter, under the same
+        // condition the in-photo branch uses (the shared meter
+        // at the allowance). A subscribed account never resolves
+        // to exhausted (its branch below is Premium); a cell
+        // that was not refused keeps the silent stock serve.
+        if isExhaustedCell, !isSubscribed, freeGenerationsUsed >= freeAllowance {
+            return .exhausted(used: freeGenerationsUsed, allowance: freeAllowance)
+        }
+        if personalPhotoDisplayed {
+            if isSubscribed { return .premium }
+            // GEN-5: the exhausted status takes over the free pill
+            // the moment the shared counter reaches the allowance —
+            // exactly at the allowance, driven by the same one
+            // meter (no second bookkeeping).
+            if freeGenerationsUsed >= freeAllowance {
+                return .exhausted(used: freeGenerationsUsed, allowance: freeAllowance)
+            }
+            // The exact photo is displayed: the count may show
+            // only once the shared counter confirms the delivery
+            // (W-18) — until then the pill waits, hidden.
+            guard freeGenerationsUsed > 0 else { return .hidden }
+            return .freeLook(used: freeGenerationsUsed, allowance: freeAllowance)
+        }
+        // No personal photo on screen and nothing making (the
+        // making case is settled at the top, FA-1): the pill is
+        // silent over a fallback serve.
+        return .hidden
+    }
+}
+
+// MARK: - Fork hero asset (GEN-5, RW-28, ruling C-2)
+
+/// The purpose-designed, hard-coded fork image
+/// (`mim-fork-hero`, 2048 × 1152, bundled — asset lane spec:
+/// rw-gen5-assets/README.md) and its code-drawn dashed face box.
+/// Anchoring rule (binding): bands narrower than the image show
+/// the FULL image height with the horizontal window centred on
+/// the face centre (x = 0.507), clamped to the edges; bands wider
+/// than the image show the full width anchored to the TOP. Plain
+/// centre-crop is ruled out — the head has only 3.2% headroom.
+enum ForkHeroSpec {
+    static let assetName = "mim-fork-hero"
+    static let imageSize = CGSize(width: 2048, height: 1152)
+    /// Face centre, fraction of image width.
+    static let faceCentreX: CGFloat = 0.507
+    /// Measured head: x 0.414–0.600, y 0.032–0.482.
+    static let headRectNormalized = CGRect(x: 0.414, y: 0.032, width: 0.186, height: 0.450)
+    /// Draw box (measured head + padding), image-normalised.
+    static let faceBoxNormalized = CGRect(x: 0.400, y: 0.018, width: 0.214, height: 0.478)
+    /// Shoulders: x 0.306–0.714 — must stay in frame with the face.
+    static let shouldersXRange: ClosedRange<CGFloat> = 0.306...0.714
+
+    /// The visible source rect (image coordinates) for a band of
+    /// `frameSize`, per the anchoring rule.
+    static func visibleRect(imageSize: CGSize, frameSize: CGSize) -> CGRect {
+        guard imageSize.width > 0, imageSize.height > 0,
+              frameSize.width > 0, frameSize.height > 0 else { return .zero }
+        let frameAspect = frameSize.width / frameSize.height
+        let imageAspect = imageSize.width / imageSize.height
+        if frameAspect <= imageAspect {
+            // Narrower band: full height; window centred on the
+            // face centre, clamped.
+            let width = imageSize.height * frameAspect
+            let centre = faceCentreX * imageSize.width
+            let x = min(max(centre - width / 2, 0), imageSize.width - width)
+            return CGRect(x: x, y: 0, width: width, height: imageSize.height)
+        }
+        // Wider band: full width, anchored to the top.
+        let height = imageSize.width / frameAspect
+        return CGRect(x: 0, y: 0, width: imageSize.width, height: height)
+    }
+
+    /// The face box in frame points, transformed with the SAME
+    /// crop the image receives — registered to the face at every
+    /// form factor.
+    static func faceBoxRectInFrame(imageSize: CGSize, frameSize: CGSize) -> CGRect {
+        let visible = visibleRect(imageSize: imageSize, frameSize: frameSize)
+        guard visible.width > 0, visible.height > 0 else { return .zero }
+        let scaleX = frameSize.width / visible.width
+        let scaleY = frameSize.height / visible.height
+        return CGRect(
+            x: (faceBoxNormalized.minX * imageSize.width - visible.minX) * scaleX,
+            y: (faceBoxNormalized.minY * imageSize.height - visible.minY) * scaleY,
+            width: faceBoxNormalized.width * imageSize.width * scaleX,
+            height: faceBoxNormalized.height * imageSize.height * scaleY
+        )
+    }
+
+    /// The band's height for a given width (RW-29 FA-40): the
+    /// band is never wider than 2.4:1, so at every shipped width
+    /// the visible window keeps the face, shoulders, and chest
+    /// composed (the asset lane's crop table: at 2.32:1 the
+    /// torso is visible to y = 0.767, at 2.56:1 to 0.694). A
+    /// fixed 180 pt band satisfies this on phones (≤ 432 pt
+    /// wide) and grows on wider form factors instead of letting
+    /// the window slide down the torso and through the chin.
+    static func bandHeight(forWidth width: CGFloat) -> CGFloat {
+        max(180, width / 2.4)
+    }
+
+    /// True when the whole draw box (and therefore the head) is
+    /// inside the visible rect — the C-2 form-factor guarantee.
+    static func faceBoxFullyVisible(imageSize: CGSize, frameSize: CGSize) -> Bool {
+        let visible = visibleRect(imageSize: imageSize, frameSize: frameSize)
+        let box = CGRect(
+            x: faceBoxNormalized.minX * imageSize.width,
+            y: faceBoxNormalized.minY * imageSize.height,
+            width: faceBoxNormalized.width * imageSize.width,
+            height: faceBoxNormalized.height * imageSize.height
+        )
+        return visible.contains(box)
+    }
+}
+
+// MARK: - Convergence band (GEN-3, Sol's settled wording Nov 4)
+
+/// The user's real bank coverage: `ready` = distinct cells with
+/// a verified banked hero (personal_heroes); `total` = distinct
+/// cells the server has engaged — banked heroes ∪ generation
+/// jobs of any status (personal_generation_jobs). The fill
+/// enqueues the whole missing matrix at once, so once a fill has
+/// run the union IS the fill set; before any fill it is just the
+/// banked set (ready == total, band hidden).
+struct BankCoverage: Equatable {
+    let ready: Int
+    let total: Int
+
+    /// Every named target cell is banked — the only state in
+    /// which a readiness claim about the bank is true.
+    var isComplete: Bool {
+        total > 0 && ready >= total
+    }
+}
+
+/// GEN-6 Wave A (DA-10-class honesty): the subscribed state's
+/// readiness claim ("Subscribed · Your photo is ready before
+/// you open the app.", design-spec §13) may render ONLY when
+/// the user's bank is actually complete — every named target
+/// cell banked. Before that (fill still converging, or coverage
+/// not yet measured) the claim is hard-coded optimism: the
+/// surfaces fall back to the plain subscribed state and the
+/// convergence band carries the honest progress.
+enum SubscribedReadiness {
+    static func mayClaim(coverage: BankCoverage?) -> Bool {
+        coverage?.isComplete == true
+    }
+}
+
+/// Coverage from the two owner-read cell sets — ready is the
+/// GEN-5 (Addendum 8 follow-up, Defect 2 — the convergence
+/// diagnosis of Nov 5, 2026): coverage is measured against the
+/// bank's TARGET SET — the forecast cells the client named to
+/// start-personal-fill — never against the set the server has
+/// happened to engage. The gen-4 formula (ready = banked, total =
+/// banked ∪ ever-enqueued) divided 8 banked cells by 9 engaged
+/// cells and displayed ~89% at 17% true coverage of the 48-cell
+/// bank; it could also reach 100% while target cells were still
+/// missing. Here ready counts only banked cells INSIDE the
+/// target, total IS the target, so the fraction can reach 1 only
+/// when every named cell is banked. Nil when no target has been
+/// named yet — without a named set there is no honest fraction
+/// and the band stays hidden. Pure, so the band's counts are
+/// unit-pinned without a network.
+func deriveBankCoverage(heroCells: Set<String>, targetCells: Set<String>) -> BankCoverage? {
+    guard !targetCells.isEmpty else { return nil }
+    return BankCoverage(
+        ready: heroCells.intersection(targetCells).count,
+        total: targetCells.count
+    )
+}
+
+/// GEN-5 (Addendum 8 follow-up, Defect 1; corrected by the
+/// second follow-up, Nov 5, 2026): one frame of the 7-day
+/// forecast for fill naming. The named forecast cells are ONE
+/// REPRESENTATIVE FRAME PER (DAY, DAYPART) CLUSTER — the first
+/// forecast hour of each cluster, in forecast order (Android's
+/// ForecastFillCells selection, mirrored for parity) — each
+/// keyed through the SAME PersonalCombination.make the displayed
+/// cell uses (comfort-adjusted feels-like frame), so a named
+/// cell is exactly the cell its frame will ask for.
+struct ForecastCellFrame {
+    /// The forecast day, yyyy-MM-dd in the forecast's own
+    /// (location-local) frame — half of the cluster key.
+    let date: String
+    let weatherCode: Int
+    let feelsLikeFahrenheit: Double
+    let hour: Int
+    let outfit: OutfitRecommendation
+}
+
+enum ForecastPriorityCells {
+    static func ids(genderPreference: GenderPreference, frames: [ForecastCellFrame]) -> [String] {
+        var seen = Set<String>()
+        var ids: [String] = []
+        var lastCluster: String? = nil
+        for frame in frames {
+            // The night daypart forms two clusters per calendar
+            // day (00:00–04:59 and 20:00–23:59); the consecutive
+            // key change is what separates them — both are named.
+            let cluster = "\(frame.date)|\(HeroTimeOfDay.from(hour: frame.hour).rawValue)"
+            if cluster == lastCluster { continue }
+            lastCluster = cluster
+            let combination = PersonalCombination.make(
+                genderPreference: genderPreference,
+                weatherCode: frame.weatherCode,
+                feelsLikeFahrenheit: frame.feelsLikeFahrenheit,
+                hour: frame.hour,
+                outfit: frame.outfit
+            )
+            if seen.insert(combination.combinationId).inserted {
+                ids.append(combination.combinationId)
+            }
+        }
+        return ids
+    }
+}
+
+/// The fill set a start-personal-fill call names, composed:
+/// the forecast cells FIRST (they are queued ahead — imminent
+/// conditions land first), then the canonical core matrix cells
+/// the forecast did not already name (the scaffold substrate
+/// fills behind them). Pure; the composition the grant call,
+/// the forecast-refresh re-kick, and the epoch re-kick all send.
+enum FillSetComposition {
+    static func named(forecastCells: [String], coreCells: [String]) -> [String] {
+        var seen = Set<String>()
+        var out: [String] = []
+        for id in forecastCells + coreCells where seen.insert(id).inserted {
+            out.append(id)
+        }
+        return out
+    }
+}
+
+struct ConvergenceBandContent: Equatable {
+    let heading: String
+    let line: String
+    let fraction: Double
+}
+
+/// The convergence band's copy and visibility rule. The heading
+/// and line are Sol's settled copy (Nov 4), word for word — do
+/// not paraphrase.
+///
+/// NUMERIC COUNT: HELD by Sol (Nov 4, later ruling). An earlier
+/// instruction's "N of your M looks are ready" line is NOT
+/// built: the example total had no basis in the generation
+/// model, and no total (24, 48, or any other) is hard-coded or
+/// rendered anywhere. Progress shows as the BAR only; the bar's
+/// fraction comes from the real banking state (BankCoverage).
+/// If Sol rules a replacement treatment, it lands here.
+///
+/// PREMIUM CONTEXT ONLY: banking is premium-only behaviour —
+/// free / in-trial users (the .free 5-look allowance state) get
+/// on-demand looks and no bank, so the band never renders for
+/// them. The band exists only while convergence is genuinely
+/// in progress: subscribed mode, a successful coverage read,
+/// and ready < total. When the bank is complete (or the state
+/// is unknown) there is no band.
+enum ConvergenceBand {
+    static let heading = AppStrings.mimBandHeading
+    static let line = AppStrings.mimBandLine
+
+    /// GEN-5 (Addendum 8, bank non-convergence): the STALLED
+    /// line. Sol's device sat at ~90% for three hours after
+    /// subscribing while the band presented as ordinary
+    /// in-progress — a bank that has stopped advancing must say
+    /// so, in the band itself. The fraction stays the REAL
+    /// banked fraction (ready ÷ total from the server's cell
+    /// sets — audited: there is no time-based or estimated
+    /// progress anywhere in this rule); only the line changes.
+    /// Lane-authored copy (no settled stalled line exists in
+    /// the design record), written to the honesty rules: it
+    /// names the delay, and it claims only what is true — the
+    /// looks already banked ARE the ones being served.
+    static let stalledLine = AppStrings.mimBandStalled
+
+    /// How long coverage may fail to advance before the bank
+    /// reads as stalled (the store's tracker applies it).
+    static let stallThreshold: TimeInterval = 30 * 60
+
+    /// The premium-context input is a plain Bool, deliberately:
+    /// this model file is compiled into BOTH the app and the
+    /// unit-test targets, while PersonalHeroStore is app-only —
+    /// the seats map their mode at the call site
+    /// (`mode == .subscribed`), so the rule itself stays
+    /// testable in the model layer like everything else here.
+    /// Fix wave 2026-11-07 (RW-126, review §3 N2 + §5.4): the
+    /// band announces GENERATION, so it may render only while
+    /// generation is actually in flight. `generationActive` is
+    /// the store's latest server read of non-terminal generation
+    /// jobs: when a read proves NO job is non-terminal, the band
+    /// SETTLES (retires) even if the client-named fraction still
+    /// reads below 100% — the denominator can move under a
+    /// finished bank, and a finished bank must not announce
+    /// activity that does not exist. Nil (no job read yet) keeps
+    /// the pre-fix arithmetic-only behaviour for callers that
+    /// have not folded a job read.
+    static func content(isSubscribed: Bool, coverage: BankCoverage?, stalled: Bool = false, generationActive: Bool? = nil) -> ConvergenceBandContent? {
+        guard isSubscribed, let coverage else { return nil }
+        if generationActive == false { return nil }
+        guard coverage.total > 0, coverage.ready < coverage.total else { return nil }
+        return ConvergenceBandContent(
+            heading: heading,
+            line: stalled ? stalledLine : line,
+            fraction: Double(coverage.ready) / Double(coverage.total)
+        )
+    }
+}
+
+/// GEN-5 (Addendum 8): the stall tracker — pure, so the rule is
+/// pinned in the model layer. It watches the REAL ready count:
+/// every observation that ADVANCES it resets the clock; when
+/// the count has not advanced for `ConvergenceBand.stallThreshold`
+/// while the bank is still incomplete, the bank reads as
+/// stalled. A completed bank is never stalled, and the first
+/// observation of a bank starts its clock (a bank is not born
+/// stalled).
+struct BankStallTracker: Equatable {
+    private var lastReady: Int?
+    private var lastAdvanceAt: Date?
+
+    mutating func observe(_ coverage: BankCoverage, now: Date) {
+        if let lastReady, coverage.ready > lastReady {
+            self.lastReady = coverage.ready
+            lastAdvanceAt = now
+        } else if lastReady == nil {
+            lastReady = coverage.ready
+            lastAdvanceAt = now
+        }
+    }
+
+    func isStalled(_ coverage: BankCoverage, now: Date) -> Bool {
+        guard coverage.total > 0, coverage.ready < coverage.total,
+              let lastAdvanceAt else { return false }
+        return now.timeIntervalSince(lastAdvanceAt) >= ConvergenceBand.stallThreshold
     }
 }
 
@@ -723,17 +1671,108 @@ enum PhotoRejection: Equatable {
     case multiplePeople   // C3b
     case tooDark          // C3c
     case tooClose         // C3d
+    case faceTooSmall     // C3E (RW-26: frame 18's failed check)
+    case rotated          // C3G (WS-6 / F-1: the roll gate)
 
     var specString: String {
         switch self {
         case .faceUnclear:
-            return "We can't see your face clearly in this one. Try a photo without sunglasses or a hat shadow."
+            return AppStrings.mimRejectFaceUnclear
         case .multiplePeople:
-            return "This photo has more than one person in it. Pick one that's just you."
+            return AppStrings.mimRejectMultiplePeople
         case .tooDark:
-            return "This one is too dark to use. Try a photo in brighter light."
+            // GEN-6 (RW-51): the settled dim/turned wording
+            // (design-spec §10.4, frame 18), verbatim in substance.
+            return AppStrings.mimRejectTooDark
         case .tooClose:
-            return "This one is cropped too close. A head-and-shoulders or half-body photo works best."
+            // GEN-6 (RW-51): the settled too-close wording
+            // (design-spec §10.4, frame 18), verbatim.
+            return AppStrings.mimRejectTooClose
+        case .faceTooSmall:
+            // GEN-6 (RW-51): the settled face-too-small wording
+            // (design-spec §10.4, frame 18), verbatim — failure-
+            // specific, and the camera is offered first (the
+            // guided capture frames the face for you).
+            return AppStrings.mimRejectFaceTooSmall
+        case .rotated:
+            // C3G: verbatim with Android's MakeItMeStrings
+            // C3G_REJECT_ROTATED (both platforms, one string).
+            return AppStrings.mimRejectRotated
+        }
+    }
+}
+
+// MARK: - Intake orientation (WS-6 / F-1)
+//
+// The intake orientation rules — pure, no Vision/UIKit types, so
+// the gate exercises every seam with rotated inputs. Mirror of
+// Android's IntakeOrientation (same constants, same math).
+//
+// F-1's root cause (field diagnosis, Nov 3 2026): the guided-selfie
+// capture's artifact arrived SIDEWAYS and no stage read in-plane
+// rotation — the identity screen scored a 90°-rotated face at
+// 0.19–0.25 against the 0.40 line, so no draw could ever deliver.
+// The client fix has three parts, all decided here or in
+// PhotoQualityChecker:
+//
+//  1. EXIF-at-decode: the checker bakes the photo's EXIF
+//     orientation into the pixels before anything measures or
+//     encodes it, so the captured artifact is upright at the
+//     source (PhotoQualityChecker's job — UIImage orientation is
+//     iOS's EXIF face).
+//  2. Roll gate: `rollWithinGate` — the subject face's roll (the
+//     Vision face observation's `roll`, read by the checker for
+//     the first time in the app) must sit within
+//     ±`maxRollDegrees` of upright (the same 30° line the
+//     server's ref-prep uses).
+//  3. Quarter-turn correction: a residual roll that is a near
+//     quarter-turn (an EXIF-less sideways photo — a screenshot, an
+//     edited export) is corrected by `quarterTurnCorrection` and
+//     re-measured; a roll that is neither within the gate nor a
+//     clean quarter-turn is NOT guessed at — the photo is
+//     rejected .rotated and retaken (the server safety net
+//     behaves the same).
+enum IntakeOrientation {
+
+    /// Roll gate half-width in degrees (mirrors ref-prep's 30° line).
+    static let maxRollDegrees: Double = 30
+    /// How close a residual roll must sit to a quarter-turn to be corrected.
+    static let quarterTurnToleranceDegrees: Double = 15
+
+    /// Normalize any roll reading into (-180, 180].
+    static func normalizeRoll(_ rollDegrees: Double) -> Double {
+        var r = rollDegrees.truncatingRemainder(dividingBy: 360)
+        if r > 180 { r -= 360 }
+        if r <= -180 { r += 360 }
+        return r
+    }
+
+    /// The roll gate: the subject face reads upright.
+    static func rollWithinGate(_ rollDegrees: Double) -> Bool {
+        abs(normalizeRoll(rollDegrees)) <= maxRollDegrees
+    }
+
+    /// The compensating clockwise rotation (90, 180, or 270) that
+    /// uprights a bitmap whose subject face reads `rollDegrees` —
+    /// or nil when the roll is within the gate (nothing to correct)
+    /// or is not a clean quarter-turn (not correctable by rotation
+    /// alone; the gate rejects it instead). The correction is the
+    /// INVERSE of the measured roll, snapped to the nearest
+    /// quarter-turn (the diagnosis measured roll ≈ +90° on the
+    /// sideways reference, and uprighting took the inverse turn).
+    /// The checker never trusts the sign blindly: a corrected
+    /// photo is re-measured, and only a re-measurement inside the
+    /// gate is accepted (see PhotoQualityChecker).
+    static func quarterTurnCorrection(rollDegrees: Double) -> Int? {
+        let roll = normalizeRoll(rollDegrees)
+        if abs(roll) <= maxRollDegrees { return nil }
+        let snapped = (roll / 90).rounded() * 90
+        if abs(roll - snapped) > quarterTurnToleranceDegrees { return nil }
+        let correction = ((-snapped).truncatingRemainder(dividingBy: 360) + 360)
+            .truncatingRemainder(dividingBy: 360)
+        switch correction {
+        case 90, 180, 270: return Int(correction)
+        default: return nil
         }
     }
 }
@@ -745,47 +1784,145 @@ enum PhotoQualityVerdict {
     /// close" (a head-and-shoulders frame keeps the face well under
     /// half the frame).
     static let tooCloseThreshold: Double = 0.45
+    /// Largest-face area share below which the face is too small to
+    /// read (RW-26, frame 18's failed check). Deliberately far
+    /// below the guided capture's coaching target — this rejects
+    /// only faces no pipeline could use.
+    static let tooSmallThreshold: Double = 0.02
 
+    /// THE check order (F7 harmonization, RW-26): face COUNT first
+    /// (no face, then multiple faces), then DARKNESS, then framing
+    /// (too small, too close). Both platforms now apply this one
+    /// order — Android's PhotoQualityPolicy previously judged
+    /// darkness first; the Android lane applies count-first from
+    /// this train. (PhotoIntakePolicy governs source routing, not
+    /// check order, on both platforms.)
+    ///
+    /// WS-6 (F-1) inserts the ROLL gate directly after the count
+    /// checks — the same seat Android's policy gives it: a subject
+    /// face whose roll is beyond IntakeOrientation's gate (and was
+    /// not a correctable quarter-turn — the checker corrects those
+    /// before this verdict runs) is rejected .rotated for retake,
+    /// never waved through sideways. `faceRollDegrees` defaults to
+    /// 0 (upright) so pre-F-1 call sites keep their verdicts.
     static func rejection(
         faceCount: Int,
         largestFaceAreaRatio: Double,
-        meanLuminance: Double
+        meanLuminance: Double,
+        faceRollDegrees: Double = 0
     ) -> PhotoRejection? {
         if faceCount == 0 { return .faceUnclear }
         if faceCount > 1 { return .multiplePeople }
+        if !IntakeOrientation.rollWithinGate(faceRollDegrees) { return .rotated }
         if meanLuminance < darkThreshold { return .tooDark }
+        if largestFaceAreaRatio < tooSmallThreshold { return .faceTooSmall }
         if largestFaceAreaRatio > tooCloseThreshold { return .tooClose }
         return nil
     }
 }
 
+/// GEN-5 (RW-29 FA-54): the per-check report behind the upload
+/// review. Build 25's review collapsed the still check to ONE
+/// verdict line (plus, on acceptance, the four labels joined in
+/// a single string) — the design's review reports the four
+/// settled checks INDIVIDUALLY, the same four the guided capture
+/// coaches live. Derived from the same measurements and the
+/// same thresholds the verdict uses, so the report can never
+/// disagree with the verdict it accompanies.
+struct PhotoCheckReport: Equatable {
+    let inFrame: Bool
+    let faceSize: Bool
+    let straightOn: Bool
+    let light: Bool
+
+    static func report(
+        faceCount: Int,
+        largestFaceAreaRatio: Double,
+        meanLuminance: Double,
+        faceRollDegrees: Double
+    ) -> PhotoCheckReport {
+        PhotoCheckReport(
+            inFrame: faceCount >= 1,
+            faceSize: faceCount >= 1
+                && largestFaceAreaRatio >= PhotoQualityVerdict.tooSmallThreshold
+                && largestFaceAreaRatio <= PhotoQualityVerdict.tooCloseThreshold,
+            straightOn: IntakeOrientation.rollWithinGate(faceRollDegrees),
+            light: meanLuminance >= PhotoQualityVerdict.darkThreshold
+        )
+    }
+
+    /// The all-failed report for a photo that could not be
+    /// measured at all (the checker's fail-closed case).
+    static let unmeasurable = PhotoCheckReport(
+        inFrame: false, faceSize: false, straightOn: false, light: false
+    )
+
+    func passed(_ check: SelfieCheck) -> Bool {
+        switch check {
+        case .faceFound: return inFrame
+        case .faceLargeEnough: return faceSize
+        case .faceFrontal: return straightOn
+        case .wellLit: return light
+        }
+    }
+}
+
 // MARK: - Intake copy (RW-16.14)
 //
-// The full-body guidance Sol ruled on Oct 31, 2026 (RW-16.13's
-// structural lever): the generator preserves what the reference
-// photos show, and Sol's own upper-body portraits produced heroes
-// with no legs for the tights outfits to land on. Guidance only —
-// it recommends; it never validates, and no photo is rejected for
-// lacking a full body (RW-16.10 strictness is a separate, still
-// open question). The lead line and the solo-frame note are Sol's
-// copy direction verbatim in substance: race photos with other
-// runners in frame fail the existing multiple-people check (C3b),
-// so the guidance must not steer anyone into that rejection.
+// GEN-6 (DA-23): the dead full-body guidance constant is
+// DELETED — guidance for an intake settled as face-only
+// (design-spec §10), with zero call sites since gen-5 removed it
+// from the intake rendering.
 enum MakeItMeCopy {
-    static let fullBodyGuidance = "Photos of you running work best. Include one full-body photo in plain athletic wear, head to shoes, with just you in the frame — full-length outfits like tights and jackets come out right when your whole body is in the photo. Photos with other people in them can't be used."
+    /// Frame 34 (WS-9 fix): the first-look band's header, verbatim
+    /// from the frozen design package — Android ships the identical
+    /// string (MakeItMeStrings.FIRST_LOOK_BAND_HEADER). The band
+    /// header names what the §9 pair below it belongs to; without
+    /// it the two benefit lines float unattributed.
+    static let firstLookBandHeader = AppStrings.mimFirstLookBandHeader
+
+    /// Frame 34's heading (design frame 34 + Android's
+    /// firstLookHeading, verbatim pattern): "Your first look ·
+    /// Today, {city}" — the CITY only, never the region; with no
+    /// known place the line ends at "Today".
+    static func firstLookHeading(city: String?) -> String {
+        guard let city, !city.isEmpty else { return AppStrings.mimFirstLookToday }
+        return AppStrings.mimFirstLookTodayCity(city)
+    }
+
+    /// Frame 34's weather line (design frame 34 + Android's
+    /// weatherLine composition): "{feels-like} feels like ·
+    /// {condition}", plus " · {n} items" when the outfit has items.
+    /// Together with the heading this is the frame's two-line
+    /// context composition — the RW-14 single computed line
+    /// ("{place} · {feels-like}") is not frame 34's treatment.
+    static func firstLookWeatherLine(feelsLike: String, condition: String, itemCount: Int) -> String {
+        var line = AppStrings.mimFirstLookWeather(feelsLike, condition)
+        if itemCount > 0 { line += AppStrings.mimFirstLookWeatherItems(itemCount) }
+        return line
+    }
+
     /// RW-16.15 (spec C2j, both platforms verbatim): the save
     /// confirmation the flow shows after a successful commit,
     /// before it dismisses — the explicit "it saved" the field
     /// report found missing on both platforms.
-    static let saveConfirmed = "Your photos are saved."
+    static let saveConfirmed = AppStrings.mimSaveConfirmed
     /// Spec §7 G1, verbatim: the progress line's title while the
     /// server reports the current cell's look as making.
-    static let progressTitle = "Making this outfit yours…"
+    static let progressTitle = AppStrings.mimProgressTitle
     /// Spec §7 G2, verbatim as AMENDED Nov 1, 2026 (RW-16.16): the
     /// original "About 10 seconds" figure was false against a
     /// measured 72-second job and a 2–4 minute backend norm; the
     /// amended line promises no number the system misses.
-    static let progressSubline = "This usually takes a few minutes. Your recommendation is ready either way — the standard photo stays up until yours is done."
+    // GEN-6 Wave A (RW-47, conformance sweep CS-01): the
+    // settled first-look honesty line (design-spec §11) is
+    // RESTORED verbatim. The gen-5 line ("This usually takes a
+    // few minutes. Your recommendation is ready either way.")
+    // was a builder substitution no owner ruling sanctioned;
+    // §11's line — whose standard-photo clause the first-look
+    // screen now honours (the standard photo sits plainly up
+    // while the look is made, FA-5) — governs again.
+    static let progressSubline = AppStrings.mimProgressSubline
     /// Spec §7 G5 (added Nov 1, 2026 — RW-16.16): the durable
     /// failed-look line at the hero, shown with the G6 action
     /// whenever the server reports the current cell's look as
@@ -793,11 +1930,24 @@ enum MakeItMeCopy {
     /// failure class in this build. DECIDED Nov 1, 2026
     /// (RW-16.16): Sol picked the final wording from the options
     /// put to him — a one-string swap.
-    static let lookFailed = "Your look couldn't be made from these photos — tap to try again."
+    static let lookFailed = AppStrings.mimLookFailed
     /// Spec §7 G6 (added Nov 1, 2026 — RW-16.16): the failed
     /// line's retry action. User-initiated only; automatic
     /// re-request stays off.
-    static let lookRetry = "Try again"
+    static let lookRetry = AppStrings.mimLookRetry
+    /// GEN-2 I2 (W-16): frame 34's failed-look line. DEVIATION-COPY
+    /// (no deck entry): the G5 line's "tap to try again" names an
+    /// action frame 34 does not carry (the retry lives on the
+    /// outfit screen's hero, G6), so this line states the failure,
+    /// the accounting truth (a failed look is never charged —
+    /// server doctrine, §1), and where the retry lives.
+    static let firstLookFailed = AppStrings.mimFirstLookFailed
+    /// GEN-2 I2 (W-16): frame 34's claim line, shown ONLY once the
+    /// generated photo is the photo on screen. Before this fix the
+    /// line was a hardcoded literal rendered over the fork's stock
+    /// photo; it is now the ready phase's caption, composed by
+    /// FirstLookPresentation.
+    static let firstLookReadyCaption = AppStrings.mimFirstLookReadyCaption
 }
 
 // MARK: - Photo intake source routing (RW-16.14)
@@ -833,8 +1983,8 @@ enum PhotoIntakeRoute: Equatable {
 }
 
 enum PhotoIntakeRouting {
-    static let cameraUnavailableNote = "No camera is available here — choose from your library instead."
-    static let cameraDeniedNote = "Camera access is off for RunWear. You can turn it on in Settings, or choose from your library."
+    static let cameraUnavailableNote = AppStrings.mimCameraUnavailableNote
+    static let cameraDeniedNote = AppStrings.mimCameraDeniedNote
 
     static func route(requested: PhotoIntakeSource, cameraAccess: CameraAccess) -> PhotoIntakeRoute {
         switch requested {
@@ -852,5 +2002,70 @@ enum PhotoIntakeRouting {
                 return .libraryWithNote(cameraDeniedNote)
             }
         }
+    }
+}
+
+// MARK: - The canonical core matrix (GEN-5, Addendum 8 second follow-up)
+
+/// The 20-cell canonical core matrix — the scaffold substrate
+/// every entitled user's bank must hold: every temperature
+/// bracket (FREEZING, COLD, COOL, MILD, WARM, HOT) at CLEAR ×
+/// DAWN, CLEAR × DUSK, and RAIN × DAWN, plus WARM and HOT at
+/// CLEAR × MIDDAY, each at the bracket's canonical outfit. This
+/// is the RW-16.30 production fill's original matrix
+/// (start-personal-fill v9), restored to the caller-named
+/// contract: a forecast-only fill in winter would bank no
+/// hot-weather photo at all, leaving nothing to scaffold from
+/// when the user travels somewhere hot.
+///
+/// The ids are DERIVED, never hand-mirrored: each cell replays
+/// its representative frame through the same shared engine the
+/// serve path uses (the deployed fill's canonical table was
+/// itself generated from engine outputs at these frames —
+/// comfort NEUTRAL so adjusted == raw; calm wind; RAIN measured
+/// rain at 1.0 mm; UV 2 at DAWN/DUSK dry, 1 in RAIN, 4 at
+/// MIDDAY; hours 8 / 13 / 18; representative adjusted temps
+/// FREEZING 12, COLD 27, COOL 42, MILD 57, WARM 72, HOT 85 °F),
+/// so a derived id is by construction a launch-set cell id the
+/// server will intersect, and engine drift moves both together.
+enum CoreMatrixCells {
+    private static let brackets: [(bracket: HeroTempBracket, feelsLikeF: Double)] = [
+        (.FREEZING, 12), (.COLD, 27), (.COOL, 42),
+        (.MILD, 57), (.WARM, 72), (.HOT, 85),
+    ]
+
+    static func ids(genderPreference: GenderPreference) -> [String] {
+        brackets.flatMap { entry in
+            var cells = [
+                cell(genderPreference: genderPreference, weatherCode: 0,
+                     feelsLikeF: entry.feelsLikeF, hour: 8, uvIndex: 2, precipitation: 0),
+                cell(genderPreference: genderPreference, weatherCode: 0,
+                     feelsLikeF: entry.feelsLikeF, hour: 18, uvIndex: 2, precipitation: 0),
+                cell(genderPreference: genderPreference, weatherCode: 61,
+                     feelsLikeF: entry.feelsLikeF, hour: 8, uvIndex: 1, precipitation: 1.0),
+            ]
+            if entry.bracket == .WARM || entry.bracket == .HOT {
+                cells.append(cell(genderPreference: genderPreference, weatherCode: 0,
+                                  feelsLikeF: entry.feelsLikeF, hour: 13, uvIndex: 4, precipitation: 0))
+            }
+            return cells
+        }
+    }
+
+    private static func cell(genderPreference: GenderPreference, weatherCode: Int,
+                             feelsLikeF: Double, hour: Int, uvIndex: Double,
+                             precipitation: Double) -> String {
+        let outfit = OutfitRecommendationService.shared.getRecommendation(
+            for: feelsLikeF, rawTemperature: feelsLikeF,
+            isRaining: precipitation > 0, windSpeed: 2, humidity: 50,
+            uvIndex: uvIndex, precipitation: precipitation, hour: hour
+        )
+        return PersonalCombination.make(
+            genderPreference: genderPreference,
+            weatherCode: weatherCode,
+            feelsLikeFahrenheit: feelsLikeF,
+            hour: hour,
+            outfit: outfit
+        ).combinationId
     }
 }

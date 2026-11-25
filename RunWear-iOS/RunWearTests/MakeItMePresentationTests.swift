@@ -121,3 +121,129 @@ final class MakeItMePresentationTests: XCTestCase {
                      "a fresh flow must not open wearing the previous attempt's error line")
     }
 }
+
+/// RW-16.30 pricing experiment readiness (Nov 2, 2026) — the iOS half
+/// of the cross-platform paywall-price rule (Android:
+/// MakeItMePriceLabelTest). Every price in the paywall path renders
+/// from the fetched current RevenueCat offering: unresolved rows
+/// fall back to price-free plan names.
+///
+/// GEN-3 (WS-F) supersedes the gen-2 savings-suffix rule: the
+/// annual row carries NO "less than paying monthly" comparison at
+/// any price. In its place the paywall's fine print frames the
+/// annual price per run, with the basis stated in the line and the
+/// cents figure DERIVED from the displayed product's annual price
+/// — about 4¢ at the $9.99 control, and the honest derived figure
+/// at the $19.99/$29.99 arms, never a hardcoded cents value.
+final class MakeItMePriceLabelTests: XCTestCase {
+
+    func testUnresolvedRowsFallBackToPriceFreePlanNames() {
+        XCTAssertEqual("Monthly", MakeItMePriceLabels.monthlyRowLabel(priceString: nil))
+        XCTAssertEqual(
+            "Annual",
+            MakeItMePriceLabels.annualRowLabel(annualPriceString: nil, annual: nil, monthly: nil)
+        )
+    }
+
+    func testMonthlyLabelRendersTheOfferingPrice() {
+        XCTAssertEqual("Monthly — $19.99/month", MakeItMePriceLabels.monthlyRowLabel(priceString: "$19.99"))
+        XCTAssertEqual("Monthly — $0.99/month", MakeItMePriceLabels.monthlyRowLabel(priceString: "$0.99"))
+    }
+
+    // MARK: - WS-F · the monthly comparison is gone at every price
+
+    func testAnnualRowCarriesNoMonthlyComparisonAtAnyArm() {
+        for (priceString, amount) in [("$9.99", "9.99"), ("$19.99", "19.99"), ("$29.99", "29.99")] {
+            let label = MakeItMePriceLabels.annualRowLabel(
+                annualPriceString: priceString,
+                annual: Decimal(string: amount),
+                monthly: Decimal(string: "0.99")
+            )
+            XCTAssertEqual("\(priceString)/yr", label)
+            XCTAssertFalse(label.contains("less than paying monthly"),
+                           "WS-F: the monthly comparison is removed, not reworded")
+            XCTAssertFalse(label.contains("%"),
+                           "WS-F: no percentage claim survives on the annual row")
+        }
+        // Even with the monthly price unknown, the row is the same
+        // plain price + term.
+        XCTAssertEqual(
+            "$9.99/yr",
+            MakeItMePriceLabels.annualRowLabel(annualPriceString: "$9.99",
+                                               annual: Decimal(string: "9.99"),
+                                               monthly: nil)
+        )
+    }
+
+    // MARK: - WS-F · the per-run fine print derives from the price
+
+    func testPerRunCentsDeriveFromTheAnnualPriceAtTheStatedBasis() {
+        // Basis: four to five runs a week → 4.5 × 52 = 234 runs/yr.
+        // $9.99 → 999/234 = 4.27¢ → about 4¢ (the control framing).
+        XCTAssertEqual(4, MakeItMePriceLabels.perRunCents(annual: Decimal(string: "9.99")))
+        // $19.99 → 1999/234 = 8.54¢ → about 9¢.
+        XCTAssertEqual(9, MakeItMePriceLabels.perRunCents(annual: Decimal(string: "19.99")))
+        // $29.99 → 2999/234 = 12.82¢ → about 13¢.
+        XCTAssertEqual(13, MakeItMePriceLabels.perRunCents(annual: Decimal(string: "29.99")))
+        XCTAssertNil(MakeItMePriceLabels.perRunCents(annual: nil))
+    }
+
+    func testPerRunFinePrintStatesItsBasisAtAllThreeArms() {
+        // GEN-6 (DA-20 + RW-58): the fine print is the settled
+        // basis ONLY — "$9.99 a year, at 4–5 runs a week." — at
+        // every arm; the per-run claim lives once, in perRunLine.
+        XCTAssertEqual(
+            "$9.99 a year, at 4–5 runs a week.",
+            MakeItMePriceLabels.perRunFinePrint(annualPriceString: "$9.99",
+                                                annual: Decimal(string: "9.99"))
+        )
+        XCTAssertEqual(
+            "$19.99 a year, at 4–5 runs a week.",
+            MakeItMePriceLabels.perRunFinePrint(annualPriceString: "$19.99",
+                                                annual: Decimal(string: "19.99"))
+        )
+        XCTAssertEqual(
+            "$29.99 a year, at 4–5 runs a week.",
+            MakeItMePriceLabels.perRunFinePrint(annualPriceString: "$29.99",
+                                                annual: Decimal(string: "29.99"))
+        )
+    }
+
+    func testPerRunFinePrintWaitsForTheOffering() {
+        XCTAssertNil(MakeItMePriceLabels.perRunFinePrint(annualPriceString: nil, annual: nil))
+        XCTAssertNil(MakeItMePriceLabels.perRunFinePrint(annualPriceString: "$9.99", annual: nil))
+        XCTAssertNil(MakeItMePriceLabels.perRunFinePrint(annualPriceString: nil,
+                                                         annual: Decimal(string: "9.99")))
+    }
+
+    // MARK: - WS-D · the Settings offer card's price line
+
+    func testSettingsOfferPriceLineIsTheProductPriceWithTerm() {
+        XCTAssertEqual("$9.99/yr",
+                       MakeItMePriceLabels.settingsOfferPriceLine(annualPriceString: "$9.99"))
+        XCTAssertEqual("$19.99/yr",
+                       MakeItMePriceLabels.settingsOfferPriceLine(annualPriceString: "$19.99"))
+        XCTAssertNil(MakeItMePriceLabels.settingsOfferPriceLine(annualPriceString: nil),
+                     "unresolved offering → the card carries no price, never a hardcoded one")
+    }
+}
+
+/// RW-16.30 (privacy decision 5a) — the Delete my data alerts are
+/// distinct presentation states from the photos-only delete: the
+/// account-level confirmation, its confirmed end state, and its
+/// failure must never alias the photos flow's alerts (the end-state
+/// copy claims different things — account deleted, not just photos).
+final class DeleteMyDataAlertTests: XCTestCase {
+
+    func testDeleteDataAlertsHaveDistinctStableIds() {
+        XCTAssertEqual(MakeItMeAlert.confirmDeleteData.id, "confirmDeleteData")
+        XCTAssertEqual(MakeItMeAlert.dataDeletedConfirmation.id, "dataDeletedConfirmation")
+        XCTAssertEqual(MakeItMeAlert.deleteDataFailed.id, "deleteDataFailed")
+    }
+
+    func testDeleteDataAlertsAreNotThePhotosAlerts() {
+        XCTAssertNotEqual(MakeItMeAlert.confirmDeleteData, .confirmDelete)
+        XCTAssertNotEqual(MakeItMeAlert.dataDeletedConfirmation, .deletedConfirmation)
+        XCTAssertNotEqual(MakeItMeAlert.deleteDataFailed, .deleteFailed)
+    }
+}

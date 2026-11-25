@@ -27,12 +27,80 @@ struct WatchOutfitView: View {
     // MARK: - Page 1: Hero Weather
 
     private var heroWeatherPage: some View {
+        // GEN-6 (RW-67): the glance page is its own view
+        // (WatchGlancePage, below) so the gate's render tests
+        // compose the exact production page — the composition
+        // is unchanged.
+        WatchGlancePage(viewModel: viewModel, weather: weather)
+    }
+
+    private var temperatureColor: Color {
+        AppTheme.temperatureColor(for: viewModel.currentTempBracket)
+    }
+
+    // MARK: - Page 2: Outfit
+
+    private var outfitPage: some View {
+        ScrollView {
+            VStack(spacing: 6) {
+                // Temperature Bracket
+                Text(recommendation.temperatureBracket.description)
+                    .font(.caption2)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(temperatureColor.opacity(0.8))
+                    .cornerRadius(8)
+
+                // Clothing Items (v4.1 — all items in layer order)
+                ForEach(recommendation.allItems) { item in
+                    WatchClothingRow(item: item, gender: viewModel.genderPreference)
+                }
+
+                // Refresh Button
+                Button(action: { viewModel.refresh() }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 10))
+                        Text(AppStrings.wearRefresh)
+                            .font(.caption2)
+                    }
+                }
+                .buttonStyle(.bordered)
+                // GEN-5 (cream map row 60): the outfit page's
+                // refresh tint is pine, not system blue.
+                .tint(AppTheme.primaryColor)
+                .padding(.top, 4)
+            }
+            .padding(.horizontal, 4)
+        }
+    }
+}
+
+// MARK: - Watch glance page (page 1: hero weather)
+//
+// GEN-6 (RW-67): extracted from WatchOutfitView's
+// heroWeatherPage — composition unchanged — so the render
+// tests compose this exact view at watch canvases.
+
+struct WatchGlancePage: View {
+    @ObservedObject var viewModel: WatchViewModel
+    let weather: WeatherData
+
+    private var temperatureColor: Color {
+        AppTheme.temperatureColor(for: viewModel.currentTempBracket)
+    }
+
+    var body: some View {
         ZStack {
-            // Hero image background (circular crop for watch)
+            // GEN-5 (RW-29 FA-46): the hero fills the display's
+            // ACTUAL shape (frame 53) — build 25's circle clip
+            // centre-cropped the photo into a disc, cutting the
+            // runner's head and wasting the display's corners.
             heroImageBackground
 
             // Temperature tint overlay (30% opacity)
-            Circle()
+            Rectangle()
                 .fill(temperatureColor.opacity(0.3))
 
             // Content
@@ -71,7 +139,7 @@ struct WatchOutfitView: View {
 
                 // Swipe hint
                 HStack(spacing: 4) {
-                    Text("Outfit")
+                    Text(AppStrings.wearOutfitLabel)
                         .font(.system(size: 9))
                     Image(systemName: "chevron.right")
                         .font(.system(size: 8))
@@ -80,153 +148,43 @@ struct WatchOutfitView: View {
             }
             .padding(12)
         }
-        .clipShape(Circle())
     }
 
     private var heroImageBackground: some View {
-        ZStack {
-            // Fallback image (immediate)
-            if let fallbackUrl = viewModel.fallbackImageUrl {
-                AsyncImage(url: URL(string: fallbackUrl)) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    case .failure, .empty:
-                        Color.black
-                    @unknown default:
-                        Color.black
+        // GEN-5 (RW-29 FA-46): full-bleed, TOP-anchored — the
+        // photo fills the display's shape with the head kept,
+        // the same crop discipline as the phone's hero surfaces.
+        GeometryReader { proxy in
+            ZStack {
+                // Fallback image (immediate)
+                if let fallbackUrl = viewModel.fallbackImageUrl {
+                    AsyncImage(url: URL(string: fallbackUrl)) { phase in
+                        switch phase {
+                        case .success(let image):
+                            HeroPhoto(image: image, width: proxy.size.width, height: proxy.size.height)
+                        case .failure, .empty:
+                            Color.black
+                        @unknown default:
+                            Color.black
+                        }
                     }
                 }
-            }
 
-            // AI image on top with crossfade
-            if let heroUrl = viewModel.heroImageUrl {
-                AsyncImage(url: URL(string: heroUrl)) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    case .failure, .empty:
-                        EmptyView()
-                    @unknown default:
-                        EmptyView()
+                // AI image on top with crossfade
+                if let heroUrl = viewModel.heroImageUrl {
+                    AsyncImage(url: URL(string: heroUrl)) { phase in
+                        switch phase {
+                        case .success(let image):
+                            HeroPhoto(image: image, width: proxy.size.width, height: proxy.size.height)
+                        case .failure, .empty:
+                            EmptyView()
+                        @unknown default:
+                            EmptyView()
+                        }
                     }
                 }
             }
         }
-        .clipShape(Circle())
-    }
-
-    private var temperatureColor: Color {
-        AppTheme.temperatureColor(for: viewModel.currentTempBracket)
-    }
-
-    // MARK: - Page 2: Outfit
-
-    private var outfitPage: some View {
-        ScrollView {
-            VStack(spacing: 6) {
-                // Temperature Bracket
-                Text(recommendation.temperatureBracket.description)
-                    .font(.caption2)
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(temperatureColor.opacity(0.8))
-                    .cornerRadius(8)
-
-                // Clothing Items (v4.1 — all items in layer order)
-                ForEach(recommendation.allItems) { item in
-                    WatchClothingRow(item: item, gender: viewModel.genderPreference)
-                }
-
-                // Refresh Button
-                Button(action: { viewModel.refresh() }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 10))
-                        Text("Refresh")
-                            .font(.caption2)
-                    }
-                }
-                .buttonStyle(.bordered)
-                .tint(.blue)
-                .padding(.top, 4)
-            }
-            .padding(.horizontal, 4)
-        }
-    }
-}
-
-// MARK: - Watch Weather Card (Legacy)
-
-struct WatchWeatherCard: View {
-    let weather: CurrentWeather
-    let locationName: String
-    let onToggleUnit: () -> Void
-
-    var temperatureColor: Color {
-        let temp = weather.temperatureFahrenheit
-        switch temp {
-        case 80...: return Color(hex: "FF5722")
-        case 65..<80: return Color(hex: "FF9800")
-        case 50..<65: return Color(hex: "4CAF50")
-        case 35..<50: return Color(hex: "2196F3")
-        case 20..<35: return Color(hex: "3F51B5")
-        default: return Color(hex: "9C27B0")
-        }
-    }
-
-    var body: some View {
-        VStack(spacing: 4) {
-            // Location
-            HStack(spacing: 2) {
-                Image(systemName: "location.fill")
-                    .font(.system(size: 8))
-                Text(locationName)
-                    .font(.system(size: 10))
-            }
-            .foregroundColor(.secondary)
-
-            // Weather Icon + Temp
-            HStack(spacing: 8) {
-                Image(systemName: weather.condition.icon)
-                    .font(.title2)
-                    .foregroundColor(AppTheme.primaryColor)
-
-                Button(action: onToggleUnit) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text("\(Int(weather.temperatureFahrenheit))°")
-                            .font(.system(size: 36, weight: .bold))
-                            .foregroundColor(temperatureColor)
-                        Text("Feels like")
-                            .font(.system(size: 8))
-                            .foregroundColor(.secondary)
-                    }
-                }
-                .buttonStyle(.plain)
-            }
-
-            // Condition + Wind
-            HStack(spacing: 8) {
-                Text(weather.condition.rawValue)
-                    .font(.caption2)
-
-                HStack(spacing: 2) {
-                    Image(systemName: "wind")
-                        .font(.system(size: 8))
-                    Text("\(Int(weather.windspeed))")
-                        .font(.system(size: 10))
-                }
-            }
-            .foregroundColor(.secondary)
-        }
-        .padding(8)
-        .background(Color.black.opacity(0.3))
-        .cornerRadius(12)
     }
 }
 
@@ -284,18 +242,16 @@ struct WatchClothingRow: View {
 
             Spacer()
 
-            // Shop icon - links to Amazon with watchos subtag
-            if let url = item.affiliateURL(for: gender, subtag: "watchos") {
-                Link(destination: url) {
-                    Image(systemName: "cart.fill")
-                        .font(.system(size: 10))
-                        .foregroundColor(AppTheme.primaryColor)
-                }
-            }
+            // GEN-6 (DA-24): no shop link on the watch — there is
+            // no designed watch shop surface, and the phone shop
+            // sheet is the settled shop surface. The row's `gender`
+            // input remains for the row's other consumers.
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(Color.white.opacity(0.05))
+        // GEN-5 (cream map row 60): the theme's own dark card
+        // fill, not a raw white composite.
+        .background(AppTheme.cardFillOnDark)
         .cornerRadius(8)
         .frame(minHeight: 44) // Minimum touch target
     }

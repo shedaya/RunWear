@@ -12,7 +12,7 @@ enum WatchViewState {
 @MainActor
 class WatchViewModel: NSObject, ObservableObject {
     @Published var state: WatchViewState = .loading
-    @Published var locationName: String = "Loading..."
+    @Published var locationName: String = AppStrings.wearLoading
 
     // Hero image state
     @Published var heroImageUrl: String?
@@ -27,7 +27,7 @@ class WatchViewModel: NSObject, ObservableObject {
         }
     }
 
-    @Published var temperatureUnit: TemperatureUnit = .fahrenheit {
+    @Published var temperatureUnit: TemperatureUnit = LocaleUnits.defaultTemperatureUnit {
         didSet {
             UserDefaults.standard.set(temperatureUnit.rawValue, forKey: "temperatureUnit")
         }
@@ -48,7 +48,17 @@ class WatchViewModel: NSObject, ObservableObject {
     private let geocoder = CLGeocoder()
 
     private var currentLocation: CLLocation?
-    private var currentWeather: WeatherData?
+    /// Internal (not private) so the RW-67 render fixtures can
+    /// seat a measured weather value and render the production
+    /// glance page — the WeatherViewModel precedent
+    /// (updateSelectedWeatherSnapshot is internal for the same
+    /// reason). Production writes it only in fetchWeather.
+    var currentWeather: WeatherData?
+    /// GEN-5 (RW-29 FA-56): the measured RAW feels-like (°F) from
+    /// the last fetch. The glance does NOT render this value
+    /// directly — GEN-6 (DA-14) it renders the comfort-adjusted
+    /// figure derived from it (see `displayTemperature`).
+    private(set) var currentFeelsLikeF: Double?
 
     override init() {
         super.init()
@@ -101,12 +111,13 @@ class WatchViewModel: NSObject, ObservableObject {
         case .notDetermined:
             state = .permissionNeeded
         case .restricted, .denied:
-            state = .error("Location access denied. Enable in Settings.")
+            state = .error(AppStrings.wearErrorLocationDenied)
         case .authorizedWhenInUse, .authorizedAlways:
             state = .loading
             locationManager.requestLocation()
         @unknown default:
-            state = .error("Unknown location status")
+            // GEN-5 (RW-29 FA-15 / EX-20): authored words.
+            state = .error(AppStrings.wearErrorLocationUnavailable)
         }
     }
 
@@ -121,7 +132,19 @@ class WatchViewModel: NSObject, ObservableObject {
 
             currentWeather = weather
 
-            let adjustedTemp = comfortLevel.adjustTemperature(weather.currentWeather.temperatureFahrenheit)
+            // RW-23: the watch keys BOTH its recommendation and its
+            // hero on the comfort-adjusted FEELS-LIKE — the same
+            // frame the phone uses. Before RW-23 it keyed on the
+            // comfort-adjusted ACTUAL temperature, a third frame, so
+            // watch and phone could recommend/serve different
+            // outfits for the same conditions. The feels-like comes
+            // from the extended current block (°C → °F, the same
+            // expression the phone's prepareHeroFrame fallback uses),
+            // falling back to the actual temperature when absent.
+            let rawFeelsLikeF = weather.currentDetail?.apparentTemperature.map { $0 * 9 / 5 + 32 }
+                ?? weather.currentWeather.temperatureFahrenheit
+            currentFeelsLikeF = rawFeelsLikeF
+            let adjustedTemp = comfortLevel.adjustTemperature(rawFeelsLikeF)
             // The watch reads the current-conditions block only (no
             // hourly snapshot), so its rain signal stays the condition
             // class of the current code — the phone derives isRaining
@@ -131,7 +154,7 @@ class WatchViewModel: NSObject, ObservableObject {
             let currentCondition = weather.currentWeather.condition
             let recommendation = outfitService.getRecommendation(
                 for: adjustedTemp,
-                rawTemperature: weather.currentWeather.temperatureFahrenheit,
+                rawTemperature: rawFeelsLikeF,
                 isRaining: currentCondition == .rain || currentCondition == .drizzle || currentCondition == .thunderstorm,
                 windSpeed: weather.currentWeather.windspeed,
                 hour: Calendar.current.component(.hour, from: Date())
@@ -143,14 +166,21 @@ class WatchViewModel: NSObject, ObservableObject {
             // Load hero image
             await loadHeroImage()
         } catch {
-            state = .error(error.localizedDescription)
+            // GEN-5 (RW-29 FA-15 / EX-20): authored words, never
+            // raw system error text (design-spec §17).
+            state = .error(AppStrings.wearErrorWeather)
         }
     }
 
     private func loadHeroImage() async {
         guard let weather = currentWeather else { return }
 
-        let adjustedTemp = comfortLevel.adjustTemperature(weather.currentWeather.temperatureFahrenheit)
+        // RW-23: same feels-like frame as fetchWeather (see its
+        // note) — the hero is keyed on the recommendation's frame,
+        // never on the actual temperature.
+        let rawFeelsLikeF = weather.currentDetail?.apparentTemperature.map { $0 * 9 / 5 + 32 }
+            ?? weather.currentWeather.temperatureFahrenheit
+        let adjustedTemp = comfortLevel.adjustTemperature(rawFeelsLikeF)
         let weatherCode = weather.currentWeather.weathercode
         let hour = Calendar.current.component(.hour, from: Date())
 
@@ -159,23 +189,38 @@ class WatchViewModel: NSObject, ObservableObject {
         let weatherCondition = HeroWeatherCondition.from(weatherCode: weatherCode)
 
         // Set fallback immediately for zero-lag
+        // WS-6 (D-20, watch): the pre-paint fallback is resolved WITH
+        // the user's fit preference — the same deterministic mapping
+        // the phone passes (GenderPreference.fallbackHeroGender);
+        // unisex passes nil and keeps the legacy chain.
         fallbackImageUrl = fallbackProvider.getImageURL(
             temp: currentTempBracket,
             weather: weatherCondition,
-            size: .watchOS
+            size: .watchOS,
+            gender: genderPreference.fallbackHeroGender
         )
 
-        // Fetch AI hero image
+        // Fetch AI hero image — with the loaded recommendation, so the
+        // RW-20 point-grain gate can judge pool photos against the
+        // exact prescription (the phone passes its outfit the same
+        // way; without one the service serves no pool row).
+        let outfit: OutfitRecommendation?
+        if case .loaded(_, let recommendation) = state {
+            outfit = recommendation
+        } else {
+            outfit = nil
+        }
         let result = await heroImageService.getHeroImage(
             gender: genderPreference,
             weatherCode: weatherCode,
             feelsLikeTemp: adjustedTemp,
             hour: hour,
-            isWatch: true
+            isWatch: true,
+            outfit: outfit
         )
 
         // Only use AI image if not Unsplash fallback
-        if result.fallbackLevel < 6 {
+        if result.fallbackLevel < 8 {
             heroImageUrl = result.imageUrl
         } else {
             heroImageUrl = nil
@@ -194,22 +239,50 @@ class WatchViewModel: NSObject, ObservableObject {
                 let state = placemark.administrativeArea ?? ""
                 locationName = [city, state].filter { !$0.isEmpty }.joined(separator: ", ")
                 if locationName.isEmpty {
-                    locationName = "Current Location"
+                    locationName = AppStrings.wearCurrentLocation
                 }
             }
         } catch {
-            locationName = "Current Location"
+            locationName = AppStrings.wearCurrentLocation
         }
     }
 
     // MARK: - Computed Properties
 
+    /// GEN-6 (DA-14, design-spec §0.4/§17 one-frame rule): the
+    /// glance number is the COMFORT-ADJUSTED feels-like — the
+    /// number the outfit is priced off, because the
+    /// recommendation in `fetchWeather` keys on
+    /// `comfortLevel.adjustTemperature(rawFeelsLikeF)`. Rendering
+    /// the raw feels-like here (the gen-5 code) made the watch
+    /// numeral disagree with the phone's and with its own outfit
+    /// whenever the comfort adjustment was non-zero. Pure and
+    /// static so the gate pins the adjustment without a host.
+    static func glanceTemperatureString(
+        rawFeelsLikeF: Double,
+        comfortLevel: ComfortLevel,
+        unit: TemperatureUnit
+    ) -> String {
+        let adjustedF = comfortLevel.adjustTemperature(rawFeelsLikeF)
+        let temp = unit == .fahrenheit
+            ? adjustedF
+            : (adjustedF - 32) * 5 / 9
+        return AppStrings.wearDegrees(Int(round(temp)))
+    }
+
     var displayTemperature: String {
-        guard let weather = currentWeather else { return "--°" }
-        let temp = temperatureUnit == .fahrenheit
-            ? weather.currentWeather.temperatureFahrenheit
-            : weather.currentWeather.temperature
-        return "\(Int(round(temp)))°"
+        guard let weather = currentWeather else { return AppStrings.wearNoData }
+        // GEN-6 (DA-14): the glance renders the comfort-adjusted
+        // feels-like (see glanceTemperatureString). Falls back to
+        // the actual temperature as the raw surrogate only when
+        // no feels-like was measured — the same surrogate the
+        // fetch path uses, adjusted the same way.
+        let rawFeelsLikeF = currentFeelsLikeF ?? weather.currentWeather.temperatureFahrenheit
+        return Self.glanceTemperatureString(
+            rawFeelsLikeF: rawFeelsLikeF,
+            comfortLevel: comfortLevel,
+            unit: temperatureUnit
+        )
     }
 }
 
@@ -224,7 +297,9 @@ extension WatchViewModel: CLLocationManagerDelegate {
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         Task { @MainActor in
-            state = .error("Could not get location: \(error.localizedDescription)")
+            // GEN-5 (RW-29 FA-15 / EX-20): authored words, never
+            // raw system error text (design-spec §17).
+            state = .error(AppStrings.wearErrorLocation)
         }
     }
 

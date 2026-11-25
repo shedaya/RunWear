@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-// MARK: - RW-14 "Make it me" — feature store
+// MARK: - RW-14 "Make It Me" — feature store
 //
 // The one state machine for personalization: stock / free /
 // subscribed, the free-allowance count, the versioned cell cache,
@@ -25,7 +25,15 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
         case subscribed  // opted in + make_it_me entitlement active
     }
 
-    static let freeAllowance = 5
+    /// RW-128 (fix wave 2026-11-07): the free allowance is 10,
+    /// moved as ONE aligned change with the server gates and
+    /// Android. RW-148 (Nov 9, 2026): the DEFINITION lives in
+    /// the model layer (FreeLooksAllowance) because that layer
+    /// compiles into both targets while this store is app-only;
+    /// this constant FORWARDS to it — one number, two names,
+    /// every count surface reading it (pill, meters, card,
+    /// subscription line, error mapping).
+    static let freeAllowance = FreeLooksAllowance.value
 
     @Published private(set) var mode: Mode = .stock
     @Published private(set) var freeGenerationsUsed = 0
@@ -54,6 +62,21 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
     /// Bumped whenever a new personalized hero lands, so views can
     /// react (the view model does the actual swap via awaitHero).
     @Published private(set) var landedHeroVersion = 0
+    /// GEN-3 (convergence band): the caller's real bank coverage
+    /// (ready/total), read with the profile refresh. Nil until a
+    /// read succeeds — the band shows only the real banking state.
+    @Published private(set) var bankCoverage: BankCoverage?
+
+    /// Fix wave 2026-11-07 (RW-126): whether the server's last
+    /// job read proved generation still in flight — the band's
+    /// terminal fold. Nil until a job read lands.
+    @Published private(set) var bankGenerationActive: Bool?
+
+    /// Fix wave 2026-11-07 (review §2 row 5): the bank as the
+    /// server holds it, re-read by `refreshBankLibrary()` — the
+    /// Your Looks library renders THIS, not only the cells this
+    /// session happened to resolve.
+    @Published private(set) var bankedLooks: [BankedLook] = []
 
     let billing = MakeItMeBilling()
 
@@ -80,12 +103,78 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
     var isOptedIn: Bool { mode != .stock }
     var freeRemaining: Int { max(0, Self.freeAllowance - freeGenerationsUsed) }
 
+    /// GEN-3 (X-9): looks in flight right now, from the same state
+    /// the hero renders (the server's folded look states, plus
+    /// user-initiated pending requests). The Settings status block
+    /// reads this alongside the delivered counter so it can carry
+    /// an in-flight look as pending instead of printing a settled
+    /// meter the flow contradicts.
+    var looksInFlight: Int {
+        // GEN-6 Wave A (DA-08): the meter's in-flight count is
+        // the CAPPED form — used + making can never exceed the
+        // free allowance on any surface reading this property.
+        // (The raw union stays available on FreeLooksMeter for
+        // non-meter diagnostics.)
+        FreeLooksMeter.cappedInFlightCount(
+            used: freeGenerationsUsed,
+            allowance: Self.freeAllowance,
+            lookStates: lookStates,
+            userInitiatedPending: userInitiatedPending
+        )
+    }
+
+    /// RW-117 (successor wave): per-cell scaffold facts, folded
+    /// from the serving payload's own `scaffold` marker on every
+    /// resolving lookup — the paint layer's classification source
+    /// (see PersonalHeroResolving.serveIsScaffold). A cell with no
+    /// resolving lookup yet, or whose last lookup resolved
+    /// nothing, reads false.
+    private var scaffoldServes: [String: Bool] = [:]
+
     /// RW-16.16: fold one get-personal-hero payload into the
-    /// per-cell look state the hero renders. Called on every lookup
-    /// path so the rendered status is always the server's latest
-    /// word for the cell.
-    private func noteLookState(_ lookup: PersonalHeroLookup) {
-        lookStates[lookup.combinationId] = PersonalLookState.from(lookup: lookup)
+    /// per-cell look state the hero renders — now the ONE fold
+    /// every lookup path routes through (resolution, the poll,
+    /// revalidation's lookups, the already-available re-lookup),
+    /// so the cache, the look state, and the scaffold fact can
+    /// never be folded by different rules on different paths.
+    /// Returns the cache's resolution for the caller.
+    ///
+    /// RW-115 (successor wave): the fold carries the cache's
+    /// delivery fact — when THIS lookup delivered a hero into the
+    /// cell (a new entry, or the stored hero changed), a folded
+    /// failure clears to ready (PersonalLookState's
+    /// reconciledWithDelivery): the failure the payload still
+    /// reports belongs to the cell's earlier cycle, and the
+    /// delivered hero is the cell's present truth. A re-resolve
+    /// of the same cached hero delivers nothing and clears
+    /// nothing — the keep-serving failure surface stands.
+    private func foldLookup(_ lookup: PersonalHeroLookup) -> PersonalCellCache.Resolution {
+        let (resolution, deliveredHero) = cache.resolveWithDelivery(lookup: lookup, now: Date())
+        let cell = lookup.combinationId
+        lookStates[cell] = PersonalLookState.from(lookup: lookup)
+            .reconciledWithDelivery(deliveredHero)
+        switch resolution {
+        case .show:
+            // RW-130 (fix wave): the silence fact is the TIER —
+            // scaffold and similar serves are both non-exact
+            // personal serves and both stand down every
+            // exact-serve label; the legacy marker is honoured
+            // through `serveTier`'s derivation.
+            scaffoldServes[cell] = lookup.serveTier.isNonExactPersonalServe
+            serveTiers[cell] = lookup.serveTier
+        case .none:
+            scaffoldServes[cell] = false
+            serveTiers[cell] = .none
+        }
+        return resolution
+    }
+
+    /// Per-cell serve tiers as last folded (fix wave, RW-130).
+    private var serveTiers: [String: PersonalServeTier] = [:]
+
+    /// The tier of the serve last folded for a cell.
+    func serveTier(for combination: PersonalCombination) -> PersonalServeTier {
+        serveTiers[combination.combinationId] ?? .none
     }
 
     // MARK: - Bootstrap
@@ -122,8 +211,128 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
         if profile.personalizationOn {
             if mode == .stock { mode = billing.isSubscribed ? .subscribed : .free }
             referenceCount = (try? await api.fetchReferencePaths())?.count ?? referenceCount
+            // GEN-3 (convergence band): the coverage read rides
+            // the same refresh; a failed read leaves the previous
+            // value in place.
+            if let coverage = await readCoverage() {
+                bankCoverage = coverage
+                stallTracker.observe(coverage, now: Date())
+            }
+            // RW-126 (fix wave): the job-state fold rides the
+            // same refresh — a profile refresh that finds every
+            // job terminal settles the band in the same pass.
+            if let active = await api.fetchGenerationActive() {
+                bankGenerationActive = active
+            }
         } else if mode != .stock {
             mode = .stock
+        }
+        syncCoveragePolling()
+    }
+
+    /// Fix wave 2026-11-07 (review §1 Seam A / §5.4): THE
+    /// reconciliation pass. Personal-layer server state
+    /// revalidates AS A SET whenever the app lands or returns:
+    /// profile (free counter, reference count, server entitled
+    /// flag), billing entitlement, bank coverage + generation
+    /// job state (the band), the bank library, and the current
+    /// cell's look state — one pass, in that order, so no
+    /// surface keeps a different vintage of the server truth
+    /// (the stranded-state family: RW-126, RW-132, RW-134).
+    func reconcilePersonalLayer(currentCombination: PersonalCombination?) async {
+        await billing.refresh()
+        await refreshProfile()
+        await refreshBankLibrary()
+        if let currentCombination {
+            _ = await revalidateLookState(for: currentCombination)
+        }
+        syncCoveragePolling()
+    }
+
+    /// Re-read the bank for the Your Looks library (fix wave).
+    /// A failed read leaves the previous bank standing rather
+    /// than emptying the library on a transient error.
+    func refreshBankLibrary() async {
+        guard isOptedIn else { return }
+        if let looks = await api.fetchBankHeroes() {
+            bankedLooks = looks
+        }
+    }
+
+    /// GEN-5 (RW-29 FA-4): the ONE convergence-band gate both
+    /// surfaces (home band, Settings band) read — subscribed
+    /// AND not in a trial period. Trial users get on-demand
+    /// looks and no bank (the model's premium-context rule), so
+    /// the band never renders for them; Android suppresses it
+    /// for trial users the same way.
+    var convergenceBand: ConvergenceBandContent? {
+        // GEN-5 (Addendum 8): a bank whose real ready count has
+        // not advanced for the stall threshold renders the
+        // band's stalled line — never ordinary in-progress
+        // forever.
+        ConvergenceBand.content(
+            isSubscribed: mode == .subscribed && !billing.isInTrial,
+            coverage: bankCoverage,
+            stalled: bankCoverage.map { stallTracker.isStalled($0, now: Date()) } ?? false,
+            generationActive: bankGenerationActive
+        )
+    }
+
+    /// GEN-5 (Addendum 8): the bank stall tracker (pure rule in
+    /// the model layer; the store feeds it every coverage read).
+    private var stallTracker = BankStallTracker()
+
+    // MARK: - Bank coverage polling (GEN-5, RW-29 EX-15)
+    //
+    // Build 25 re-read coverage ONLY as a passenger on profile
+    // refreshes, so a bank that finished filling server-side
+    // mid-session left the convergence band standing on stale
+    // counts until some unrelated refresh happened by. While
+    // the band's own condition holds (subscribed, coverage
+    // engaged, not yet complete), the store now re-reads
+    // coverage on a slow poll until the bank completes — the
+    // band retires on the bank's actual completion, in-session.
+
+    private var coveragePollTask: Task<Void, Never>?
+
+    private var bandConditionHolds: Bool {
+        // Exactly the band's own visibility (FA-4 gate
+        // included): the poll lives while the band shows.
+        convergenceBand != nil
+    }
+
+    private func syncCoveragePolling() {
+        if bandConditionHolds {
+            guard coveragePollTask == nil else { return }
+            coveragePollTask = Task { [weak self] in
+                guard let self else { return }
+                // Fix wave 2026-11-07 (RW-126): NO iteration
+                // cap. The build-30 poll expired after 40 × 30 s
+                // ≈ 20 minutes — before the ~21-minute fill it
+                // was watching completed — and never re-armed,
+                // stranding the band for the rest of the
+                // session. The poll now lives while the band's
+                // own condition holds (Android's unbounded band
+                // watch is the reference), folding the job state
+                // with the coverage so the band settles on the
+                // server's terminal word, and `syncCoveragePolling`
+                // is re-called by every reconciliation pass.
+                while !Task.isCancelled && self.bandConditionHolds {
+                    try? await Task.sleep(nanoseconds: 30_000_000_000)
+                    if Task.isCancelled || !self.bandConditionHolds { break }
+                    if let coverage = await self.readCoverage() {
+                        self.bankCoverage = coverage
+                        self.stallTracker.observe(coverage, now: Date())
+                    }
+                    if let active = await self.api.fetchGenerationActive() {
+                        self.bankGenerationActive = active
+                    }
+                }
+                self.coveragePollTask = nil
+            }
+        } else {
+            coveragePollTask?.cancel()
+            coveragePollTask = nil
         }
     }
 
@@ -173,6 +382,47 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
         _ = await lookupAndMaybeGenerate(combination: combination, userInitiated: false)
     }
 
+    /// RW-79: the lifecycle revalidation the view model drives
+    /// when the app returns to the foreground, the hero paywall
+    /// is dismissed, or Home appears. Before this, look state was
+    /// re-read ONLY by hero resolutions and by the per-cell poll
+    /// while it ran — so a job that reached its terminal state
+    /// while no poll was live (its schedule consumed during app
+    /// suspension, cap expiry having resolved the cell out of
+    /// MAKING and deleted the poll) was never folded: Home kept
+    /// whatever it last rendered, indefinitely, until some
+    /// unrelated re-resolution happened. This performs ONE fresh
+    /// resolution read — the same read a display performs, so a
+    /// terminal FAILED folds in within the round trip and Home
+    /// (which renders `lookStates` directly) drops the MAKING
+    /// presentation for the settled failed line, and a landed
+    /// hero's URL returns to the caller for the swap — and, when
+    /// the cell is still MAKING with no poll stored, re-arms the
+    /// poll under LookRevalidationPolicy so the wait is watched
+    /// again. It never requests generation itself: the read
+    /// routes through resolveHero, whose once-per-session guard
+    /// keeps a failed cell un-requested until the user's own
+    /// "Try again" (retryLook) clears the marker.
+    func revalidateLookState(for combination: PersonalCombination) async -> String? {
+        // Fix wave 2026-11-07 (RW-134): revalidation performs a
+        // FRESH server lookup, never the cache's fresh-URL fast
+        // path. Build 30 routed through resolveHero, whose cache
+        // hit returned the morning's answer (stock-era or
+        // scaffold) while the exact cell banked behind it — the
+        // settle-bank-return sequence stranded. A fresh lookup
+        // folds the server's current word; when it delivers the
+        // exact hero, the caller swaps it in on this very pass.
+        let url = await lookupAndMaybeGenerate(combination: combination, userInitiated: false)
+        let cell = combination.combinationId
+        if LookRevalidationPolicy.shouldRearmPoll(
+            state: lookState(for: combination),
+            pollRunning: pollingTasks[cell] != nil
+        ) {
+            Task { _ = await self.awaitHero(for: combination) }
+        }
+        return url
+    }
+
     private func lookupAndMaybeGenerate(combination: PersonalCombination, userInitiated: Bool) async -> String? {
         let cell = combination.combinationId
         guard let lookup = try? await api.getPersonalHero(combinationId: cell) else {
@@ -182,8 +432,7 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
         // request decision, so the hero renders the truth for this
         // cell even when the request guard below suppresses a new
         // automatic request.
-        noteLookState(lookup)
-        switch cache.resolve(lookup: lookup, now: Date()) {
+        switch foldLookup(lookup) {
         case .show(let url):
             return url
         case .none:
@@ -195,13 +444,21 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
     }
 
     /// Wait for a pending generation to land (polls the serving
-    /// endpoint; generation takes ~2–4 min server-side). Returns the
-    /// URL when the hero lands, nil when the poll resolves FAILED or
-    /// the budget runs out. Every poll folds the server's look state
-    /// (RW-16.16): a terminal failure ends the poll with the failed
-    /// state standing on the hero — the pool photo stays up, the
-    /// failed line stays up, and nothing about the state is erased
-    /// when the poll gives up (the pre-RW-16.16 G4 behavior).
+    /// endpoint). GEN-6 Wave A (DA-02): the poll horizon is
+    /// HeroPollPolicy's — poll with backoff until the cell reaches
+    /// a terminal state (READY / FAILED), up to the policy's
+    /// generous cap (20 min), NOT gen-5's 18 × 15 s ≈ 4.5 min,
+    /// which stopped with MAKING stranded on screen. Returns the
+    /// URL when the hero lands, nil when the poll resolves FAILED
+    /// or the cap runs out. Every poll folds the server's look
+    /// state (RW-16.16): a terminal failure ends the poll with the
+    /// failed state standing on the hero — the pool photo stays
+    /// up, the failed line stays up. On CAP EXPIRY with the cell
+    /// still MAKING, the cell resolves out of MAKING
+    /// (HeroPollPolicy.stateAfterCapExpiry): the pool photo keeps
+    /// serving with no stranded generating pill, and a later
+    /// display re-looks-up the cell — never a silently stranded
+    /// MAKING.
     func awaitHero(for combination: PersonalCombination) async -> String? {
         let cell = combination.combinationId
         if let existing = pollingTasks[cell] {
@@ -210,22 +467,66 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
         let task = Task<String?, Never> { [weak self] in
             guard let self else { return nil }
             var landed: String?
-            for _ in 0..<18 {
-                try? await Task.sleep(nanoseconds: 15_000_000_000)
+            for delay in HeroPollPolicy.delays {
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                 if Task.isCancelled { break }
                 guard let lookup = try? await self.api.getPersonalHero(combinationId: cell) else { continue }
-                self.noteLookState(lookup)
-                if case .show(let url) = self.cache.resolve(lookup: lookup, now: Date()) {
-                    landed = url
-                    break
+                if case .show(let url) = self.foldLookup(lookup) {
+                    // Fix wave 2026-11-07 (RW-130, review §4.5
+                    // step 3): the poll watches the EXACT cell.
+                    // A scaffold/similar landing paints instantly
+                    // at resolve time, but it does not end this
+                    // watch — the poll lives until the exact look
+                    // lands (or a terminal fold / the cap), and
+                    // only the exact landing bumps the version
+                    // that swaps the hero in place.
+                    if !lookup.serveTier.isNonExactPersonalServe {
+                        landed = url
+                    }
                 }
-                // A terminal failure resolves the poll: the failed
-                // state folded above is the durable surface now.
-                if self.lookStates[cell]?.isFailed == true { break }
+                // RW-113 / RW-117 (successor wave): the poll
+                // settles on the policy's rule, not on the first
+                // resolution — a hero that resolves under a
+                // still-MAKING fold (the server reports the job
+                // active in the same instant the finished hero
+                // already serves) keeps the poll alive until the
+                // fold turns terminal, so the state the hero
+                // renders is the settled one, never a stranded
+                // MAKING folded in the completion instant. A
+                // terminal failure with no landing still resolves
+                // the poll: the failed state folded above is the
+                // durable surface now.
+                let folded = self.lookStates[cell] ?? .none
+                if HeroPollPolicy.shouldEndPoll(landed: landed != nil, foldedState: folded) { break }
+            }
+            if !Task.isCancelled,
+               let state = self.lookStates[cell], state == .making {
+                // Cap expiry (the loop ran its full schedule
+                // without a terminal word): leave the honest,
+                // usable state the policy names. RW-117: this now
+                // applies whether or not a hero landed under the
+                // MAKING fold — a landed hero paints either way,
+                // and a generating pill stranded over it is the
+                // defect this wave removes; the next display's
+                // revalidation folds the server's settled word.
+                self.lookStates[cell] = HeroPollPolicy.stateAfterCapExpiry(state)
             }
             self.userInitiatedPending.remove(cell)
             self.pollingTasks[cell] = nil
-            if landed != nil { self.landedHeroVersion += 1 }
+            if landed != nil {
+                self.landedHeroVersion += 1
+                // GEN-2 I2 (W-18): a landing IS the server's
+                // charge moment — the worker increments
+                // free_generations_used as it delivers the
+                // verified hero. Re-read the profile here so the
+                // ONE counter every surface binds to (this store's
+                // freeGenerationsUsed) reflects the delivery in
+                // this session. Before this, nothing re-read it
+                // after opt-in, so Settings stood at its pre-
+                // generation value ("0 of 5") while frame 34
+                // announced the debit from a hardcoded line.
+                await self.refreshProfile()
+            }
             return landed
         }
         pollingTasks[cell] = task
@@ -277,9 +578,13 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
             case "already_available":
                 // A hero exists but the lookup raced it; re-lookup.
                 if let lookup = try? await api.getPersonalHero(combinationId: cell) {
-                    noteLookState(lookup)
-                    if case .show = cache.resolve(lookup: lookup, now: Date()) {
+                    if case .show = foldLookup(lookup) {
                         landedHeroVersion += 1
+                        // W-18: the hero this response names was
+                        // delivered (and, if chargeable, charged)
+                        // before this request — re-read the one
+                        // counter so every surface agrees.
+                        await refreshProfile()
                     }
                 }
                 userInitiatedPending.remove(cell)
@@ -323,6 +628,12 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
         requestedCells.removeAll()
         exhaustedCell = nil
         await refreshProfile()
+        // GEN-5 (Addendum 8, second follow-up): a fresh photo set
+        // is a new selfie epoch — a subscribed user's fill is
+        // re-named for it (the server stamps the jobs with the
+        // new epoch and supersedes the old epoch's unprocessed
+        // jobs in the worker).
+        if mode == .subscribed { kickFillWithRetry() }
     }
 
     /// §3 photo replacement: same attestation + quality check in the
@@ -342,6 +653,11 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
             requestedCells.remove(currentCombination.combinationId)
             startUserInitiatedGeneration(for: currentCombination)
         }
+        // GEN-5 (Addendum 8, second follow-up): replacing the
+        // references is a selfie-epoch change — a subscribed
+        // user's fill is re-named for the new epoch, same as at
+        // opt-in.
+        if mode == .subscribed { kickFillWithRetry() }
     }
 
     // MARK: - Personal-hero flag (RW-14 acceptance (19))
@@ -350,6 +666,21 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
     /// serves from cache, if one is held.
     func personalHeroId(for combination: PersonalCombination) -> String? {
         cache.heroId(for: combination.combinationId)
+    }
+
+    /// WS-7: the server's folded look state for this cell (the
+    /// PersonalHeroResolving surface the paint layer classifies a
+    /// personal serve from — see WeatherViewModel's serve records).
+    func lookState(for combination: PersonalCombination) -> PersonalLookState {
+        lookStates[combination.combinationId] ?? .none
+    }
+
+    /// RW-117: the scaffold fact for this cell, folded from the
+    /// serving payload's own marker by foldLookup — the paint
+    /// layer's classification source (see the protocol's note on
+    /// why the look state cannot carry this fact).
+    func serveIsScaffold(for combination: PersonalCombination) -> Bool {
+        scaffoldServes[combination.combinationId] ?? false
     }
 
     /// "This doesn't look like me" (spec §4): flag the cell's
@@ -372,6 +703,7 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
             return false
         }
         cache.evict(combinationId: cell)
+        scaffoldServes[cell] = false
         requestedCells.remove(cell)
         return true
     }
@@ -381,8 +713,27 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
     /// resolveHero finds nothing for a stock user.
     func deleteEverything() async throws {
         try await api.deleteMyPhotos()
+        resetToStock()
+    }
+
+    /// Delete my data (RW-16.30 decision 5a): the full account
+    /// deletion. Same local reset as the photos erasure, plus the
+    /// local session is forgotten — the account it belonged to no
+    /// longer exists server-side, so the next session is a fresh
+    /// anonymous account, exactly like a first launch.
+    func deleteAllData() async throws {
+        try await api.deleteMyData()
+        resetToStock()
+        await SupabaseAuthService.shared.clearLocalSession()
+    }
+
+    private func resetToStock() {
         cache.removeAll()
         lookStates.removeAll()
+        scaffoldServes.removeAll()
+        serveTiers.removeAll()
+        bankedLooks.removeAll()
+        bankGenerationActive = nil
         requestedCells.removeAll()
         pollingTasks.values.forEach { $0.cancel() }
         pollingTasks.removeAll()
@@ -390,10 +741,59 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
         exhaustedCell = nil
         freeGenerationsUsed = 0
         referenceCount = 0
+        bankCoverage = nil
         mode = .stock
     }
 
     // MARK: - Subscription fill (server-gated)
+
+    /// GEN-5 (Addendum 8 follow-up, Defects 1 + 2, as corrected
+    /// by the second follow-up): the cells this client names to
+    /// the fill — the composed set (forecast cluster cells first,
+    /// then the canonical core matrix), supplied by
+    /// WeatherViewModel on every forecast load. The set is ALSO
+    /// the convergence band's target set (Defect 2): coverage is
+    /// banked ∩ named over named — the fill set actually owed
+    /// (core matrix + current forecast horizon), so the bar
+    /// cannot reach 100% while owed cells are missing. Persisted
+    /// so the denominator survives a relaunch before the next
+    /// forecast load lands.
+    private static let namedFillCellsKey = "rw.gen5.namedFillCells"
+    private(set) var namedFillCells: [String] = (UserDefaults.standard.stringArray(forKey: PersonalHeroStore.namedFillCellsKey) ?? [])
+    /// The set the last successful fill call named — a forecast
+    /// refresh re-sends the fill only when the set changed (the
+    /// function is designed to make re-calling harmless).
+    private var lastSentFillCells: [String] = []
+
+    /// PersonalHeroResolving: receive the composed fill set.
+    /// While subscribed, a CHANGED set re-kicks the fill
+    /// immediately (a forecast refresh — including a NEW PLACE's
+    /// forecast — is a designed fill trigger); the
+    /// subscription-grant kick reads whatever set is current.
+    func updateForecastPriorityCells(_ cells: [String]) {
+        guard cells != namedFillCells else {
+            // Same set: still the denominator of record.
+            return
+        }
+        namedFillCells = cells
+        UserDefaults.standard.set(cells, forKey: Self.namedFillCellsKey)
+        if mode == .subscribed, !cells.isEmpty {
+            kickFillWithRetry()
+        }
+        // The denominator may have moved under a standing bank —
+        // re-read coverage against the new target.
+        Task { await refreshProfile() }
+    }
+
+    /// Coverage against the named target set (Defect 2): banked
+    /// cells from the server, target from this client's own fill
+    /// contract. Nil when either read is unavailable or no target
+    /// has been named — the band then stays hidden rather than
+    /// showing a fraction against the wrong whole.
+    private func readCoverage() async -> BankCoverage? {
+        guard let banked = await api.fetchBankedCells() else { return nil }
+        return deriveBankCoverage(heroCells: banked, targetCells: Set(namedFillCells))
+    }
 
     /// On entitlement, ask the server to pre-generate the matrix.
     /// The server's entitled flag is set by the billing webhook and
@@ -405,7 +805,17 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
             guard let self else { return }
             for attempt in 0..<6 {
                 do {
-                    _ = try await self.api.startPersonalFill()
+                    // Defect 1: name the composed fill set — an
+                    // unnamed call enqueues nothing at all under
+                    // the deployed convergence contract.
+                    let cells = self.namedFillCells
+                    _ = try await self.api.startPersonalFill(priorityCells: cells)
+                    self.lastSentFillCells = cells
+                    // GEN-5 (RW-29 EX-15): the fill starting is
+                    // the moment the band appears — re-read
+                    // coverage for it directly, not as a
+                    // passenger on some later refresh.
+                    await self.refreshProfile()
                     return
                 } catch PersonalHeroAPIError.notEntitled {
                     if attempt == 5 { return }

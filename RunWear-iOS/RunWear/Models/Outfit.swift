@@ -69,14 +69,14 @@ enum TemperatureBracket: String, CaseIterable {
 
     var description: String {
         switch self {
-        case .hot: return "Hot Weather Running"
-        case .warm: return "Warm Weather Running"
-        case .mild: return "Mild Weather Running"
-        case .cool: return "Cool Weather Running"
-        case .cold: return "Cold Weather Running"
-        case .veryCold: return "Very Cold Weather Running"
-        case .frigid: return "Frigid Weather Running"
-        case .extreme: return "Extreme Cold Running"
+        case .hot: return AppStrings.weatherBracketHotDesc
+        case .warm: return AppStrings.weatherBracketWarmDesc
+        case .mild: return AppStrings.weatherBracketMildDesc
+        case .cool: return AppStrings.weatherBracketCoolDesc
+        case .cold: return AppStrings.weatherBracketColdDesc
+        case .veryCold: return AppStrings.weatherBracketVeryColdDesc
+        case .frigid: return AppStrings.weatherBracketFrigidDesc
+        case .extreme: return AppStrings.weatherBracketExtremeDesc
         }
     }
 
@@ -106,6 +106,30 @@ enum TemperatureBracket: String, CaseIterable {
         }
     }
 
+    /// RW-109 (successor wave): the DISPLAY bracket — the bracket
+    /// of the feels-like the hero actually prints. The hero
+    /// headline is the RAW measured feels-like, rounded to the
+    /// nearest degree for display (the documented Android/PWA
+    /// contract `currentFeelsLike` carries); any surface that
+    /// names a bracket BESIDE that number — the weather-band
+    /// badge, the detail sheet's context line — must classify
+    /// this value, so the bracket's printed range always
+    /// contains the printed number. The recommendation's own
+    /// bracket (`OutfitRecommendation.temperatureBracket`) keeps
+    /// its engine-frame meaning — it classifies the
+    /// comfort-adjusted feels-like the prescription was solved
+    /// from, and it keys photo selection and the day chart;
+    /// RW-109's defect was the badge reading the ENGINE bracket
+    /// while standing next to the RAW number (a runs-warm
+    /// profile: raw 64°F prints as 64 but the adjusted 69
+    /// classified Warm beside it; raw 79 printed while the
+    /// adjusted 84 classified Hot). The bounds themselves are
+    /// not moved — the two frames are simply no longer mixed on
+    /// one surface.
+    static func displayBracket(forDisplayedFeelsLikeF feelsLikeF: Double) -> TemperatureBracket {
+        from(temperature: feelsLikeF.rounded())
+    }
+
     /// The bracket's Fahrenheit bounds — the single source the
     /// badge's range label renders from. (The range previously lived
     /// ONLY in the rawValue string, hard-coded "°F": a Celsius user's
@@ -131,20 +155,36 @@ enum TemperatureBracket: String, CaseIterable {
     /// Fahrenheit returns the historical rawValue byte-for-byte;
     /// Celsius converts the same bounds, so the band and the hero
     /// numbers always speak one unit.
+    /// The range label in Fahrenheit, resolved through the catalog
+    /// (WP-R3). The rawValue stays the canonical token (it segments
+    /// combination IDs); display reads go through here / rangeText.
+    var displayRange: String {
+        switch self {
+        case .hot: return AppStrings.weatherBracketHotRange
+        case .warm: return AppStrings.weatherBracketWarmRange
+        case .mild: return AppStrings.weatherBracketMildRange
+        case .cool: return AppStrings.weatherBracketCoolRange
+        case .cold: return AppStrings.weatherBracketColdRange
+        case .veryCold: return AppStrings.weatherBracketVeryColdRange
+        case .frigid: return AppStrings.weatherBracketFrigidRange
+        case .extreme: return AppStrings.weatherBracketExtremeRange
+        }
+    }
+
     func rangeText(for unit: TemperatureUnit) -> String {
-        guard unit == .celsius else { return rawValue }
+        guard unit == .celsius else { return displayRange }
         func celsius(_ fahrenheit: Int) -> Int {
             Int(round(Double(fahrenheit - 32) * 5 / 9))
         }
         switch fahrenheitBounds {
         case let (lower?, nil):
-            return "\(celsius(lower))°C+"
+            return AppStrings.weatherBracketRangeCelsiusHigh(celsius(lower))
         case let (nil, upper?):
-            return "<\(celsius(upper))°C"
+            return AppStrings.weatherBracketRangeCelsiusBelow(celsius(upper))
         case let (lower?, upper?):
-            return "\(celsius(lower))-\(celsius(upper))°C"
+            return AppStrings.weatherBracketRangeCelsiusSpan(celsius(lower), celsius(upper))
         case (nil, nil):
-            return rawValue
+            return displayRange
         }
     }
 }

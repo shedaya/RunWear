@@ -60,9 +60,9 @@ final class ReferencePhotosLoader: ObservableObject {
             let urls = try await runWithTimeout { try await self.collectURLs() }
             state = urls.isEmpty ? .empty : .loaded(urls)
         } catch is LoadTimeout {
-            state = .failed("Loading your photos took too long. Check your connection and try again.")
+            state = .failed(AppStrings.mimPhotosLoadTimeout)
         } catch {
-            state = .failed("Couldn't load your photos. Please try again.")
+            state = .failed(AppStrings.mimPhotosLoadFailed)
         }
     }
 

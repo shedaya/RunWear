@@ -1,0 +1,273 @@
+import XCTest
+import SwiftUI
+
+/// Pins for WS-1 (RC-1, iOS half) — home composition verification.
+///
+/// The deep audit judged iOS CLEAN on D-01…D-04 at code level
+/// (`WeatherOutfitView.swift`'s sheet container overlaps the photo
+/// by −28pt by construction; a single continuous sheet-filled
+/// stack; an opaque navigation bar). This suite VERIFIES those
+/// verdicts against the current tree, pins the Part 1 §1.1 handoff
+/// invariants that are testable, and carries the fixes this lane
+/// landed where verification found divergences:
+///
+/// - the photo-zone chrome (script logo) never faded — it only
+///   rode the hero's scale transform (§1.1: opacity 1 → 0 across
+///   the handoff's first 40%, non-interactive from fade start);
+/// - the hero crossfade ran at 0.5 s (§1.1: 300 ms) and its
+///   landed state carried over to later photos, which then
+///   swapped with no crossfade at all;
+/// - the fallback layer hard-swapped on a URL change instead of
+///   crossfading.
+///
+/// View-layer facts the test target cannot compile are pinned
+/// against the sources of record (the suite's established
+/// source-pin pattern; a skip in CI is reported in the gate
+/// report, never silently counted).
+final class HomeCompositionTests: XCTestCase {
+
+    // MARK: - The overlap anchor (D-01 iOS verdict)
+
+    func testSheetOverlapIsTheDesignedConstant() {
+        XCTAssertEqual(HomeHandoffGeometry.sheetOverlap, 28)
+        XCTAssertEqual(HomeHandoffGeometry.sheetCornerRadius, 28)
+    }
+
+    func testOverlapIsConstantAcrossTheWholeHandoff() {
+        // The overlap is layout geometry (.padding(.top, -overlap)
+        // on the sheet container), NOT a function of progress:
+        // for every handoff position the sheet's top edge sits
+        // exactly `sheetOverlap` above the hero's layout foot.
+        // This loop pins the model side — there is no
+        // progress-dependent overlap value anywhere in the type.
+        for progress in stride(from: 0.0, through: 1.0, by: 0.05) {
+            XCTAssertEqual(
+                HomeHandoffGeometry.sheetOverlap, 28,
+                "overlap changed at progress \(progress)"
+            )
+            _ = progress
+        }
+    }
+
+    // MARK: - Handoff progress (scroll-coupled 1:1, §1.1)
+
+    func testProgressIsADirectClampedFunctionOfOffset() {
+        XCTAssertEqual(HomeHandoffGeometry.progress(forScrollOffset: -40), 0)
+        XCTAssertEqual(HomeHandoffGeometry.progress(forScrollOffset: 0), 0)
+        XCTAssertEqual(HomeHandoffGeometry.progress(forScrollOffset: 110), 0.5, accuracy: 0.001)
+        XCTAssertEqual(HomeHandoffGeometry.progress(forScrollOffset: 220), 1)
+        XCTAssertEqual(HomeHandoffGeometry.progress(forScrollOffset: 900), 1)
+        XCTAssertEqual(HomeHandoffGeometry.handoffRange, 220)
+    }
+
+    func testSettledCardEndStateMatchesSpec() {
+        // §1.1 end-state: scale 1.00 → 0.94, radius 0 → 24,
+        // horizontal inset 0 → 16, all across the same range.
+        XCTAssertEqual(HomeHandoffGeometry.scale(progress: 0), 1)
+        XCTAssertEqual(HomeHandoffGeometry.scale(progress: 1), 0.94, accuracy: 0.001)
+        XCTAssertEqual(HomeHandoffGeometry.scale(progress: 0.5), 0.97, accuracy: 0.001)
+        XCTAssertEqual(HomeHandoffGeometry.cornerRadius(progress: 0), 0)
+        XCTAssertEqual(HomeHandoffGeometry.cornerRadius(progress: 1), 24)
+        XCTAssertEqual(HomeHandoffGeometry.horizontalInset(progress: 0), 0)
+        XCTAssertEqual(HomeHandoffGeometry.horizontalInset(progress: 1), 16)
+    }
+
+    // MARK: - Photo-zone chrome fade (§1.1, the WS-1 fix)
+
+    func testChromeFadesAcrossTheFirstFortyPercentOnly() {
+        XCTAssertEqual(HomeHandoffGeometry.chromeFadePortion, 0.4)
+        XCTAssertEqual(HomeHandoffGeometry.chromeOpacity(progress: 0), 1)
+        XCTAssertEqual(HomeHandoffGeometry.chromeOpacity(progress: 0.2), 0.5, accuracy: 0.001)
+        XCTAssertEqual(HomeHandoffGeometry.chromeOpacity(progress: 0.4), 0)
+        XCTAssertEqual(HomeHandoffGeometry.chromeOpacity(progress: 0.41), 0)
+        XCTAssertEqual(HomeHandoffGeometry.chromeOpacity(progress: 1), 0)
+    }
+
+    func testChromeIsInteractiveOnlyAtExactRest() {
+        XCTAssertTrue(HomeHandoffGeometry.chromeIsInteractive(progress: 0))
+        XCTAssertFalse(HomeHandoffGeometry.chromeIsInteractive(progress: 0.001))
+        XCTAssertFalse(HomeHandoffGeometry.chromeIsInteractive(progress: 0.4))
+        XCTAssertFalse(HomeHandoffGeometry.chromeIsInteractive(progress: 1))
+    }
+
+    func testChromeIsFullyPresentAgainAtRest() {
+        // Rubber-band / return-to-top: a negative offset is the
+        // at-rest state, and the chrome is whole there.
+        let rest = HomeHandoffGeometry.progress(forScrollOffset: -120)
+        XCTAssertEqual(HomeHandoffGeometry.chromeOpacity(progress: rest), 1)
+        XCTAssertTrue(HomeHandoffGeometry.chromeIsInteractive(progress: rest))
+    }
+
+    // MARK: - Capped accessory zone (flag chip)
+
+    func testFlagChipInsetDerivesFromTheOverlapAndIsCapped() {
+        XCTAssertEqual(HomeHandoffGeometry.flagChipBottomInset, 40)
+        XCTAssertEqual(
+            HomeHandoffGeometry.flagChipBottomInset,
+            HomeHandoffGeometry.sheetOverlap + HomeHandoffGeometry.flagChipGap
+        )
+        XCTAssertEqual(HomeHandoffGeometry.flagChipGap, 12)
+    }
+
+    // MARK: - No scroll void (D-04 iOS verdict), by construction
+
+    func testComposedHeightHasNoReservedVoid() {
+        // The stacked composition is hero (RW-144: 0.45 of the
+        // container — the v8 first screen's ≈45% hero, superseding
+        // the 0.75 seat) then the sheet pulled UP by the overlap:
+        // total composed height = hero + sheet − 28, with no
+        // reserved-but-empty segment at any content height.
+        // (Android's D-04 void was a first item reserving
+        // hero + sheet − 28 while its visible content ended at
+        // hero.) Here the sheet's own content BEGINS at hero − 28,
+        // for short and tall sheets alike — the arithmetic this
+        // test pins is the whole claim; the frame census belongs
+        // to WS-9's walkthrough.
+        let container = 800.0
+        let hero = container * AppTheme.heroHeightRatio
+        XCTAssertEqual(hero, 360)
+        for sheetContent in [120.0, 340.0, 900.0] {
+            let sheetTop = hero - HomeHandoffGeometry.sheetOverlap
+            let composed = sheetTop + sheetContent + 40 // foot spacer
+            XCTAssertEqual(composed, hero + sheetContent + 40 - 28)
+            XCTAssertLessThan(sheetTop, hero, "sheet must overlap the photo's foot")
+        }
+    }
+
+    // MARK: - Head crop (D-23 iOS half)
+
+    func testHeadBandStaysInFrameInTheD23Scenario() {
+        // The audit's D-23 source: an 800×1200 portrait whose
+        // head sits at source y ≈ 392–509 in the ANDROID fit's
+        // coordinates; in the source's own coordinates the head
+        // band is the top ~15% (y 0–180), and the failure was a
+        // visible window STARTING at y ≈ 603. The iOS crop is
+        // top-anchored: the visible window starts at y = 0 in
+        // every frame shape, so the head band is in frame by
+        // construction — phone hero and wide Duo pane alike.
+        let image = CGSize(width: 800, height: 1200)
+        let headBand = 0.0...180.0
+        for frame in [CGSize(width: 393, height: 585),
+                      CGSize(width: 393, height: 639),
+                      CGSize(width: 700, height: 360)] {
+            let visible = HeroPhoto.visibleRect(imageSize: image, frameSize: frame)
+            XCTAssertEqual(visible.minY, 0, "visible window must start at the image's top edge")
+            XCTAssertGreaterThanOrEqual(visible.maxY, headBand.upperBound,
+                                        "head band must be fully visible in frame \(frame)")
+        }
+    }
+
+    // MARK: - Crossfade (§1.1: after full decode, 300 ms)
+
+    func testHeroCrossfadeDurationIsTheSpecValue() {
+        XCTAssertEqual(AppTheme.crossfadeDuration, 0.3, accuracy: 0.001)
+    }
+
+    // MARK: - Source pins (view-layer facts)
+
+    private func sourceFile(_ relativePath: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent(relativePath)
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else {
+            throw XCTSkip("source of record unreachable at \(relativePath)")
+        }
+        return text
+    }
+
+    func testSheetOverlapAndChromeFadeAreWired_sourcePin() throws {
+        let view = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
+        XCTAssertTrue(view.contains(".padding(.top, -HomeHandoffGeometry.sheetOverlap)"),
+                      "the sheet overlap must come from the geometry constant")
+        XCTAssertTrue(view.contains("HomeHandoffGeometry.chromeOpacity(progress: progress)"),
+                      "the script logo must fade per §1.1")
+        XCTAssertTrue(view.contains("HomeHandoffGeometry.chromeIsInteractive(progress: progress)"),
+                      "the chrome must leave the hit test when the fade begins")
+        XCTAssertTrue(view.contains("HomeHandoffGeometry.progress(forScrollOffset: offset)"),
+                      "handoff progress must be the geometry type's direct function of offset")
+        // No spring / animation transaction may be attached to
+        // the handoff itself (§1.1: 1:1, no spring, no lag).
+        // RE-PINNED for RW-124 (fix wave): the ONE `.animation`
+        // the file now carries is the handoff's own nil-pinning
+        // — the mechanism that keeps the scroll handoff free of
+        // any animation transaction. Any other animated
+        // transaction in the composition breaks the count.
+        XCTAssertEqual(view.components(separatedBy: ".animation(").count - 1, 1,
+                       "exactly one animation modifier stands on the home composition — the handoff's nil-pinning")
+        XCTAssertTrue(view.contains(".animation(nil, value: heroScrollProgress)"),
+                      "the handoff transform is pinned to no animation (RW-124)")
+    }
+
+    func testInsetsAreConsumedOnce_sourcePin() throws {
+        let hero = try sourceFile("../RunWear/Views/HeroImageView.swift")
+        // The hero extends under the top safe area exactly once;
+        // a second consumption is the D-03 mechanism (content
+        // clipped / doubled insets).
+        XCTAssertEqual(hero.components(separatedBy: ".ignoresSafeArea(edges: .top)").count - 1, 1,
+                       "the hero must consume the top inset exactly once")
+        XCTAssertTrue(hero.contains("HomeHandoffGeometry.flagChipBottomInset"),
+                      "the flag chip's inset must derive from the overlap constant")
+        // RW-106 (Nov 6, 2026) relocates this mechanism: the
+        // crossfade reset lives in the remote layer
+        // (HeroRemoteImageView), keyed to the photo's IDENTITY —
+        // a view-level reset on the URL string was the RW-106
+        // defect itself (every re-signed URL hid the photo and
+        // restarted its download). The property stands per
+        // identity: a different photo starts hidden.
+        XCTAssertTrue(hero.contains(".onChange(of: urlString)"),
+                      "each incoming photo (a new identity) must reset the crossfade state")
+        let view = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
+        // RW-144 (Nov 8, 2026) RE-PIN: the opaque nav bar is
+        // RETIRED — the v8 first screen is full-bleed photo with
+        // its chrome ON the hero, so the bar is hidden and the
+        // D-03 concern moves to the hero chrome itself (the top
+        // scrim + luminance-boosted pill fills keep the status
+        // area legible). The location entry keeps the Y-16 rule
+        // — one tap straight to the picker, no intermediate
+        // menu — from its new seat: the hero's place pill.
+        XCTAssertTrue(view.contains(".toolbar(.hidden, for: .navigationBar)"),
+                      "RW-144: home carries no nav bar; the hero chrome replaces it")
+        XCTAssertFalse(view.contains(".toolbarTitleMenu"),
+                       "Y-16: the title menu's extra tap is removed")
+        XCTAssertTrue(view.contains("onPlaceTapped: { showLocationPicker = true }"),
+                      "Y-16 preserved: the hero place pill is bound straight to the picker")
+        let heroChrome = try sourceFile("../RunWear/Views/FirstScreenHero.swift")
+        XCTAssertTrue(heroChrome.contains("Button(action: onPlaceTapped)"),
+                      "the place pill is a single direct button — one tap, no menu")
+    }
+
+    func testHeroFirstPaintIsSkeletonUntilTheServeResolves_sourcePin() throws {
+        // GEN-3 (WS-A(1)/WS-B) SUPERSEDES the §1.1 gate this pin
+        // originally asserted: the bundled fallback is a final
+        // truthful serve committed atomically with the cell, so it
+        // paints from the first frame — a skeleton spanning the
+        // whole pool-resolution window was the X-3 empty band.
+        // The skeleton now gates on exactly two states: the
+        // resolved hero does not belong to the place on the label
+        // (X-7 place switch in flight), or no fallback has been
+        // committed for this place yet (the first resolution).
+        let view = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
+        XCTAssertTrue(view.contains("!viewModel.heroBelongsToDisplayedPlace"),
+                      "the hero zone must skeleton-gate while the resolved hero belongs to another place")
+        XCTAssertTrue(view.contains("viewModel.heroImageUrl == nil"),
+                      "the hero zone must skeleton-gate on the unresolved serve")
+        XCTAssertTrue(view.contains("viewModel.fallbackImageUrl == nil"),
+                      "the gate must cover the pre-commit window (no fallback committed yet)")
+        // RW-147 RE-PIN (Nov 9, 2026): the call gained the
+        // explicit-height argument when the hero height policy
+        // was threaded through heroSection — the skeleton GATE
+        // this pin protects (the three conditions above) is
+        // unchanged.
+        XCTAssertTrue(view.contains("heroSkeleton(heightMode: heightMode, explicitHeight: explicitHeight)"))
+    }
+
+    func testFirstPaintIsTheDesignedSkeleton_sourcePin() throws {
+        // §1.1 first paint: until weather + recommendation exist,
+        // ContentView paints the designed skeleton (frame 46's
+        // LoadingView), never a stale or fallback home.
+        let content = try sourceFile("../RunWear/Views/ContentView.swift")
+        XCTAssertTrue(content.contains("case .loading:"))
+        XCTAssertTrue(content.contains("LoadingView()"))
+        XCTAssertTrue(content.contains("HomePresentation.resolve("))
+    }
+}

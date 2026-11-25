@@ -18,13 +18,24 @@ enum HeroFlagReason: String, CaseIterable {
     /// The stored `hero_flags.reason` value.
     var code: String { rawValue }
 
-    /// The label shown in the flag sheet.
+    /// The label shown in the flag sheet. GEN-5 (RW-29
+    /// FA-18): the sheet speaks the settled frame-45 reasons,
+    /// not the backend vocabulary — the CODES above are the
+    /// server contract and do not change; only the presented
+    /// labels do. The stock sheet leads with the outfit reason,
+    /// then the quality reason, then the residual.
     var label: String {
         switch self {
-        case .looksBroken: return "Looks broken"
-        case .inappropriate: return "Inappropriate"
-        case .outfitMismatch: return "Doesn't match the outfit"
+        case .outfitMismatch: return AppStrings.mimFlagWrongOutfit
+        case .looksBroken: return AppStrings.mimFlagUnflattering
+        case .inappropriate: return AppStrings.mimFlagOther
         }
+    }
+
+    /// The stock sheet's presentation order (frame 45: outfit
+    /// and quality reasons lead).
+    static var sheetOrder: [HeroFlagReason] {
+        [.outfitMismatch, .looksBroken, .inappropriate]
     }
 }
 

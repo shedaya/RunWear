@@ -22,18 +22,36 @@ import XCTest
 /// lands on a detail of the requested kind, and every detail
 /// carries the text and icon it renders — a detail resolving
 /// blank is what the white sheet was.
+///
+/// GEN-6 (RW-63): the canonical set is the SETTLED sheet's set —
+/// feels-like and actual join the original five, precipitation
+/// last — seven details covering the seven metric kinds.
 final class WeatherDetailPresentationTests: XCTestCase {
 
-    /// The five canonical details, built the way
+    /// The settled canonical details, built the way
     /// WeatherOutfitView.allWeatherDetails builds them.
     private func canonicalDetails() -> [WeatherDetailType] {
         [
+            .feelsLike(value: "52°"),
+            .actual(value: "55°"),
             .condition(.clear),
             .wind(speed: 8, direction: "NW", gusts: 12),
             .humidity(percentage: 55),
-            .precipitation(percentage: 20),
-            .uvIndex(value: 2.0)
+            .uvIndex(value: 2.0),
+            .precipitation(percentage: 20)
         ]
+    }
+
+    func testSettledOrderIsFeelsLikeActualThenTheRest() {
+        XCTAssertEqual(
+            WeatherMetricKind.allCases,
+            [.feelsLike, .actual, .condition, .wind, .humidity, .uvIndex, .precipitation]
+        )
+        XCTAssertEqual(
+            canonicalDetails().map(\.kind),
+            WeatherMetricKind.allCases,
+            "the built details follow the settled order"
+        )
     }
 
     func testCanonicalDetailsCoverEveryMetricKindExactlyOnce() {

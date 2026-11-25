@@ -44,4 +44,43 @@ class ClothingThumbnailService {
     func hasThumbnail(for item: ClothingItem) -> Bool {
         RunWearEngine.ClothingThumbnailService.shared.hasThumbnail(itemName: item.key)
     }
+
+    // MARK: - RW-144 light-mode garment tiles (Treatment L)
+
+    /// The bundled LIGHT-mode garment tile for an item, or nil.
+    ///
+    /// The seam is the app's existing garment-tile mechanism —
+    /// the engine's one item→file-key map
+    /// (`thumbnailKeyForName`, the same key `getThumbnailURL`
+    /// resolves remotely) plus the bundle, exactly as
+    /// `hero_fallback/` bundles the hero pool: the Treatment L
+    /// PNGs live in the `garment_tiles_light/` folder reference
+    /// under their final-L filenames (`<key>-<gender>.png`), so
+    /// the icon top-up is a file-for-file swap in that folder
+    /// with NO code change. Dark mode does not use this seam —
+    /// it keeps the remote thumbnail treatment.
+    func lightTileURL(for item: ClothingItem, gender: GenderPreference, bundle: Bundle = .main) -> URL? {
+        guard let resource = lightTileResourceName(for: item, gender: gender) else {
+            return nil
+        }
+        return bundle.url(
+            forResource: resource,
+            withExtension: "png",
+            subdirectory: "garment_tiles_light"
+        )
+    }
+
+    /// The bundled resource name (`<key>-<gender>`) a light tile
+    /// resolves to, before bundle-URL resolution. Internal (not
+    /// private) so unit tests can pin the resolution in a
+    /// logic-test host, where Bundle.main is the test runner and
+    /// no app resources resolve — the same split FallbackImage
+    /// Provider uses for the hero pool.
+    func lightTileResourceName(for item: ClothingItem, gender: GenderPreference) -> String? {
+        guard let key = RunWearEngine.ClothingThumbnailService.shared.thumbnailKeyForName(itemName: item.key) else {
+            return nil
+        }
+        let suffix = gender == .female ? "female" : "male"
+        return "\(key)-\(suffix)"
+    }
 }

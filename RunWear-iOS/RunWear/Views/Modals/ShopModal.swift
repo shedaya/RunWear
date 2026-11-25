@@ -56,37 +56,42 @@ struct ShopModal: View {
                 // FTC disclosure + explicit Close (Android's shop
                 // sheet carries both; the iOS sheet had neither).
                 VStack(spacing: 12) {
-                    Text("Affiliate Disclosure: ")
+                    // GEN-6 (RW-64): the settled disclosure
+                    // substance (frame 44 / §5), all three elements:
+                    // the links open Amazon; RunWear may earn a
+                    // commission; it never changes the outfit
+                    // recommended.
+                    Text(AppStrings.shopDisclosureLead)
                         .font(.caption.weight(.bold))
-                        .foregroundColor(.white.opacity(0.6))
-                    + Text("As an Amazon Associate, RunWear earns from qualifying purchases. When you click these links, we may earn a small commission at no extra cost to you.")
+                        .foregroundColor(AppTheme.inkSecondary)
+                    + Text(AppStrings.shopDisclosure)
                         .font(.caption)
-                        .foregroundColor(.white.opacity(0.6))
+                        .foregroundColor(AppTheme.inkSecondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(14)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(AppTheme.cardFillOnDark)
+                        .fill(AppTheme.cardFill)
                 )
                 .padding(.horizontal, 24)
 
                 Button(action: dismiss) {
-                    Text("Close")
+                    Text(AppStrings.shopClose)
                         .font(.appSecondary.weight(.semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppTheme.inkPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                                .stroke(AppTheme.cardStroke, lineWidth: 1)
                         )
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 12)
                 .padding(.bottom, 16)
             }
-            .background(AppTheme.darkBackground.ignoresSafeArea())
+            .background(AppTheme.background.ignoresSafeArea())
             .inspector(isPresented: itemInspectorPresented) {
                 itemInspector
             }
@@ -112,7 +117,7 @@ struct ShopModal: View {
                 // Text(item.icon), i.e. the SF Symbol NAME as text.)
                 ZStack {
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.white.opacity(0.1))
+                        .fill(AppTheme.cardFill)
 
                     if let url = ClothingThumbnailService.shared.getThumbnailURL(for: item, gender: genderPreference) {
                         AsyncImage(url: url) { phase in
@@ -125,26 +130,26 @@ struct ShopModal: View {
                             default:
                                 Image(systemName: item.icon)
                                     .font(.largeTitle)
-                                    .foregroundColor(.white)
+                                    .foregroundColor(AppTheme.inkSecondary)
                             }
                         }
                     } else {
                         Image(systemName: item.icon)
                             .font(.largeTitle)
-                            .foregroundColor(.white)
+                            .foregroundColor(AppTheme.inkSecondary)
                     }
                 }
                 .frame(width: 72, height: 72)
                 Text(item.name)
                     .font(.appSectionTitle)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppTheme.inkPrimary)
                 Text(item.description)
                     .font(.appSecondary)
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(AppTheme.inkSecondary)
                 Button(action: { openAmazon(for: item) }) {
                     HStack(spacing: 6) {
                         Image(systemName: "cart.fill")
-                        Text("Shop")
+                        Text(AppStrings.shopTitle)
                     }
                     .font(.appSecondary.weight(.semibold))
                     .foregroundColor(.white)
@@ -158,7 +163,7 @@ struct ShopModal: View {
             }
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(AppTheme.darkBackground.ignoresSafeArea())
+            .background(AppTheme.background.ignoresSafeArea())
             .navigationTitle(item.name)
             .inspectorColumnWidth(min: 240, ideal: 300, max: 360)
         }
@@ -179,14 +184,14 @@ struct ShopModal: View {
     private var headerSection: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Shop Gear")
+                Text(AppStrings.shopGear)
                     .font(.appSheetTitle)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppTheme.inkPrimary)
 
-                Text("\(items.count) items recommended")
+                Text(AppStrings.shopItemsRecommended(items.count))
                     .font(.appSecondary)
                     .monospacedDigit()
-                    .foregroundColor(.white.opacity(0.6))
+                    .foregroundColor(AppTheme.inkSecondary)
             }
 
             Spacer()
@@ -194,7 +199,7 @@ struct ShopModal: View {
             // Shop All button
             Button(action: openShopAll) {
                 HStack(spacing: 4) {
-                    Text("Shop All")
+                    Text(AppStrings.shopAll)
                         .font(.appSecondary.weight(.semibold))
                     Image(systemName: "arrow.right")
                         .font(.appFootnote.weight(.semibold))
@@ -272,7 +277,7 @@ private struct ShopItemRow: View {
                 // text, clipped to fragments like "ts…"/"fig…"/"lig…".
                 ZStack {
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.white.opacity(0.1))
+                        .fill(AppTheme.cardOnSheet)
 
                     if let url = ClothingThumbnailService.shared.getThumbnailURL(for: item, gender: genderPreference) {
                         AsyncImage(url: url) { phase in
@@ -285,13 +290,13 @@ private struct ShopItemRow: View {
                             default:
                                 Image(systemName: item.icon)
                                     .font(.title)
-                                    .foregroundColor(.white)
+                                    .foregroundColor(AppTheme.inkSecondary)
                             }
                         }
                     } else {
                         Image(systemName: item.icon)
                             .font(.title)
-                            .foregroundColor(.white)
+                            .foregroundColor(AppTheme.inkSecondary)
                     }
                 }
                 .frame(width: 56, height: 56)
@@ -300,30 +305,38 @@ private struct ShopItemRow: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(item.name)
                         .font(.appItemName)
-                        .foregroundColor(.white)
+                        .foregroundColor(AppTheme.inkPrimary)
 
                     Text(item.description)
                         .font(.appFootnote)
-                        .foregroundColor(.white.opacity(0.6))
-                        .lineLimit(2)
+                        .foregroundColor(AppTheme.inkSecondary)
+                        // RW-114 (successor wave): item
+                        // descriptions render whole — no line
+                        // cap, so no mid-word ellipsis (the
+                        // modal's other description render
+                        // already wraps fully).
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Spacer()
 
-                // Shop arrow
-                Image(systemName: "cart.fill")
-                    .font(.body)
+                // GEN-6 (RW-64): the settled per-row door —
+                // "Shop ›" as labelled text, replacing the bare
+                // cart glyph (the row itself still opens Amazon,
+                // or selects for the inspector at regular width).
+                Text(AppStrings.actionShopArrow)
+                    .font(.appSecondary.weight(.semibold))
                     .foregroundColor(AppTheme.primaryColor)
             }
             .padding(12)
             // Flat content card (AppTheme tokens) — not glass.
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(AppTheme.cardFillOnDark)
+                    .fill(AppTheme.cardFill)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(AppTheme.cardStrokeOnDark, lineWidth: 1)
+                    .stroke(AppTheme.cardStroke, lineWidth: 1)
             )
         }
     }
@@ -341,9 +354,9 @@ private struct ShopItemRow: View {
 #Preview {
     ShopModal(
         items: [
-            ClothingItem(key: "SHORTS", name: "Running Shorts (5-7\")", description: "Standard running shorts", icon: "figure.run", amazonSearchTerm: "running shorts 5 inch"),
-            ClothingItem(key: "SHORT_SLEEVE", name: "Short Sleeve Shirt", description: "Moisture-wicking technical fabric", icon: "tshirt.fill", amazonSearchTerm: "running short sleeve shirt dri-fit"),
-            ClothingItem(key: "BASEBALL_CAP", name: "Running Cap", description: "Sun and light rain protection", icon: "baseball.cap.fill", amazonSearchTerm: "running cap lightweight")
+            ClothingItem(key: "SHORTS", name: AppStrings.shopItemShortsName, description: AppStrings.shopItemShortsDesc, icon: "figure.run", amazonSearchTerm: "running shorts 5 inch"),
+            ClothingItem(key: "SHORT_SLEEVE", name: AppStrings.shopItemShirtName, description: AppStrings.shopItemShirtDesc, icon: "tshirt.fill", amazonSearchTerm: "running short sleeve shirt dri-fit"),
+            ClothingItem(key: "BASEBALL_CAP", name: AppStrings.shopItemCapName, description: AppStrings.shopItemCapDesc, icon: "baseball.cap.fill", amazonSearchTerm: "running cap lightweight")
         ],
         genderPreference: .male,
         weatherCode: 0,

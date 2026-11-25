@@ -18,7 +18,7 @@ actor SupabaseClient {
             .addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? pattern
 
         let endpoint = "/rest/v1/generated_images"
-        let query = "combination_id=like.\(encodedPattern)&select=id,combination_id,image_url,thumbnail_url,prompt,review_status"
+        let query = "combination_id=like.\(encodedPattern)&select=id,combination_id,image_url,thumbnail_url,prompt,review_status,person_count,garment_classes,garment_source"
 
         guard let url = URL(string: "\(baseURL)\(endpoint)?\(query)") else {
             throw SupabaseError.invalidURL
@@ -93,13 +93,13 @@ enum SupabaseError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidURL:
-            return "Invalid Supabase URL"
+            return AppStrings.errorInvalidSupabaseUrl
         case .invalidResponse:
-            return "Invalid response from Supabase"
+            return AppStrings.errorInvalidSupabaseResponse
         case .httpError(let code):
-            return "HTTP error: \(code)"
+            return AppStrings.errorHttp(code)
         case .decodingError(let error):
-            return "Decoding error: \(error.localizedDescription)"
+            return AppStrings.errorDecoding(error.localizedDescription)
         }
     }
 }

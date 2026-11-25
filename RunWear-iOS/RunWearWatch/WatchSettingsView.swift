@@ -1,5 +1,23 @@
 import SwiftUI
 
+/// Watch settings (frame 53's direction: the phone's three
+/// preference rows, in the app's tokens).
+///
+/// GEN-5 (RW-29 EX-5 + cream map row 61): build 25 abbreviated
+/// every label ("M" / "F" / "Body Temp" / "°F" / "°C") and made
+/// every selection in system green/blue on the default black.
+/// The labels are now spelled out exactly as the phone's —
+/// Men's / Women's, Body temperature, Fahrenheit / Celsius —
+/// and the selections are pine, on the Warm Charcoal ground
+/// the app root paints.
+/// RW-81 (owner ruling, Sol, Nov 6, 2026): Fit Preference here
+/// carries the same TWO buttons as the phone — no third choice.
+/// Tapping the selected fit button again returns to neutral
+/// (.unisex, nothing highlighted), through the same model
+/// transition the phone's control uses
+/// (GenderPreference.fitSelection(afterTapping:)). The
+/// temperature buttons are untouched: a unit always has a
+/// value, so they stay direct-set with no toggle.
 struct WatchSettingsView: View {
     @ObservedObject var viewModel: WatchViewModel
 
@@ -7,71 +25,70 @@ struct WatchSettingsView: View {
         ScrollView {
             VStack(spacing: 16) {
                 // Title
-                Text("Settings")
+                Text(AppStrings.wearSettingsTitle)
                     .font(.headline)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppTheme.inkPrimary)
 
                 // Temperature Unit
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Temperature")
+                    Text(AppStrings.wearTemperatureUnit)
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(AppTheme.inkSecondary)
 
-                    HStack(spacing: 8) {
+                    VStack(spacing: 8) {
                         WatchSettingsButton(
-                            label: "°F",
+                            label: AppStrings.unitFahrenheitLabel,
                             isSelected: viewModel.temperatureUnit == .fahrenheit,
                             action: { viewModel.temperatureUnit = .fahrenheit }
                         )
 
                         WatchSettingsButton(
-                            label: "°C",
+                            label: AppStrings.unitCelsiusLabel,
                             isSelected: viewModel.temperatureUnit == .celsius,
                             action: { viewModel.temperatureUnit = .celsius }
                         )
                     }
                 }
 
-                // Gender Preference
+                // Fit Preference — the phone's TWO choices,
+                // spelled out, one row each (RW-81: no third
+                // button; tapping the selected one again clears
+                // back to neutral, nothing highlighted).
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Fit Preference")
+                    Text(AppStrings.wearFitPreference)
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(AppTheme.inkSecondary)
 
-                    HStack(spacing: 8) {
-                        WatchGenderButton(
-                            label: "M",
+                    VStack(spacing: 8) {
+                        WatchSettingsButton(
+                            label: AppStrings.fitOptionMens,
                             isSelected: viewModel.genderPreference == .male,
                             action: {
-                                viewModel.genderPreference = viewModel.genderPreference == .male ? .unisex : .male
+                                viewModel.genderPreference = viewModel.genderPreference
+                                    .fitSelection(afterTapping: .male)
                             }
                         )
 
-                        WatchGenderButton(
-                            label: "F",
+                        WatchSettingsButton(
+                            label: AppStrings.fitOptionWomens,
                             isSelected: viewModel.genderPreference == .female,
                             action: {
-                                viewModel.genderPreference = viewModel.genderPreference == .female ? .unisex : .female
+                                viewModel.genderPreference = viewModel.genderPreference
+                                    .fitSelection(afterTapping: .female)
                             }
                         )
-                    }
-
-                    if viewModel.genderPreference == .unisex {
-                        Text("None selected")
-                            .font(.system(size: 10))
-                            .foregroundColor(.secondary)
                     }
                 }
 
-                // Comfort Level
+                // Body Temperature
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Body Temp")
+                    Text(AppStrings.wearBodyTemperature)
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(AppTheme.inkSecondary)
 
                     Text(viewModel.comfortLevel.shortLabel)
                         .font(.caption2)
-                        .foregroundColor(.white)
+                        .foregroundColor(AppTheme.inkPrimary)
 
                     WatchComfortSlider(comfortLevel: $viewModel.comfortLevel)
                 }
@@ -93,35 +110,13 @@ private struct WatchSettingsButton: View {
     var body: some View {
         Button(action: action) {
             Text(label)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(isSelected ? .white : .gray)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(isSelected ? .white : AppTheme.inkSecondary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 10)
                 .background(
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(isSelected ? Color.green.opacity(0.6) : Color.white.opacity(0.1))
-                )
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-// MARK: - Gender Button
-
-private struct WatchGenderButton: View {
-    let label: String
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Text(label)
-                .font(.system(size: 14, weight: .bold))
-                .foregroundColor(isSelected ? .white : .gray)
-                .frame(width: 44, height: 44)
-                .background(
-                    Circle()
-                        .fill(isSelected ? Color.blue.opacity(0.6) : Color.white.opacity(0.1))
+                        .fill(isSelected ? AppTheme.primaryColor : AppTheme.cardFillOnDark)
                 )
         }
         .buttonStyle(.plain)
@@ -149,12 +144,14 @@ private struct WatchComfortSlider: View {
         .frame(maxWidth: .infinity)
     }
 
+    /// The phone slider's settled family (C-1): blue at the
+    /// cold end, pine at neutral, orange at the warm end.
     private func comfortColor(_ level: ComfortLevel) -> Color {
         switch level {
         case .veryCold, .cold:
             return .blue
         case .neutral:
-            return .green
+            return AppTheme.primaryColor
         case .warm, .veryWarm:
             return .orange
         }

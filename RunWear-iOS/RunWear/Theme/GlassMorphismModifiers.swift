@@ -60,7 +60,15 @@ struct GlassPillModifier: ViewModifier {
             .glassEffect(
                 isSelected
                     ? Glass.regular.tint(AppTheme.primaryColor.opacity(0.45)).interactive()
-                    : Glass.regular.interactive(),
+                    // GEN-5 design pass (cream map row 19): the
+                    // unselected pill glass carries the WARMED
+                    // tint — the Warm Charcoal tone at low
+                    // strength — so the hero's pills read as the
+                    // app's warmed chrome (the mini bar's
+                    // treatment family) rather than neutral
+                    // system glass, without costing the white
+                    // label its contrast over photography.
+                    : Glass.regular.tint(AppTheme.darkBackground.opacity(0.22)).interactive(),
                 in: Capsule()
             )
     }

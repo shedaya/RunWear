@@ -163,8 +163,8 @@ struct HourlyWeatherSnapshot {
 
     /// Wind direction as compass direction
     var windDirectionCompass: String {
-        let directions = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
-                         "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
+        let directions = [AppStrings.weatherCompassN, AppStrings.weatherCompassNne, AppStrings.weatherCompassNe, AppStrings.weatherCompassEne, AppStrings.weatherCompassE, AppStrings.weatherCompassEse, AppStrings.weatherCompassSe, AppStrings.weatherCompassSse,
+                         AppStrings.weatherCompassS, AppStrings.weatherCompassSsw, AppStrings.weatherCompassSw, AppStrings.weatherCompassWsw, AppStrings.weatherCompassW, AppStrings.weatherCompassWnw, AppStrings.weatherCompassNw, AppStrings.weatherCompassNnw]
         let index = Int((Double(windDirection) + 11.25) / 22.5) % 16
         return directions[index]
     }
@@ -255,15 +255,15 @@ enum WeatherCondition: String, Codable {
     /// Short description for weather pills
     var shortDescription: String {
         switch self {
-        case .clear: return "Clear"
-        case .partlyCloudy: return "Partly Cloudy"
-        case .cloudy: return "Cloudy"
-        case .foggy: return "Foggy"
-        case .drizzle: return "Light Rain"
-        case .rain: return "Rainy"
-        case .snow: return "Snowy"
-        case .thunderstorm: return "Storms"
-        case .unknown: return "Unknown"
+        case .clear: return AppEnglish.weatherClear
+        case .partlyCloudy: return AppEnglish.weatherPartlyCloudy
+        case .cloudy: return AppEnglish.weatherCloudy
+        case .foggy: return AppEnglish.weatherFoggy
+        case .drizzle: return AppEnglish.weatherDrizzleShort
+        case .rain: return AppEnglish.weatherRainShort
+        case .snow: return AppEnglish.weatherSnowShort
+        case .thunderstorm: return AppEnglish.weatherThunderstormShort
+        case .unknown: return AppEnglish.weatherUnknown
         }
     }
 

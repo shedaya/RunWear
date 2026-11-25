@@ -72,13 +72,13 @@ enum WeatherError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidURL:
-            return "Invalid URL"
+            return AppStrings.errorInvalidUrl
         case .invalidResponse:
-            return "Invalid response from weather service"
+            return AppStrings.errorInvalidWeatherResponse
         case .decodingError:
-            return "Could not decode weather data"
+            return AppStrings.errorDecodeWeather
         case .locationNotAvailable:
-            return "Location not available"
+            return AppStrings.errorLocationUnavailable
         }
     }
 }

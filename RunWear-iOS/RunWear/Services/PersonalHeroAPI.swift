@@ -98,8 +98,63 @@ actor PersonalHeroAPI {
     }
 
     func getPersonalHero(combinationId: String) async throws -> PersonalHeroLookup {
-        let data = try await functionPost("get-personal-hero", body: ["combination_id": combinationId])
+        // Fix wave 2026-11-07 (RW-130, review §4.3): declare
+        // contract v2 — this client classifies scaffold AND
+        // similar serves from `serve_tier` and labels neither
+        // as exact, so the server may serve the ladder to it.
+        let data = try await functionPost("get-personal-hero", body: ["combination_id": combinationId, "client_contract": 2])
         return try JSONDecoder().decode(PersonalHeroLookup.self, from: data)
+    }
+
+    /// Fix wave 2026-11-07 (review §2 row 5): the bank as the
+    /// server holds it — every delivered hero row for the
+    /// caller (combination, hero id, storage path), for the
+    /// Your Looks library's genuine server read. Nil on any
+    /// failure — the library then falls back to session state
+    /// rather than inventing a bank.
+    func fetchBankHeroes() async -> [BankedLook]? {
+        guard let session = try? await requireSession() else { return nil }
+        let path = "/rest/v1/personal_heroes?select=combination_id,id,storage_path&user_id=eq.\(session.userId)&order=combination_id.asc"
+        guard let data = try? await authedGet(path: path, session: session) else { return nil }
+        struct Row: Decodable {
+            let combinationId: String
+            let id: String?
+            let storagePath: String?
+            enum CodingKeys: String, CodingKey {
+                case combinationId = "combination_id"
+                case id
+                case storagePath = "storage_path"
+            }
+        }
+        guard let rows = try? JSONDecoder().decode([Row].self, from: data) else { return nil }
+        // One row per cell (the first — variant rotation is the
+        // serve path's business, the library shows the cell).
+        var seen = Set<String>()
+        var looks: [BankedLook] = []
+        for row in rows where seen.insert(row.combinationId).inserted {
+            var url: String? = nil
+            if let storagePath = row.storagePath,
+               let signed = try? await signedReferenceURL(path: storagePath) {
+                url = signed.absoluteString
+            }
+            looks.append(BankedLook(combinationId: row.combinationId, heroId: row.id, imageURL: url))
+        }
+        return looks
+    }
+
+    /// Fix wave 2026-11-07 (RW-126, review §3 N2): the caller's
+    /// generation-job states, for the band's terminal fold —
+    /// true while ANY job is non-terminal (queued/processing),
+    /// false when a read proves every job terminal, nil when
+    /// no read landed (the band then keeps its prior truth).
+    func fetchGenerationActive() async -> Bool? {
+        guard let session = try? await requireSession() else { return nil }
+        let path = "/rest/v1/personal_generation_jobs?select=status&user_id=eq.\(session.userId)"
+        guard let data = try? await authedGet(path: path, session: session) else { return nil }
+        struct Row: Decodable { let status: String }
+        guard let rows = try? JSONDecoder().decode([Row].self, from: data) else { return nil }
+        let nonTerminal: Set<String> = ["QUEUED", "PROCESSING", "queued", "processing", "pending", "running"]
+        return rows.contains { nonTerminal.contains($0.status) }
     }
 
     /// RW-16.12 Lane B backstop: ask the server to reconcile this
@@ -119,13 +174,39 @@ actor PersonalHeroAPI {
     /// entitled flag (set by the billing webhook, service-role only):
     /// a 403 not_entitled here means the webhook has not landed yet,
     /// and the caller retries — the client never writes entitled.
-    func startPersonalFill() async throws -> PersonalFillResponse {
-        let data = try await functionPost("start-personal-fill", body: [:])
+    func startPersonalFill(priorityCells: [String]) async throws -> PersonalFillResponse {
+        // GEN-5 (Addendum 8 follow-up, Defect 1): the deployed
+        // fill enqueues ONLY the cells named here — the client's
+        // 7-day forecast cells, in forecast order. Gen-4 posted an
+        // empty body, so the fill enqueued zero cells and banks
+        // grew only through cells the user personally opened (the
+        // Nov 5, 2026 convergence diagnosis).
+        let data = try await functionPost("start-personal-fill", body: ["priority_cells": priorityCells])
         return try JSONDecoder().decode(PersonalFillResponse.self, from: data)
     }
 
     func deleteMyPhotos() async throws {
         _ = try await functionPost("delete-my-photos", body: [:])
+    }
+
+    private struct DeleteMyDataResponse: Decodable {
+        let accountDeleted: Bool
+        enum CodingKeys: String, CodingKey { case accountDeleted = "account_deleted" }
+    }
+
+    /// Full account-data deletion (delete-my-data, RW-16.30
+    /// decision 5a): the photos sweep plus the webhook log and the
+    /// account itself. The server reports a failed account deletion
+    /// in the receipt (account_deleted = false) instead of failing
+    /// the call; anything but an explicit true throws here so the
+    /// caller claims nothing — the data is gone but the account is
+    /// not, and the user's retry completes it.
+    func deleteMyData() async throws {
+        let data = try await functionPost("delete-my-data", body: [:])
+        let receipt = try JSONDecoder().decode(DeleteMyDataResponse.self, from: data)
+        guard receipt.accountDeleted else {
+            throw PersonalHeroAPIError.server(message: "account deletion not confirmed")
+        }
     }
 
     // MARK: - Profile + reference reads (PostgREST, owner-SELECT)
@@ -136,6 +217,27 @@ actor PersonalHeroAPI {
         let data = try await authedGet(path: path, session: session)
         let rows = try JSONDecoder().decode([PersonalProfileRow].self, from: data)
         return rows.first
+    }
+
+    /// GEN-3 (convergence band): the caller's REAL bank coverage,
+    /// from the two owner-read tables (personal_heroes ∪
+    /// personal_generation_jobs, by combination_id). Nil when
+    /// there is no session or either read fails — the band never
+    /// shows invented counts.
+    /// GEN-5 (Addendum 8 follow-up, Defect 2): the BANKED cell
+    /// set only. Coverage is derived against the client's named
+    /// target set (deriveBankCoverage) — the gen-4 read also
+    /// fetched the jobs table so the denominator could be the
+    /// engaged union, the formula that displayed ~89% at 17%
+    /// true coverage.
+    func fetchBankedCells() async -> Set<String>? {
+        guard let session = try? await requireSession() else { return nil }
+        let path = "/rest/v1/personal_heroes?select=combination_id&user_id=eq.\(session.userId)"
+        guard let data = try? await authedGet(path: path, session: session) else { return nil }
+        struct Row: Decodable { let combinationId: String
+            enum CodingKeys: String, CodingKey { case combinationId = "combination_id" } }
+        guard let rows = try? JSONDecoder().decode([Row].self, from: data) else { return nil }
+        return Set(rows.map { $0.combinationId })
     }
 
     func fetchReferencePaths() async throws -> [String] {

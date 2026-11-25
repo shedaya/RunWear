@@ -1,6 +1,6 @@
 import XCTest
 
-/// RW-14 "Make it me" — pins for the pure personal-hero model layer
+/// RW-14 "Make It Me" — pins for the pure personal-hero model layer
 /// (PersonalHeroModels.swift, compiled into this target directly,
 /// the established pattern). The combination-id vectors are the
 /// backend contract's own worked examples
@@ -102,7 +102,12 @@ final class PersonalHeroTests: XCTestCase {
             version: version,
             replenishmentQueued: 0,
             lookState: nil,
-            lookReason: nil
+            lookReason: nil,
+            scaffold: nil,
+            scaffoldCombinationId: nil,
+            serveTierRaw: nil,
+            servedCombinationId: nil,
+            converging: nil
         )
     }
 
@@ -266,8 +271,11 @@ final class PersonalHeroTests: XCTestCase {
         // without a spec change fails loudly.
         XCTAssertEqual(PhotoRejection.faceUnclear.specString, "We can't see your face clearly in this one. Try a photo without sunglasses or a hat shadow.")
         XCTAssertEqual(PhotoRejection.multiplePeople.specString, "This photo has more than one person in it. Pick one that's just you.")
-        XCTAssertEqual(PhotoRejection.tooDark.specString, "This one is too dark to use. Try a photo in brighter light.")
-        XCTAssertEqual(PhotoRejection.tooClose.specString, "This one is cropped too close. A head-and-shoulders or half-body photo works best.")
+        // GEN-6 (RW-51): too-dark and too-close carry the settled
+        // design-spec §10.4 / frame 18 wordings.
+        XCTAssertEqual(PhotoRejection.tooDark.specString, "Try facing a window or light, looking at the camera.")
+        XCTAssertEqual(PhotoRejection.tooClose.specString, "Hold the phone at arm's length, so your whole face fits with space around it.")
+        XCTAssertEqual(PhotoRejection.faceTooSmall.specString, "Your face is small in that photo — A closer selfie works best — a mirror selfie is great too. Or let the camera guide you…")
     }
 
     // MARK: - RW-15 (1): request payload contract
@@ -313,7 +321,13 @@ final class PersonalHeroTests: XCTestCase {
         // The shared reasons mirror the pool menu's labels and the
         // pool vocabulary's codes (HeroFlagReason).
         XCTAssertEqual(PersonalHeroFlagReason.looksBroken.code, HeroFlagReason.looksBroken.code)
-        XCTAssertEqual(PersonalHeroFlagReason.looksBroken.label, HeroFlagReason.looksBroken.label)
+        // GEN-5 supersession (FA-18, frame 45): the personal
+        // sheet's presentation labels are its own settled set —
+        // looksBroken presents as "Something else" on the
+        // personal sheet while the pool sheet keeps
+        // "Unflattering photo"; the CODES still mirror.
+        XCTAssertEqual(PersonalHeroFlagReason.looksBroken.label, "Something else")
+        XCTAssertEqual(HeroFlagReason.looksBroken.label, "Unflattering photo")
         XCTAssertEqual(PersonalHeroFlagReason.inappropriate.code, HeroFlagReason.inappropriate.code)
         XCTAssertEqual(PersonalHeroFlagReason.inappropriate.label, HeroFlagReason.inappropriate.label)
         XCTAssertEqual(PersonalHeroFlagReason.outfitMismatch.code, HeroFlagReason.outfitMismatch.code)
@@ -690,9 +704,11 @@ final class LookStatusTests: XCTestCase {
 
     func testProgressCopyIsTheAmendedDeck() {
         XCTAssertEqual(MakeItMeCopy.progressTitle, "Making this outfit yours…")
+        // GEN-6 Wave A (RW-47): the settled §11 honesty line is
+        // restored verbatim, superseding the gen-5 substitution.
         XCTAssertEqual(
             MakeItMeCopy.progressSubline,
-            "This usually takes a few minutes. Your recommendation is ready either way — the standard photo stays up until yours is done.")
+            "This usually takes a few minutes — the standard photo stays up until yours is done.")
         // The retired G2 figure must never come back: it promised
         // a number the system misses by an order of magnitude.
         XCTAssertFalse(MakeItMeCopy.progressSubline.contains("10 seconds"))

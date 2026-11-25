@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-// MARK: - RW-16.7 — "Make it me" presentation ownership
+// MARK: - RW-16.7 — "Make It Me" presentation ownership
 //
 // The defect (field-verified on 1.0 (12), recording 16:38–16:41
 // EDT): MakeItMeSettingsSection carried four .sheet modifiers
@@ -49,6 +49,11 @@ enum MakeItMeAlert: Identifiable, Equatable {
     case confirmDelete
     case deletedConfirmation
     case deleteFailed
+    /// Delete my data (RW-16.30 decision 5a): the account-level
+    /// erasure, one step beyond confirmDelete's photos-only scope.
+    case confirmDeleteData
+    case dataDeletedConfirmation
+    case deleteDataFailed
     /// A commit that failed after its sheet had gone away —
     /// the failure the old structure swallowed whole.
     case commitFailed(CommitFailurePresentation)
@@ -58,6 +63,9 @@ enum MakeItMeAlert: Identifiable, Equatable {
         case .confirmDelete: return "confirmDelete"
         case .deletedConfirmation: return "deletedConfirmation"
         case .deleteFailed: return "deleteFailed"
+        case .confirmDeleteData: return "confirmDeleteData"
+        case .dataDeletedConfirmation: return "dataDeletedConfirmation"
+        case .deleteDataFailed: return "deleteDataFailed"
         case .commitFailed: return "commitFailed"
         }
     }

@@ -1,0 +1,174 @@
+import XCTest
+import SwiftUI
+
+/// Pins for RW-25 (next-gen home, iOS): the appearance resolution
+/// mapping, the Android temperature set, the "Wear I've Run"
+/// narration formatter, and the mini bar's background policy.
+///
+/// These types are compiled into the test target directly (the
+/// target's dual-membership pattern), so no @testable import.
+final class RW25NextGenHomeTests: XCTestCase {
+
+    // MARK: - Appearance resolution
+
+    func testAppearanceSystemResolvesToNoOverride() {
+        XCTAssertNil(AppearancePreference.resolve(.system))
+        XCTAssertNil(AppearancePreference.system.colorScheme)
+    }
+
+    func testAppearanceLightResolvesToLight() {
+        XCTAssertEqual(AppearancePreference.resolve(.light), .light)
+    }
+
+    func testAppearanceDarkResolvesToDark() {
+        XCTAssertEqual(AppearancePreference.resolve(.dark), .dark)
+    }
+
+    func testAppearanceRawValuesRoundTrip() {
+        for preference in AppearancePreference.allCases {
+            XCTAssertEqual(AppearancePreference(rawValue: preference.rawValue), preference)
+        }
+        XCTAssertEqual(AppearancePreference.allCases.count, 3)
+    }
+
+    // MARK: - Temperature hex pins (the Android set)
+
+    func testTemperatureHexPinsMatchAndroidSet() {
+        XCTAssertEqual(AppTheme.temperatureHex(for: .FREEZING), "8B5CF6")
+        XCTAssertEqual(AppTheme.temperatureHex(for: .COLD), "6366F1")
+        XCTAssertEqual(AppTheme.temperatureHex(for: .COOL), "3B82F6")
+        XCTAssertEqual(AppTheme.temperatureHex(for: .MILD), "10B981")
+        XCTAssertEqual(AppTheme.temperatureHex(for: .WARM), "F59E0B")
+        XCTAssertEqual(AppTheme.temperatureHex(for: .HOT), "F97316")
+    }
+
+    func testTemperatureHexViaEngineBracketMapping() {
+        // Bracket boundaries are the engine's (pinned by
+        // EngineFixtureTests: 34.9 -> COLD, 80 -> HOT); the hex the
+        // bracket resolves to must be the Android set.
+        XCTAssertEqual(
+            AppTheme.temperatureHex(for: HeroTempBracket.from(feelsLikeTemperature: 34.9)),
+            "6366F1"
+        )
+        XCTAssertEqual(
+            AppTheme.temperatureHex(for: HeroTempBracket.from(feelsLikeTemperature: 80)),
+            "F97316"
+        )
+    }
+
+    // MARK: - Mini bar narration formatter
+
+    func testNarrationPreAddIsNil() {
+        XCTAssertNil(WearIveRunNarration.line(for: .preAdd))
+    }
+
+    // RW-138/WT-7 (Nov 7, 2026): the two formatter pins for the
+    // ".added" comma form ("Added New York, Now" / "Added
+    // Central Park, 7 a.m.") are REMOVED with the case itself.
+    // RW-135 spec §9.1 forbids the "Added" line on these
+    // surfaces; while the case existed, §9.1 conformance rested
+    // on the derivation never emitting it. The case is now
+    // unrepresentable, so there is nothing left to pin at the
+    // formatter level — the creation form is pinned at the
+    // derivation level in testMiniBarStateDerivation below and
+    // in SimplePlaceTests.
+
+    func testNarrationUpdateToPayload() {
+        // GEN-5 (Addendum 8): the payload is structural — the
+        // "Cool-weather kit" garment literal this pin carried
+        // can no longer be written at all. A place payload:
+        XCTAssertEqual(
+            WearIveRunNarration.line(for: .updated(payload: .place("Miami, FL"))),
+            "Updated to Miami, FL"
+        )
+        // And a moment payload (a clock reading is in-spec, C-7):
+        XCTAssertEqual(
+            WearIveRunNarration.line(for: .updated(payload: .moment(.clock(hour12: 9, isPM: true)))),
+            "Updated to 9 p.m."
+        )
+    }
+
+    func testMiniBarStateDerivation() {
+        // RW-26: the collection is built — the bar's state derives
+        // from today's entry. No entry: preAdd, narration nil
+        // (nothing renders). An entry: the "Added" narration.
+        // (Phase 1 pinned a hard-coded preAdd; the pin now covers
+        // the derivation instead.)
+        XCTAssertEqual(WearIveRunMiniBarModel.wordmark, "Wear I've Run")
+        let noEntry = WearIveRunMiniBarModel.state(
+            todaysEntry: nil, moment: .now,
+            wasUpdatedThisSession: false
+        )
+        XCTAssertEqual(noEntry, .preAdd)
+        XCTAssertNil(WearIveRunNarration.line(for: noEntry))
+        let entry = WearIveRunEntry(
+            dayStart: Date(timeIntervalSince1970: 1_762_560_000),
+            placeName: "New York", feelsLikeF: 41, actualF: 38,
+            condition: "Cloudy", itemNames: ["Tee"], itemKeys: ["tee"],
+            heroImageReference: "hero"
+        )
+        // RW-135 spec §9.1 RE-PIN: the derivation's creation
+        // form is an "Updated to" line (the .added state case
+        // itself was removed in the RW-138 pass — the form is
+        // unrepresentable, not merely unemitted).
+        // RW-150 (Nov 9, 2026) RE-PIN: RW-98 governs the line's
+        // CONTENT — the settled state names place AND moment,
+        // so a Now entry derives .placeAtMoment, not the
+        // place-only payload (the lane's RW-150 class pins
+        // cover the moment-bearing classes end to end).
+        XCTAssertEqual(
+            WearIveRunMiniBarModel.state(
+                todaysEntry: entry, moment: .now,
+                wasUpdatedThisSession: false
+            ),
+            .updated(payload: .placeAtMoment("New York", .now))
+        )
+        // GEN-5 (RW-28, C-7) SUPERSEDES the WS-4 garment payload:
+        // an entry carrying no stored update payload narrates
+        // its PLACE — never its first kit item. (This pin
+        // previously asserted the first kit item "Tee"; before
+        // that, a caller-supplied "5 items · 41°F" summary —
+        // both superseded in turn.)
+        XCTAssertEqual(
+            WearIveRunMiniBarModel.state(
+                todaysEntry: entry, moment: .now,
+                wasUpdatedThisSession: true
+            ),
+            .updated(payload: .placeAtMoment("New York", .now))
+        )
+    }
+
+    // MARK: - Mini bar background policy (translucency amendment)
+
+    func testMiniBackgroundIsTranslucentMaterial() {
+        XCTAssertEqual(
+            WearIveRunBackgroundPolicy.style(for: .mini, isDark: true),
+            .translucentMaterial(sheetOpacity: 0.82)
+        )
+        XCTAssertEqual(
+            WearIveRunBackgroundPolicy.style(for: .mini, isDark: false),
+            .translucentMaterial(sheetOpacity: 0.85)
+        )
+    }
+
+    func testFullExpressionBackgroundIsOpaqueSheet() {
+        XCTAssertEqual(
+            WearIveRunBackgroundPolicy.style(for: .expanded, isDark: true),
+            .opaqueSheet
+        )
+        XCTAssertEqual(
+            WearIveRunBackgroundPolicy.style(for: .expanded, isDark: false),
+            .opaqueSheet
+        )
+        // WS-3: the cue is a state of the ONE machine now — the
+        // retired `.endOfScrollCue` presentation case is `.cue`.
+        XCTAssertEqual(
+            WearIveRunBackgroundPolicy.style(for: .cue, isDark: true),
+            .opaqueSheet
+        )
+        XCTAssertEqual(
+            WearIveRunBackgroundPolicy.style(for: .cue, isDark: false),
+            .opaqueSheet
+        )
+    }
+}
