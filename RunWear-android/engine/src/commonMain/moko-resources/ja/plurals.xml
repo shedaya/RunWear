@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="wir_items_count">
+        <item quantity="other">%1$d点</item>
+    </plurals>
+    <plurals name="wir_days_count">
+        <item quantity="other">%1$d日</item>
+    </plurals>
+    <plurals name="wir_stays_count">
+        <item quantity="other">%1$d件の滞在</item>
+    </plurals>
+    <plurals name="wir_last_saved_minutes">
+        <item quantity="other">%1$d分前に保存</item>
+    </plurals>
+    <plurals name="wir_last_saved_hours">
+        <item quantity="other">%1$d時間前に保存</item>
+    </plurals>
+    <plurals name="outfit_items_for_run">
+        <item quantity="other">ランのアイテム%1$d点</item>
+    </plurals>
+    <plurals name="wear_swipe_items">
+        <item quantity="other">スワイプでアイテム%1$d点 →</item>
+    </plurals>
+</resources>

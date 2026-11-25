@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="wear_swipe_items">
+        <item quantity="other">ปัดเพื่อดู %1$d ชิ้น →</item>
+    </plurals>
+</resources>

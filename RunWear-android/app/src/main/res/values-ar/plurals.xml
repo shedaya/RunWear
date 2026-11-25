@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="wir_items_count">
+        <item quantity="zero">%1$d عنصر</item>
+        <item quantity="one">%1$d عنصر</item>
+        <item quantity="two">%1$d عنصران</item>
+        <item quantity="few">%1$d عناصر</item>
+        <item quantity="many">%1$d عنصرًا</item>
+        <item quantity="other">%1$d عنصر</item>
+    </plurals>
+    <plurals name="wir_days_count">
+        <item quantity="zero">%1$d يوم</item>
+        <item quantity="one">%1$d يوم</item>
+        <item quantity="two">%1$d يومان</item>
+        <item quantity="few">%1$d أيام</item>
+        <item quantity="many">%1$d يومًا</item>
+        <item quantity="other">%1$d يوم</item>
+    </plurals>
+    <plurals name="wir_stays_count">
+        <item quantity="zero">%1$d إقامة</item>
+        <item quantity="one">%1$d إقامة</item>
+        <item quantity="two">%1$d إقامتان</item>
+        <item quantity="few">%1$d إقامات</item>
+        <item quantity="many">%1$d إقامةً</item>
+        <item quantity="other">%1$d إقامة</item>
+    </plurals>
+    <plurals name="wir_last_saved_minutes">
+        <item quantity="zero">آخر حفظ قبل %1$d دقيقة</item>
+        <item quantity="one">آخر حفظ قبل %1$d دقيقة</item>
+        <item quantity="two">آخر حفظ قبل %1$d دقيقتين</item>
+        <item quantity="few">آخر حفظ قبل %1$d دقائق</item>
+        <item quantity="many">آخر حفظ قبل %1$d دقيقةً</item>
+        <item quantity="other">آخر حفظ قبل %1$d دقيقة</item>
+    </plurals>
+    <plurals name="wir_last_saved_hours">
+        <item quantity="zero">آخر حفظ قبل %1$d ساعة</item>
+        <item quantity="one">آخر حفظ قبل %1$d ساعة</item>
+        <item quantity="two">آخر حفظ قبل %1$d ساعتين</item>
+        <item quantity="few">آخر حفظ قبل %1$d ساعات</item>
+        <item quantity="many">آخر حفظ قبل %1$d ساعةً</item>
+        <item quantity="other">آخر حفظ قبل %1$d ساعة</item>
+    </plurals>
+</resources>

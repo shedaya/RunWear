@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">RunWear</string>
+    <string name="tile_outfit_label">Outfit Lari</string>
+    <string name="tile_outfit_description">Rekomendasi cuaca dan outfit untuk larimu</string>
+    <string name="complication_outfit_label">Outfit RunWear</string>
+    <string name="wear_feels_like_label">Terasa seperti</string>
+    <string name="wear_couldnt_load">Tidak dapat memuat cuaca</string>
+    <string name="wear_grant">Izinkan</string>
+    <string name="wear_loading">Memuat...</string>
+    <string name="wear_location_needed">Lokasi diperlukan</string>
+    <string name="wear_permission_required">Izin lokasi diperlukan</string>
+    <string name="wear_location_unavailable">Lokasi tidak tersedia — atur di aplikasi ponsel.</string>
+    <string name="wear_no_data_available">Tidak ada data tersedia</string>
+    <string name="wear_no_data">Tidak ada data</string>
+    <string name="wear_no_tips">Tidak ada tips khusus untuk hari ini. Selamat berlari!</string>
+    <string name="wear_outfit_preview">Pratinjau outfit</string>
+    <string name="wear_outfit_recommendation">Rekomendasi outfit: %1$s</string>
+    <string name="wear_refresh">Segarkan</string>
+    <string name="wear_retry">Coba lagi</string>
+    <string name="wear_runner">Pelari</string>
+    <string name="wear_tap_for_details">Ketuk untuk detail</string>
+    <string name="wear_tap_to_enable">Ketuk untuk mengaktifkan</string>
+    <string name="wear_tap_to_load">Ketuk untuk memuat</string>
+    <string name="wear_tap_to_retry">Ketuk untuk mencoba lagi</string>
+    <string name="wear_day_today">Hari ini</string>
+    <string name="wear_complication_feels">Terasa seperti %1$s, aktual %2$s</string>
+</resources>

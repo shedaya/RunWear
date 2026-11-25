@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">RunWear</string>
+    <string name="tile_outfit_label">Strój do biegania</string>
+    <string name="tile_outfit_description">Pogoda i rekomendacja stroju na Twój bieg</string>
+    <string name="complication_outfit_label">Strój RunWear</string>
+    <string name="wear_feels_like_label">Odczuwalna</string>
+    <string name="wear_couldnt_load">Nie udało się wczytać pogody</string>
+    <string name="wear_grant">Zezwól</string>
+    <string name="wear_loading">Ładowanie...</string>
+    <string name="wear_location_needed">Potrzebna lokalizacja</string>
+    <string name="wear_permission_required">Wymagane uprawnienie do lokalizacji</string>
+    <string name="wear_location_unavailable">Lokalizacja niedostępna — ustaw ją w aplikacji na telefonie.</string>
+    <string name="wear_no_data_available">Brak dostępnych danych</string>
+    <string name="wear_no_data">Brak danych</string>
+    <string name="wear_no_tips">Brak szczególnych wskazówek na dziś. Miłego biegu!</string>
+    <string name="wear_outfit_preview">Podgląd stroju</string>
+    <string name="wear_outfit_recommendation">Rekomendacja stroju: %1$s</string>
+    <string name="wear_refresh">Odśwież</string>
+    <string name="wear_retry">Ponów</string>
+    <string name="wear_runner">Biegacz</string>
+    <string name="wear_tap_for_details">Dotknij, aby zobaczyć szczegóły</string>
+    <string name="wear_tap_to_enable">Dotknij, aby włączyć</string>
+    <string name="wear_tap_to_load">Dotknij, aby wczytać</string>
+    <string name="wear_tap_to_retry">Dotknij, aby spróbować ponownie</string>
+    <string name="wear_day_today">Dziś</string>
+    <string name="wear_complication_feels">Odczuwalna %1$s, rzeczywista %2$s</string>
+</resources>

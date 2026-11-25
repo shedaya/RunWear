@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="wir_items_count">
+        <item quantity="one">%1$d item</item>
+        <item quantity="other">%1$d items</item>
+    </plurals>
+    <plurals name="wir_days_count">
+        <item quantity="one">%1$d dag</item>
+        <item quantity="other">%1$d dagen</item>
+    </plurals>
+    <plurals name="wir_stays_count">
+        <item quantity="one">%1$d verblijf</item>
+        <item quantity="other">%1$d verblijven</item>
+    </plurals>
+    <plurals name="wir_last_saved_minutes">
+        <item quantity="one">%1$d min geleden opgeslagen</item>
+        <item quantity="other">%1$d min geleden opgeslagen</item>
+    </plurals>
+    <plurals name="wir_last_saved_hours">
+        <item quantity="one">%1$d uur geleden opgeslagen</item>
+        <item quantity="other">%1$d uur geleden opgeslagen</item>
+    </plurals>
+    <plurals name="outfit_items_for_run">
+        <item quantity="one">%1$d item voor je loop</item>
+        <item quantity="other">%1$d items voor je loop</item>
+    </plurals>
+    <plurals name="wear_swipe_items">
+        <item quantity="one">Veeg voor %1$d item →</item>
+        <item quantity="other">Veeg voor %1$d items →</item>
+    </plurals>
+</resources>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="wear_swipe_items">
+        <item quantity="one">Przesuń, aby zobaczyć %1$d element →</item>
+        <item quantity="few">Przesuń, aby zobaczyć %1$d elementy →</item>
+        <item quantity="many">Przesuń, aby zobaczyć %1$d elementów →</item>
+        <item quantity="other">Przesuń, aby zobaczyć %1$d elementu →</item>
+    </plurals>
+</resources>

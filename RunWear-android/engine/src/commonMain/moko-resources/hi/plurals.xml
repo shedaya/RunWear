@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="wir_items_count">
+        <item quantity="one">%1$d आइटम</item>
+        <item quantity="other">%1$d आइटम</item>
+    </plurals>
+    <plurals name="wir_days_count">
+        <item quantity="one">%1$d दिन</item>
+        <item quantity="other">%1$d दिन</item>
+    </plurals>
+    <plurals name="wir_stays_count">
+        <item quantity="one">%1$d प्रवास</item>
+        <item quantity="other">%1$d प्रवास</item>
+    </plurals>
+    <plurals name="wir_last_saved_minutes">
+        <item quantity="one">अंतिम बार %1$d मिनट पहले सहेजा गया</item>
+        <item quantity="other">अंतिम बार %1$d मिनट पहले सहेजा गया</item>
+    </plurals>
+    <plurals name="wir_last_saved_hours">
+        <item quantity="one">अंतिम बार %1$d घंटे पहले सहेजा गया</item>
+        <item quantity="other">अंतिम बार %1$d घंटे पहले सहेजा गया</item>
+    </plurals>
+    <plurals name="outfit_items_for_run">
+        <item quantity="one">आपकी रन के लिए %1$d आइटम</item>
+        <item quantity="other">आपकी रन के लिए %1$d आइटम</item>
+    </plurals>
+    <plurals name="wear_swipe_items">
+        <item quantity="one">%1$d आइटम के लिए स्वाइप करें →</item>
+        <item quantity="other">%1$d आइटम के लिए स्वाइप करें →</item>
+    </plurals>
+</resources>

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">RunWear</string>
+    <string name="tile_outfit_label">रनिंग आउटफ़िट</string>
+    <string name="tile_outfit_description">आपकी रन के लिए मौसम और आउटफ़िट सिफ़ारिश</string>
+    <string name="complication_outfit_label">RunWear आउटफ़िट</string>
+    <string name="wear_feels_like_label">जैसा महसूस होता है</string>
+    <string name="wear_couldnt_load">मौसम लोड नहीं हो सका</string>
+    <string name="wear_grant">अनुमति दें</string>
+    <string name="wear_loading">लोड हो रहा है...</string>
+    <string name="wear_location_needed">स्थान आवश्यक है</string>
+    <string name="wear_permission_required">स्थान अनुमति आवश्यक है</string>
+    <string name="wear_location_unavailable">स्थान उपलब्ध नहीं है — इसे फ़ोन ऐप में सेट करें।</string>
+    <string name="wear_no_data_available">कोई डेटा उपलब्ध नहीं</string>
+    <string name="wear_no_data">कोई डेटा नहीं</string>
+    <string name="wear_no_tips">आज के लिए कोई विशेष टिप नहीं। अपनी रन का आनंद लें!</string>
+    <string name="wear_outfit_preview">आउटफ़िट पूर्वावलोकन</string>
+    <string name="wear_outfit_recommendation">आउटफ़िट सिफ़ारिश: %1$s</string>
+    <string name="wear_refresh">ताज़ा करें</string>
+    <string name="wear_retry">फिर से कोशिश करें</string>
+    <string name="wear_runner">धावक</string>
+    <string name="wear_tap_for_details">विवरण के लिए टैप करें</string>
+    <string name="wear_tap_to_enable">सक्षम करने के लिए टैप करें</string>
+    <string name="wear_tap_to_load">लोड करने के लिए टैप करें</string>
+    <string name="wear_tap_to_retry">फिर से कोशिश करने के लिए टैप करें</string>
+    <string name="wear_day_today">आज</string>
+    <string name="wear_complication_feels">जैसा महसूस होता है %1$s, वास्तविक %2$s</string>
+</resources>

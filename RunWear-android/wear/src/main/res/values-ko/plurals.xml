@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="wear_swipe_items">
+        <item quantity="other">항목 %1$d개 보려면 스와이프 →</item>
+    </plurals>
+</resources>

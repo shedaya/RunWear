@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="wir_items_count">
+        <item quantity="other">%1$d 件物品</item>
+    </plurals>
+    <plurals name="wir_days_count">
+        <item quantity="other">%1$d 天</item>
+    </plurals>
+    <plurals name="wir_stays_count">
+        <item quantity="other">%1$d 次停留</item>
+    </plurals>
+    <plurals name="wir_last_saved_minutes">
+        <item quantity="other">上次保存于 %1$d 分钟前</item>
+    </plurals>
+    <plurals name="wir_last_saved_hours">
+        <item quantity="other">上次保存于 %1$d 小时前</item>
+    </plurals>
+</resources>

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="wir_items_count">
+        <item quantity="one">%1$d element</item>
+        <item quantity="few">%1$d elementy</item>
+        <item quantity="many">%1$d elementów</item>
+        <item quantity="other">%1$d elementu</item>
+    </plurals>
+    <plurals name="wir_days_count">
+        <item quantity="one">%1$d dzień</item>
+        <item quantity="few">%1$d dni</item>
+        <item quantity="many">%1$d dni</item>
+        <item quantity="other">%1$d dnia</item>
+    </plurals>
+    <plurals name="wir_stays_count">
+        <item quantity="one">%1$d pobyt</item>
+        <item quantity="few">%1$d pobyty</item>
+        <item quantity="many">%1$d pobytów</item>
+        <item quantity="other">%1$d pobytu</item>
+    </plurals>
+    <plurals name="wir_last_saved_minutes">
+        <item quantity="one">Ostatnio zapisano %1$d min temu</item>
+        <item quantity="few">Ostatnio zapisano %1$d min temu</item>
+        <item quantity="many">Ostatnio zapisano %1$d min temu</item>
+        <item quantity="other">Ostatnio zapisano %1$d min temu</item>
+    </plurals>
+    <plurals name="wir_last_saved_hours">
+        <item quantity="one">Ostatnio zapisano %1$d godz. temu</item>
+        <item quantity="few">Ostatnio zapisano %1$d godz. temu</item>
+        <item quantity="many">Ostatnio zapisano %1$d godz. temu</item>
+        <item quantity="other">Ostatnio zapisano %1$d godz. temu</item>
+    </plurals>
+</resources>

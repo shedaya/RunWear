@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="wear_swipe_items">
+        <item quantity="one">Deslize para %1$d item →</item>
+        <item quantity="other">Deslize para %1$d itens →</item>
+    </plurals>
+</resources>

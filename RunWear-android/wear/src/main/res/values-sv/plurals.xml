@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="wear_swipe_items">
+        <item quantity="one">Svep för %1$d plagg →</item>
+        <item quantity="other">Svep för %1$d plagg →</item>
+    </plurals>
+</resources>

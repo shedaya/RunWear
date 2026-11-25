@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="wear_swipe_items">
+        <item quantity="one">Scorri per %1$d articolo →</item>
+        <item quantity="other">Scorri per %1$d articoli →</item>
+    </plurals>
+</resources>

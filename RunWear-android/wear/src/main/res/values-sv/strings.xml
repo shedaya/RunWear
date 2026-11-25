@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">RunWear</string>
+    <string name="tile_outfit_label">Löparoutfit</string>
+    <string name="tile_outfit_description">Väder och outfitrekommendation för din löptur</string>
+    <string name="complication_outfit_label">RunWear-outfit</string>
+    <string name="wear_feels_like_label">Känns som</string>
+    <string name="wear_couldnt_load">Kunde inte ladda vädret</string>
+    <string name="wear_grant">Bevilja</string>
+    <string name="wear_loading">Laddar...</string>
+    <string name="wear_location_needed">Plats behövs</string>
+    <string name="wear_permission_required">Platsbehörighet krävs</string>
+    <string name="wear_location_unavailable">Plats ej tillgänglig — ange den i telefonappen.</string>
+    <string name="wear_no_data_available">Ingen data tillgänglig</string>
+    <string name="wear_no_data">Ingen data</string>
+    <string name="wear_no_tips">Inga särskilda tips för idag. Njut av din löptur!</string>
+    <string name="wear_outfit_preview">Förhandsvisning av outfit</string>
+    <string name="wear_outfit_recommendation">Outfitrekommendation: %1$s</string>
+    <string name="wear_refresh">Uppdatera</string>
+    <string name="wear_retry">Försök igen</string>
+    <string name="wear_runner">Löpare</string>
+    <string name="wear_tap_for_details">Tryck för detaljer</string>
+    <string name="wear_tap_to_enable">Tryck för att aktivera</string>
+    <string name="wear_tap_to_load">Tryck för att ladda</string>
+    <string name="wear_tap_to_retry">Tryck för att försöka igen</string>
+    <string name="wear_day_today">Idag</string>
+    <string name="wear_complication_feels">Känns som %1$s, faktisk %2$s</string>
+</resources>

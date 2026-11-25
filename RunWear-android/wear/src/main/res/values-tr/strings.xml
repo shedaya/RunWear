@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">RunWear</string>
+    <string name="tile_outfit_label">Koşu Kombini</string>
+    <string name="tile_outfit_description">Koşun için hava durumu ve kombin önerisi</string>
+    <string name="complication_outfit_label">RunWear Kombini</string>
+    <string name="wear_feels_like_label">Hissedilen</string>
+    <string name="wear_couldnt_load">Hava durumu yüklenemedi</string>
+    <string name="wear_grant">İzin Ver</string>
+    <string name="wear_loading">Yükleniyor...</string>
+    <string name="wear_location_needed">Konum gerekli</string>
+    <string name="wear_permission_required">Konum izni gerekli</string>
+    <string name="wear_location_unavailable">Konum kullanılamıyor — telefon uygulamasından ayarla.</string>
+    <string name="wear_no_data_available">Veri yok</string>
+    <string name="wear_no_data">Veri yok</string>
+    <string name="wear_no_tips">Bugün için özel ipucu yok. Koşunun tadını çıkar!</string>
+    <string name="wear_outfit_preview">Kombin önizlemesi</string>
+    <string name="wear_outfit_recommendation">Kombin önerisi: %1$s</string>
+    <string name="wear_refresh">Yenile</string>
+    <string name="wear_retry">Tekrar dene</string>
+    <string name="wear_runner">Koşucu</string>
+    <string name="wear_tap_for_details">Ayrıntılar için dokun</string>
+    <string name="wear_tap_to_enable">Etkinleştirmek için dokun</string>
+    <string name="wear_tap_to_load">Yüklemek için dokun</string>
+    <string name="wear_tap_to_retry">Tekrar denemek için dokun</string>
+    <string name="wear_day_today">Bugün</string>
+    <string name="wear_complication_feels">Hissedilen %1$s, gerçek %2$s</string>
+</resources>

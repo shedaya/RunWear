@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="wir_items_count">
+        <item quantity="other">항목 %1$d개</item>
+    </plurals>
+    <plurals name="wir_days_count">
+        <item quantity="other">%1$d일</item>
+    </plurals>
+    <plurals name="wir_stays_count">
+        <item quantity="other">숙박 %1$d회</item>
+    </plurals>
+    <plurals name="wir_last_saved_minutes">
+        <item quantity="other">마지막 저장 %1$d분 전</item>
+    </plurals>
+    <plurals name="wir_last_saved_hours">
+        <item quantity="other">마지막 저장 %1$d시간 전</item>
+    </plurals>
+</resources>

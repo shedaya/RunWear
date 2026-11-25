@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">RunWear</string>
+    <string name="tile_outfit_label">跑步穿搭</string>
+    <string name="tile_outfit_description">为你的跑步提供天气和穿搭推荐</string>
+    <string name="complication_outfit_label">RunWear 穿搭</string>
+    <string name="wear_feels_like_label">体感温度</string>
+    <string name="wear_couldnt_load">无法加载天气</string>
+    <string name="wear_grant">授予</string>
+    <string name="wear_loading">加载中...</string>
+    <string name="wear_location_needed">需要位置</string>
+    <string name="wear_permission_required">需要定位权限</string>
+    <string name="wear_location_unavailable">位置不可用——在手机应用中设置。</string>
+    <string name="wear_no_data_available">没有可用数据</string>
+    <string name="wear_no_data">没有数据</string>
+    <string name="wear_no_tips">今天没有具体提示。享受你的跑步！</string>
+    <string name="wear_outfit_preview">穿搭预览</string>
+    <string name="wear_outfit_recommendation">穿搭推荐：%1$s</string>
+    <string name="wear_refresh">刷新</string>
+    <string name="wear_retry">重试</string>
+    <string name="wear_runner">跑者</string>
+    <string name="wear_tap_for_details">点按查看详情</string>
+    <string name="wear_tap_to_enable">点按启用</string>
+    <string name="wear_tap_to_load">点按加载</string>
+    <string name="wear_tap_to_retry">点按重试</string>
+    <string name="wear_day_today">今天</string>
+    <string name="wear_complication_feels">体感温度 %1$s，实际 %2$s</string>
+</resources>

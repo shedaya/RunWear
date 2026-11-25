@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">RunWear</string>
+    <string name="tile_outfit_label">Trang phục chạy</string>
+    <string name="tile_outfit_description">Thời tiết và gợi ý trang phục cho lần chạy của bạn</string>
+    <string name="complication_outfit_label">Trang phục RunWear</string>
+    <string name="wear_feels_like_label">Cảm nhận như</string>
+    <string name="wear_couldnt_load">Không thể tải thời tiết</string>
+    <string name="wear_grant">Cấp quyền</string>
+    <string name="wear_loading">Đang tải...</string>
+    <string name="wear_location_needed">Cần vị trí</string>
+    <string name="wear_permission_required">Yêu cầu quyền vị trí</string>
+    <string name="wear_location_unavailable">Vị trí không khả dụng — đặt nó trong ứng dụng điện thoại.</string>
+    <string name="wear_no_data_available">Không có dữ liệu</string>
+    <string name="wear_no_data">Không có dữ liệu</string>
+    <string name="wear_no_tips">Không có mẹo cụ thể cho hôm nay. Chúc bạn chạy vui!</string>
+    <string name="wear_outfit_preview">Xem trước trang phục</string>
+    <string name="wear_outfit_recommendation">Gợi ý trang phục: %1$s</string>
+    <string name="wear_refresh">Làm mới</string>
+    <string name="wear_retry">Thử lại</string>
+    <string name="wear_runner">Người chạy</string>
+    <string name="wear_tap_for_details">Chạm để xem chi tiết</string>
+    <string name="wear_tap_to_enable">Chạm để bật</string>
+    <string name="wear_tap_to_load">Chạm để tải</string>
+    <string name="wear_tap_to_retry">Chạm để thử lại</string>
+    <string name="wear_day_today">Hôm nay</string>
+    <string name="wear_complication_feels">Cảm nhận như %1$s, thực tế %2$s</string>
+</resources>

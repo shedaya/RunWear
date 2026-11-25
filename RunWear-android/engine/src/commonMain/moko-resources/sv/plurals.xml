@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="wir_items_count">
+        <item quantity="one">%1$d plagg</item>
+        <item quantity="other">%1$d plagg</item>
+    </plurals>
+    <plurals name="wir_days_count">
+        <item quantity="one">%1$d dag</item>
+        <item quantity="other">%1$d dagar</item>
+    </plurals>
+    <plurals name="wir_stays_count">
+        <item quantity="one">%1$d vistelse</item>
+        <item quantity="other">%1$d vistelser</item>
+    </plurals>
+    <plurals name="wir_last_saved_minutes">
+        <item quantity="one">Senast sparat för %1$d min sedan</item>
+        <item quantity="other">Senast sparat för %1$d min sedan</item>
+    </plurals>
+    <plurals name="wir_last_saved_hours">
+        <item quantity="one">Senast sparat för %1$d tim sedan</item>
+        <item quantity="other">Senast sparat för %1$d tim sedan</item>
+    </plurals>
+    <plurals name="outfit_items_for_run">
+        <item quantity="one">%1$d plagg för din löptur</item>
+        <item quantity="other">%1$d plagg för din löptur</item>
+    </plurals>
+    <plurals name="wear_swipe_items">
+        <item quantity="one">Svep för %1$d plagg →</item>
+        <item quantity="other">Svep för %1$d plagg →</item>
+    </plurals>
+</resources>

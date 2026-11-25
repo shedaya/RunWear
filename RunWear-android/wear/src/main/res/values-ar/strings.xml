@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">RunWear</string>
+    <string name="tile_outfit_label">إطلالة الجري</string>
+    <string name="tile_outfit_description">الطقس وتوصية الإطلالة لجولة جريك</string>
+    <string name="complication_outfit_label">إطلالة RunWear</string>
+    <string name="wear_feels_like_label">المحسوسة</string>
+    <string name="wear_couldnt_load">تعذّر تحميل الطقس</string>
+    <string name="wear_grant">منح</string>
+    <string name="wear_loading">جارٍ التحميل...</string>
+    <string name="wear_location_needed">الموقع مطلوب</string>
+    <string name="wear_permission_required">إذن الموقع مطلوب</string>
+    <string name="wear_location_unavailable">الموقع غير متاح — حدّده في تطبيق الهاتف.</string>
+    <string name="wear_no_data_available">لا بيانات متاحة</string>
+    <string name="wear_no_data">لا بيانات</string>
+    <string name="wear_no_tips">لا نصائح محددة لليوم. استمتع بجولة جريك!</string>
+    <string name="wear_outfit_preview">معاينة الإطلالة</string>
+    <string name="wear_outfit_recommendation">توصية الإطلالة: %1$s</string>
+    <string name="wear_refresh">تحديث</string>
+    <string name="wear_retry">إعادة المحاولة</string>
+    <string name="wear_runner">عدّاء</string>
+    <string name="wear_tap_for_details">انقر للتفاصيل</string>
+    <string name="wear_tap_to_enable">انقر للتفعيل</string>
+    <string name="wear_tap_to_load">انقر للتحميل</string>
+    <string name="wear_tap_to_retry">انقر لإعادة المحاولة</string>
+    <string name="wear_day_today">اليوم</string>
+    <string name="wear_complication_feels">المحسوسة %1$s، الفعلية %2$s</string>
+</resources>

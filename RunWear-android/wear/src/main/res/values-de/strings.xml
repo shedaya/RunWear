@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">RunWear</string>
+    <string name="tile_outfit_label">Lauf-Outfit</string>
+    <string name="tile_outfit_description">Wetter- und Outfit-Empfehlung für deinen Lauf</string>
+    <string name="complication_outfit_label">RunWear Outfit</string>
+    <string name="wear_feels_like_label">Gefühlt</string>
+    <string name="wear_couldnt_load">Wetter konnte nicht geladen werden</string>
+    <string name="wear_grant">Erlauben</string>
+    <string name="wear_loading">Lädt...</string>
+    <string name="wear_location_needed">Standort benötigt</string>
+    <string name="wear_permission_required">Standortberechtigung erforderlich</string>
+    <string name="wear_location_unavailable">Standort nicht verfügbar — lege ihn in der Telefon-App fest.</string>
+    <string name="wear_no_data_available">Keine Daten verfügbar</string>
+    <string name="wear_no_data">Keine Daten</string>
+    <string name="wear_no_tips">Keine spezifischen Tipps für heute. Viel Spaß bei deinem Lauf!</string>
+    <string name="wear_outfit_preview">Outfit-Vorschau</string>
+    <string name="wear_outfit_recommendation">Outfit-Empfehlung: %1$s</string>
+    <string name="wear_refresh">Aktualisieren</string>
+    <string name="wear_retry">Wiederholen</string>
+    <string name="wear_runner">Läufer</string>
+    <string name="wear_tap_for_details">Tippe für Details</string>
+    <string name="wear_tap_to_enable">Tippe zum Aktivieren</string>
+    <string name="wear_tap_to_load">Tippe zum Laden</string>
+    <string name="wear_tap_to_retry">Tippe zum erneuten Versuchen</string>
+    <string name="wear_day_today">Heute</string>
+    <string name="wear_complication_feels">Gefühlt %1$s, tatsächlich %2$s</string>
+</resources>

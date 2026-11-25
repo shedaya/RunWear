@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="wir_items_count">
+        <item quantity="one">%1$d предмет</item>
+        <item quantity="few">%1$d предмети</item>
+        <item quantity="many">%1$d предметів</item>
+        <item quantity="other">%1$d предмета</item>
+    </plurals>
+    <plurals name="wir_days_count">
+        <item quantity="one">%1$d день</item>
+        <item quantity="few">%1$d дні</item>
+        <item quantity="many">%1$d днів</item>
+        <item quantity="other">%1$d дня</item>
+    </plurals>
+    <plurals name="wir_stays_count">
+        <item quantity="one">%1$d перебування</item>
+        <item quantity="few">%1$d перебування</item>
+        <item quantity="many">%1$d перебувань</item>
+        <item quantity="other">%1$d перебування</item>
+    </plurals>
+    <plurals name="wir_last_saved_minutes">
+        <item quantity="one">Востаннє збережено %1$d хв тому</item>
+        <item quantity="few">Востаннє збережено %1$d хв тому</item>
+        <item quantity="many">Востаннє збережено %1$d хв тому</item>
+        <item quantity="other">Востаннє збережено %1$d хв тому</item>
+    </plurals>
+    <plurals name="wir_last_saved_hours">
+        <item quantity="one">Востаннє збережено %1$d год тому</item>
+        <item quantity="few">Востаннє збережено %1$d год тому</item>
+        <item quantity="many">Востаннє збережено %1$d год тому</item>
+        <item quantity="other">Востаннє збережено %1$d год тому</item>
+    </plurals>
+</resources>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="wear_swipe_items">
+        <item quantity="one">Balayez pour %1$d article →</item>
+        <item quantity="other">Balayez pour %1$d articles →</item>
+    </plurals>
+</resources>

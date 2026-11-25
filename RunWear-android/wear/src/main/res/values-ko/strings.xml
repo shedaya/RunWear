@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">RunWear</string>
+    <string name="tile_outfit_label">러닝 아웃핏</string>
+    <string name="tile_outfit_description">러닝을 위한 날씨와 아웃핏 추천</string>
+    <string name="complication_outfit_label">RunWear 아웃핏</string>
+    <string name="wear_feels_like_label">체감 온도</string>
+    <string name="wear_couldnt_load">날씨를 불러올 수 없습니다</string>
+    <string name="wear_grant">허용</string>
+    <string name="wear_loading">불러오는 중...</string>
+    <string name="wear_location_needed">위치 필요</string>
+    <string name="wear_permission_required">위치 권한 필요</string>
+    <string name="wear_location_unavailable">위치를 사용할 수 없습니다 — 휴대폰 앱에서 설정하세요.</string>
+    <string name="wear_no_data_available">사용 가능한 데이터 없음</string>
+    <string name="wear_no_data">데이터 없음</string>
+    <string name="wear_no_tips">오늘은 특별한 팁이 없습니다. 러닝을 즐기세요!</string>
+    <string name="wear_outfit_preview">아웃핏 미리보기</string>
+    <string name="wear_outfit_recommendation">아웃핏 추천: %1$s</string>
+    <string name="wear_refresh">새로고침</string>
+    <string name="wear_retry">다시 시도</string>
+    <string name="wear_runner">러너</string>
+    <string name="wear_tap_for_details">탭하여 세부 정보 보기</string>
+    <string name="wear_tap_to_enable">탭하여 활성화</string>
+    <string name="wear_tap_to_load">탭하여 불러오기</string>
+    <string name="wear_tap_to_retry">탭하여 다시 시도</string>
+    <string name="wear_day_today">오늘</string>
+    <string name="wear_complication_feels">체감 온도 %1$s, 실제 %2$s</string>
+</resources>

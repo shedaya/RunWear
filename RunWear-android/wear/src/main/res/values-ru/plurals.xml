@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="wear_swipe_items">
+        <item quantity="one">Смахните — %1$d предмет →</item>
+        <item quantity="few">Смахните — %1$d предмета →</item>
+        <item quantity="many">Смахните — %1$d предметов →</item>
+        <item quantity="other">Смахните — %1$d предмета →</item>
+    </plurals>
+</resources>

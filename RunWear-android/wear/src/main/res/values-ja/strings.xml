@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">RunWear</string>
+    <string name="tile_outfit_label">ランニングコーディネート</string>
+    <string name="tile_outfit_description">ランのための天気とコーディネートのおすすめ</string>
+    <string name="complication_outfit_label">RunWearコーディネート</string>
+    <string name="wear_feels_like_label">体感温度</string>
+    <string name="wear_couldnt_load">天気を読み込めませんでした</string>
+    <string name="wear_grant">許可</string>
+    <string name="wear_loading">読み込み中...</string>
+    <string name="wear_location_needed">位置情報が必要です</string>
+    <string name="wear_permission_required">位置情報の許可が必要です</string>
+    <string name="wear_location_unavailable">位置情報が利用できません — スマートフォンのアプリで設定してください。</string>
+    <string name="wear_no_data_available">データがありません</string>
+    <string name="wear_no_data">データなし</string>
+    <string name="wear_no_tips">今日の特別なヒントはありません。ランを楽しんでください！</string>
+    <string name="wear_outfit_preview">コーディネートのプレビュー</string>
+    <string name="wear_outfit_recommendation">コーディネートのおすすめ：%1$s</string>
+    <string name="wear_refresh">更新</string>
+    <string name="wear_retry">再試行</string>
+    <string name="wear_runner">ランナー</string>
+    <string name="wear_tap_for_details">タップして詳細</string>
+    <string name="wear_tap_to_enable">タップして有効化</string>
+    <string name="wear_tap_to_load">タップして読み込み</string>
+    <string name="wear_tap_to_retry">タップして再試行</string>
+    <string name="wear_day_today">今日</string>
+    <string name="wear_complication_feels">体感温度 %1$s、実際の気温 %2$s</string>
+</resources>

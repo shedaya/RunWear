@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="wir_items_count">
+        <item quantity="one">%1$d article</item>
+        <item quantity="other">%1$d articles</item>
+    </plurals>
+    <plurals name="wir_days_count">
+        <item quantity="one">%1$d jour</item>
+        <item quantity="other">%1$d jours</item>
+    </plurals>
+    <plurals name="wir_stays_count">
+        <item quantity="one">%1$d séjour</item>
+        <item quantity="other">%1$d séjours</item>
+    </plurals>
+    <plurals name="wir_last_saved_minutes">
+        <item quantity="one">Dernier enregistrement il y a %1$d min</item>
+        <item quantity="other">Dernier enregistrement il y a %1$d min</item>
+    </plurals>
+    <plurals name="wir_last_saved_hours">
+        <item quantity="one">Dernier enregistrement il y a %1$d h</item>
+        <item quantity="other">Dernier enregistrement il y a %1$d h</item>
+    </plurals>
+</resources>

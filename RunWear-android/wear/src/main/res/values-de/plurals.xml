@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="wear_swipe_items">
+        <item quantity="one">Wische für %1$d Element →</item>
+        <item quantity="other">Wische für %1$d Elemente →</item>
+    </plurals>
+</resources>

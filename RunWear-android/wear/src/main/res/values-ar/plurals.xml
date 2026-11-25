@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="wear_swipe_items">
+        <item quantity="zero">مرّر لـ %1$d عنصر →</item>
+        <item quantity="one">مرّر لـ %1$d عنصر →</item>
+        <item quantity="two">مرّر لـ %1$d عنصرين →</item>
+        <item quantity="few">مرّر لـ %1$d عناصر →</item>
+        <item quantity="many">مرّر لـ %1$d عنصرًا →</item>
+        <item quantity="other">مرّر لـ %1$d عنصر →</item>
+    </plurals>
+</resources>

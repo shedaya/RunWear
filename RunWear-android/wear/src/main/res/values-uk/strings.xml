@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">RunWear</string>
+    <string name="tile_outfit_label">Образ для бігу</string>
+    <string name="tile_outfit_description">Погода й рекомендація образу для вашої пробіжки</string>
+    <string name="complication_outfit_label">Образ RunWear</string>
+    <string name="wear_feels_like_label">Відчувається як</string>
+    <string name="wear_couldnt_load">Не вдалося завантажити погоду</string>
+    <string name="wear_grant">Надати</string>
+    <string name="wear_loading">Завантаження...</string>
+    <string name="wear_location_needed">Потрібне місцезнаходження</string>
+    <string name="wear_permission_required">Потрібен дозвіл на місцезнаходження</string>
+    <string name="wear_location_unavailable">Місцезнаходження недоступне — укажіть його в застосунку на телефоні.</string>
+    <string name="wear_no_data_available">Даних немає</string>
+    <string name="wear_no_data">Немає даних</string>
+    <string name="wear_no_tips">Немає конкретних порад на сьогодні. Гарної пробіжки!</string>
+    <string name="wear_outfit_preview">Попередній перегляд образу</string>
+    <string name="wear_outfit_recommendation">Рекомендація образу: %1$s</string>
+    <string name="wear_refresh">Оновити</string>
+    <string name="wear_retry">Повторити</string>
+    <string name="wear_runner">Бігун</string>
+    <string name="wear_tap_for_details">Торкніться для деталей</string>
+    <string name="wear_tap_to_enable">Торкніться, щоб увімкнути</string>
+    <string name="wear_tap_to_load">Торкніться, щоб завантажити</string>
+    <string name="wear_tap_to_retry">Торкніться, щоб повторити</string>
+    <string name="wear_day_today">Сьогодні</string>
+    <string name="wear_complication_feels">Відчувається як %1$s, фактична %2$s</string>
+</resources>

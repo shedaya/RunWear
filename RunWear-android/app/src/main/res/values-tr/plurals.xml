@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="wir_items_count">
+        <item quantity="one">%1$d parça</item>
+        <item quantity="other">%1$d parça</item>
+    </plurals>
+    <plurals name="wir_days_count">
+        <item quantity="one">%1$d gün</item>
+        <item quantity="other">%1$d gün</item>
+    </plurals>
+    <plurals name="wir_stays_count">
+        <item quantity="one">%1$d konaklama</item>
+        <item quantity="other">%1$d konaklama</item>
+    </plurals>
+    <plurals name="wir_last_saved_minutes">
+        <item quantity="one">Son kayıt %1$d dk önce</item>
+        <item quantity="other">Son kayıt %1$d dk önce</item>
+    </plurals>
+    <plurals name="wir_last_saved_hours">
+        <item quantity="one">Son kayıt %1$d sa önce</item>
+        <item quantity="other">Son kayıt %1$d sa önce</item>
+    </plurals>
+</resources>

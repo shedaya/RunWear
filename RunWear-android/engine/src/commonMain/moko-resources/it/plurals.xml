@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="wir_items_count">
+        <item quantity="one">%1$d articolo</item>
+        <item quantity="other">%1$d articoli</item>
+    </plurals>
+    <plurals name="wir_days_count">
+        <item quantity="one">%1$d giorno</item>
+        <item quantity="other">%1$d giorni</item>
+    </plurals>
+    <plurals name="wir_stays_count">
+        <item quantity="one">%1$d soggiorno</item>
+        <item quantity="other">%1$d soggiorni</item>
+    </plurals>
+    <plurals name="wir_last_saved_minutes">
+        <item quantity="one">Ultimo salvataggio %1$d min fa</item>
+        <item quantity="other">Ultimo salvataggio %1$d min fa</item>
+    </plurals>
+    <plurals name="wir_last_saved_hours">
+        <item quantity="one">Ultimo salvataggio %1$d ora fa</item>
+        <item quantity="other">Ultimo salvataggio %1$d ore fa</item>
+    </plurals>
+    <plurals name="outfit_items_for_run">
+        <item quantity="one">%1$d articolo per la tua corsa</item>
+        <item quantity="other">%1$d articoli per la tua corsa</item>
+    </plurals>
+    <plurals name="wear_swipe_items">
+        <item quantity="one">Scorri per %1$d articolo →</item>
+        <item quantity="other">Scorri per %1$d articoli →</item>
+    </plurals>
+</resources>

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">RunWear</string>
+    <string name="tile_outfit_label">Conjunto para correr</string>
+    <string name="tile_outfit_description">Clima y recomendación de conjunto para tu salida</string>
+    <string name="complication_outfit_label">Conjunto RunWear</string>
+    <string name="wear_feels_like_label">Sensación térmica</string>
+    <string name="wear_couldnt_load">No se pudo cargar el clima</string>
+    <string name="wear_grant">Conceder</string>
+    <string name="wear_loading">Cargando...</string>
+    <string name="wear_location_needed">Se necesita ubicación</string>
+    <string name="wear_permission_required">Se requiere permiso de ubicación</string>
+    <string name="wear_location_unavailable">Ubicación no disponible: establécela en la app del teléfono.</string>
+    <string name="wear_no_data_available">No hay datos disponibles</string>
+    <string name="wear_no_data">Sin datos</string>
+    <string name="wear_no_tips">Sin consejos específicos para hoy. ¡Disfruta tu salida!</string>
+    <string name="wear_outfit_preview">Vista previa del conjunto</string>
+    <string name="wear_outfit_recommendation">Recomendación de conjunto: %1$s</string>
+    <string name="wear_refresh">Actualizar</string>
+    <string name="wear_retry">Reintentar</string>
+    <string name="wear_runner">Corredor</string>
+    <string name="wear_tap_for_details">Toca para ver detalles</string>
+    <string name="wear_tap_to_enable">Toca para activar</string>
+    <string name="wear_tap_to_load">Toca para cargar</string>
+    <string name="wear_tap_to_retry">Toca para reintentar</string>
+    <string name="wear_day_today">Hoy</string>
+    <string name="wear_complication_feels">%1$s de sensación térmica, %2$s real</string>
+</resources>

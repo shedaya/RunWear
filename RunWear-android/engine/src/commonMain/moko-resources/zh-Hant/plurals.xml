@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="wir_items_count">
+        <item quantity="other">%1$d 件單品</item>
+    </plurals>
+    <plurals name="wir_days_count">
+        <item quantity="other">%1$d 天</item>
+    </plurals>
+    <plurals name="wir_stays_count">
+        <item quantity="other">%1$d 晚</item>
+    </plurals>
+    <plurals name="wir_last_saved_minutes">
+        <item quantity="other">上次儲存於 %1$d 分鐘前</item>
+    </plurals>
+    <plurals name="wir_last_saved_hours">
+        <item quantity="other">上次儲存於 %1$d 小時前</item>
+    </plurals>
+    <plurals name="outfit_items_for_run">
+        <item quantity="other">你的跑步有 %1$d 件單品</item>
+    </plurals>
+    <plurals name="wear_swipe_items">
+        <item quantity="other">滑動查看 %1$d 件單品 →</item>
+    </plurals>
+</resources>

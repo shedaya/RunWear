@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="wir_items_count">
+        <item quantity="other">%1$d ชิ้น</item>
+    </plurals>
+    <plurals name="wir_days_count">
+        <item quantity="other">%1$d วัน</item>
+    </plurals>
+    <plurals name="wir_stays_count">
+        <item quantity="other">%1$d การเข้าพัก</item>
+    </plurals>
+    <plurals name="wir_last_saved_minutes">
+        <item quantity="other">บันทึกล่าสุด %1$d นาทีที่แล้ว</item>
+    </plurals>
+    <plurals name="wir_last_saved_hours">
+        <item quantity="other">บันทึกล่าสุด %1$d ชม.ที่แล้ว</item>
+    </plurals>
+</resources>

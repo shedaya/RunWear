@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="wir_items_count">
+        <item quantity="one">%1$d предмет</item>
+        <item quantity="few">%1$d предмета</item>
+        <item quantity="many">%1$d предметов</item>
+        <item quantity="other">%1$d предмета</item>
+    </plurals>
+    <plurals name="wir_days_count">
+        <item quantity="one">%1$d день</item>
+        <item quantity="few">%1$d дня</item>
+        <item quantity="many">%1$d дней</item>
+        <item quantity="other">%1$d дня</item>
+    </plurals>
+    <plurals name="wir_stays_count">
+        <item quantity="one">%1$d пребывание</item>
+        <item quantity="few">%1$d пребывания</item>
+        <item quantity="many">%1$d пребываний</item>
+        <item quantity="other">%1$d пребывания</item>
+    </plurals>
+    <plurals name="wir_last_saved_minutes">
+        <item quantity="one">Сохранено %1$d минуту назад</item>
+        <item quantity="few">Сохранено %1$d минуты назад</item>
+        <item quantity="many">Сохранено %1$d минут назад</item>
+        <item quantity="other">Сохранено %1$d минуты назад</item>
+    </plurals>
+    <plurals name="wir_last_saved_hours">
+        <item quantity="one">Сохранено %1$d час назад</item>
+        <item quantity="few">Сохранено %1$d часа назад</item>
+        <item quantity="many">Сохранено %1$d часов назад</item>
+        <item quantity="other">Сохранено %1$d часа назад</item>
+    </plurals>
+    <plurals name="outfit_items_for_run">
+        <item quantity="one">%1$d предмет для вашей пробежки</item>
+        <item quantity="few">%1$d предмета для вашей пробежки</item>
+        <item quantity="many">%1$d предметов для вашей пробежки</item>
+        <item quantity="other">%1$d предмета для вашей пробежки</item>
+    </plurals>
+    <plurals name="wear_swipe_items">
+        <item quantity="one">Смахните — %1$d предмет →</item>
+        <item quantity="few">Смахните — %1$d предмета →</item>
+        <item quantity="many">Смахните — %1$d предметов →</item>
+        <item quantity="other">Смахните — %1$d предмета →</item>
+    </plurals>
+</resources>

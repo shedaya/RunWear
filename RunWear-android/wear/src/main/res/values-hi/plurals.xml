@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="wear_swipe_items">
+        <item quantity="one">%1$d आइटम के लिए स्वाइप करें →</item>
+        <item quantity="other">%1$d आइटम के लिए स्वाइप करें →</item>
+    </plurals>
+</resources>

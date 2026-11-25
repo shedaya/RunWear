@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">RunWear</string>
+    <string name="tile_outfit_label">Tenue de course</string>
+    <string name="tile_outfit_description">Météo et recommandation de tenue pour votre course</string>
+    <string name="complication_outfit_label">Tenue RunWear</string>
+    <string name="wear_feels_like_label">Ressenti</string>
+    <string name="wear_couldnt_load">Impossible de charger la météo</string>
+    <string name="wear_grant">Autoriser</string>
+    <string name="wear_loading">Chargement...</string>
+    <string name="wear_location_needed">Localisation requise</string>
+    <string name="wear_permission_required">Autorisation de localisation requise</string>
+    <string name="wear_location_unavailable">Localisation indisponible — définissez-la dans l\'app téléphone.</string>
+    <string name="wear_no_data_available">Aucune donnée disponible</string>
+    <string name="wear_no_data">Aucune donnée</string>
+    <string name="wear_no_tips">Aucun conseil particulier pour aujourd\'hui. Bonne course !</string>
+    <string name="wear_outfit_preview">Aperçu de la tenue</string>
+    <string name="wear_outfit_recommendation">Recommandation de tenue : %1$s</string>
+    <string name="wear_refresh">Actualiser</string>
+    <string name="wear_retry">Réessayer</string>
+    <string name="wear_runner">Coureur</string>
+    <string name="wear_tap_for_details">Touchez pour les détails</string>
+    <string name="wear_tap_to_enable">Touchez pour activer</string>
+    <string name="wear_tap_to_load">Touchez pour charger</string>
+    <string name="wear_tap_to_retry">Touchez pour réessayer</string>
+    <string name="wear_day_today">Aujourd\'hui</string>
+    <string name="wear_complication_feels">Ressenti %1$s, réel %2$s</string>
+</resources>

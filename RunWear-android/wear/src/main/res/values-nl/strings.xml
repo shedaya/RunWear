@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">RunWear</string>
+    <string name="tile_outfit_label">Hardloopoutfit</string>
+    <string name="tile_outfit_description">Weer- en outfitadvies voor je loop</string>
+    <string name="complication_outfit_label">RunWear Outfit</string>
+    <string name="wear_feels_like_label">Voelt als</string>
+    <string name="wear_couldnt_load">Het weer kon niet worden geladen</string>
+    <string name="wear_grant">Toestaan</string>
+    <string name="wear_loading">Laden...</string>
+    <string name="wear_location_needed">Locatie nodig</string>
+    <string name="wear_permission_required">Locatietoestemming vereist</string>
+    <string name="wear_location_unavailable">Locatie niet beschikbaar — stel hem in via de telefoon-app.</string>
+    <string name="wear_no_data_available">Geen gegevens beschikbaar</string>
+    <string name="wear_no_data">Geen gegevens</string>
+    <string name="wear_no_tips">Geen specifieke tips voor vandaag. Veel plezier met je loop!</string>
+    <string name="wear_outfit_preview">Outfitvoorbeeld</string>
+    <string name="wear_outfit_recommendation">Outfitadvies: %1$s</string>
+    <string name="wear_refresh">Vernieuwen</string>
+    <string name="wear_retry">Opnieuw</string>
+    <string name="wear_runner">Hardloper</string>
+    <string name="wear_tap_for_details">Tik voor details</string>
+    <string name="wear_tap_to_enable">Tik om in te schakelen</string>
+    <string name="wear_tap_to_load">Tik om te laden</string>
+    <string name="wear_tap_to_retry">Tik om opnieuw te proberen</string>
+    <string name="wear_day_today">Vandaag</string>
+    <string name="wear_complication_feels">Voelt als %1$s, werkelijk %2$s</string>
+</resources>
