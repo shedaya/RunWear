@@ -529,7 +529,26 @@ final class Gen6VisualQAHarnessTests: XCTestCase {
     @MainActor
     private func writeHostedRender<Content: View>(_ content: Content, size: CGSize, name: String) throws {
         let host = UIHostingController(rootView: content.frame(width: size.width, height: size.height))
-        let window = UIWindow(frame: CGRect(origin: .zero, size: size))
+        // The window MUST belong to a window scene. A scene-less
+        // UIWindow(frame:) never composites on iOS 26: the render
+        // server refuses the snapshot ("Render server returned
+        // error for view") and drawHierarchy returns a pure-black
+        // bitmap. That vehicle failure — not the surfaces — is
+        // what failed every hosted test on the Nov 15 build-34
+        // gate and the Nov 25 train gate (every hosted capture in
+        // run 45674432273 errored identically; the same views
+        // render with content through ImageRenderer, and the
+        // hosted-only PNGs on both gates are single-colour).
+        // Root-caused and fixed Nov 25, 2026.
+        let frame = CGRect(origin: .zero, size: size)
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        let window: UIWindow
+        if let scene = scenes.first(where: { $0.activationState == .foregroundActive }) ?? scenes.first {
+            window = UIWindow(windowScene: scene)
+            window.frame = frame
+        } else {
+            window = UIWindow(frame: frame)
+        }
         window.rootViewController = host
         window.makeKeyAndVisible()
         host.view.frame = CGRect(origin: .zero, size: size)
@@ -700,14 +719,11 @@ final class Gen6VisualQAHarnessTests: XCTestCase {
     @MainActor
     func testVQFix_PillStates_Hosted() throws {
         // The -fixed counterparts of testVQ1PillStates_Hosted,
-        // through the same writeHostedRender vehicle. Hosted
-        // capture in the parallel CI clones is a lottery (a
-        // window that has not composited snapshots pure black;
-        // the same failure hits testVQ1PillStates_Hosted itself
-        // on the unmodified base branch), so this test rides
-        // that lottery exactly like the harness's own test —
-        // an earlier retry variant (fresh window per attempt)
-        // made no difference across two runs and was removed.
+        // through the same writeHostedRender vehicle. (The
+        // pure-black hosted captures once blamed on a parallel-
+        // clone "lottery" were root-caused Nov 25, 2026: the
+        // vehicle built its UIWindow without a window scene, so
+        // it never composited — see writeHostedRender.)
         func pill(_ state: HeroPillState, _ name: String) throws {
             try writeHostedRender(
                 HeroImageView(
