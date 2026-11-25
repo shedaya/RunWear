@@ -2,6 +2,7 @@ package com.runwear.app.makeitme
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -112,15 +113,29 @@ class LookStatusPolicyTest {
     @Test
     fun `progress sub-line no longer promises ten seconds`() {
         assertFalse(MakeItMeStrings.G2_PROGRESS_SUB.contains("10 seconds"))
+        // GEN-6 (RW-47): the settled §11 line, restored verbatim
+        // per the owner's Nov 5 conformance ruling.
         assertEquals(
-            "This usually takes a few minutes. Your recommendation is ready either way — the standard photo stays up until yours is done.",
+            "This usually takes a few minutes — the standard photo stays up until yours is done.",
             MakeItMeStrings.G2_PROGRESS_SUB
         )
     }
 
     @Test
+    fun `progress sub-line carries the settled photo claim - GEN-6 RW-47 supersedes X-8`() {
+        // The gen-3 X-8 audit removed this claim as false in the
+        // Overland Park frames (no photo up at all). That state's
+        // root cause — the empty-hero path — was closed by the
+        // WS-A(1)/GEN-4 fallback floor, and the owner restored the
+        // settled line in the Nov 5 conformance sweep (RW-47). The
+        // claim is now pinned as PRESENT; if a no-photo state ever
+        // recurs it is a serve-path defect, not a copy edit.
+        assertTrue(MakeItMeStrings.G2_PROGRESS_SUB.contains("the standard photo stays up"))
+    }
+
+    @Test
     fun `failure line and retry action are the deck G5 and G6`() {
-        assertEquals("We couldn't make this look yet — tap to try again.", MakeItMeStrings.G5_LOOK_FAILED)
+        assertEquals("Your look couldn't be made from these photos — tap to try again.", MakeItMeStrings.G5_LOOK_FAILED)
         assertEquals("Try again", MakeItMeStrings.G6_RETRY)
     }
 

@@ -93,12 +93,132 @@ class PersonalHeroPoliciesTest {
         assertEquals("https://signed/first", (decision as PersonalHeroCachePolicy.Decision.Serve).imageUrl)
     }
 
+    // ── Hero id threading (RW-16.27: the personal flag's address) ───
+
+    @Test
+    fun `a fresh serve carries the server hero id`() {
+        val decision = PersonalHeroCachePolicy.decide(
+            cached = null,
+            found = true,
+            serverVersion = 1,
+            serverUrl = "https://signed/first",
+            nowMs = now,
+            serverHeroId = "hero-1"
+        )
+        assertTrue(decision is PersonalHeroCachePolicy.Decision.Serve)
+        assertEquals("hero-1", (decision as PersonalHeroCachePolicy.Decision.Serve).heroId)
+    }
+
+    @Test
+    fun `a cached serve keeps the cached hero id`() {
+        val decision = PersonalHeroCachePolicy.decide(
+            cached = PersonalHeroCachePolicy.CachedEntry(
+                2, "https://signed/cached", now - 60_000, heroId = "hero-2"
+            ),
+            found = true,
+            serverVersion = 2,
+            serverUrl = "https://signed/new-signed",
+            nowMs = now,
+            serverHeroId = "hero-2"
+        )
+        assertTrue(decision is PersonalHeroCachePolicy.Decision.Serve)
+        assertEquals("hero-2", (decision as PersonalHeroCachePolicy.Decision.Serve).heroId)
+    }
+
+    @Test
+    fun `a legacy cached entry adopts the server hero id on a fresh read`() {
+        // Entries persisted before RW-16.27 carry no hero id; while
+        // the cached URL is still served, the flag's address comes
+        // from the same payload's hero_id.
+        val decision = PersonalHeroCachePolicy.decide(
+            cached = PersonalHeroCachePolicy.CachedEntry(2, "https://signed/cached", now - 60_000),
+            found = true,
+            serverVersion = 2,
+            serverUrl = "https://signed/new-signed",
+            nowMs = now,
+            serverHeroId = "hero-2"
+        )
+        assertTrue(decision is PersonalHeroCachePolicy.Decision.Serve)
+        assertEquals("hero-2", (decision as PersonalHeroCachePolicy.Decision.Serve).heroId)
+    }
+
+    @Test
+    fun `a version bump serves the new hero's id, never the replaced one's`() {
+        val decision = PersonalHeroCachePolicy.decide(
+            cached = PersonalHeroCachePolicy.CachedEntry(
+                1, "https://signed/v1", now - 60_000, heroId = "hero-old"
+            ),
+            found = true,
+            serverVersion = 2,
+            serverUrl = "https://signed/v2",
+            nowMs = now,
+            serverHeroId = "hero-new"
+        )
+        assertTrue(decision is PersonalHeroCachePolicy.Decision.Serve)
+        assertEquals("hero-new", (decision as PersonalHeroCachePolicy.Decision.Serve).heroId)
+    }
+
+    // ── Personal flag reasons (RW-16.27, iOS parity) ────────────────
+
+    @Test
+    fun `personal flag reasons mirror the backend vocabulary and iOS labels`() {
+        // The codes are the flag_hero action's validated set; the
+        // first label is the spec §4 control verbatim. Both must
+        // match iOS's PersonalHeroFlagReason exactly.
+        assertEquals(
+            listOf("doesnt_look_like_me", "outfit_mismatch", "looks_broken"),
+            PersonalHeroFlagReason.entries.map { it.code }
+        )
+        assertEquals(
+            listOf(
+                "This doesn't look like me", "Wrong outfit for the weather",
+                "Something else"
+            ),
+            PersonalHeroFlagReason.entries.map { it.label }
+        )
+    }
+
+    @Test
+    fun `personal flag sheet codes equal the server contract in sheet order`() {
+        // RW-62 correction: the labels are frame 45's settled design
+        // and do not change, but the codes are the server contract
+        // and must not change with them. The backend flag_hero
+        // action (supabase/functions/request-personal-generation,
+        // FLAG_REASONS) and the personal_hero_flags migration pin
+        // {doesnt_look_like_me, looks_broken, inappropriate,
+        // outfit_mismatch} and return 400 "Unknown flag reason"
+        // otherwise. Mirroring iOS's documented mapping: the lead
+        // files as doesnt_look_like_me, "Wrong outfit for the
+        // weather" files as outfit_mismatch, and the residual
+        // "Something else" files under the generic defect code
+        // looks_broken. Sheet order is [lead, outfit, residual].
+        assertEquals(
+            listOf("doesnt_look_like_me", "outfit_mismatch", "looks_broken"),
+            PersonalHeroFlagReason.entries.map { it.code }
+        )
+        assertEquals(
+            listOf("doesnt_look_like_me", "outfit_mismatch", "looks_broken"),
+            listOf(PersonalFlagSheetContent.headingReason.code) +
+                PersonalFlagSheetContent.rowReasons.map { it.code }
+        )
+        assertEquals(
+            "outfit_mismatch",
+            PersonalHeroFlagReason.WRONG_OUTFIT.code
+        )
+        assertEquals(
+            "looks_broken",
+            PersonalHeroFlagReason.SOMETHING_ELSE.code
+        )
+    }
+
     // ── Upsell rules (spec §5.2) ────────────────────────────────────
 
     private fun upsell(
         personalizationOn: Boolean = true,
         entitled: Boolean = false,
-        freeGenerationsUsed: Int = 5,
+        // RW-128 (Nov 7, 2026): the free allowance is 10 (was 5) —
+        // the exhausted default follows the shared allowance.
+        freeGenerationsUsed: Int = 10,
         cellHasPersonalHero: Boolean = false,
         cellGenerationPending: Boolean = false,
         combinationId: String = "MALE_CLEAR_WARM_DAWN_aaaaaaaa",
@@ -173,10 +293,21 @@ class PersonalHeroPoliciesTest {
     // ── Photo quality policy (spec §2.3) ────────────────────────────
 
     @Test
-    fun `dark photo rejected before face checks`() {
+    fun `face count is judged before darkness (RW-26 F7 harmonized order)`() {
+        // A dark photo with NO face reads as face-unclear first on BOTH
+        // platforms now; darkness is judged only once exactly one face
+        // is present.
+        assertEquals(
+            PhotoRejection.FACE_UNCLEAR,
+            PhotoQualityPolicy.decide(faceCount = 0, largestFaceWidthFraction = 0f, meanLuminance = 0.05)
+        )
+        assertEquals(
+            PhotoRejection.MULTIPLE_PEOPLE,
+            PhotoQualityPolicy.decide(faceCount = 2, largestFaceWidthFraction = 0f, meanLuminance = 0.05)
+        )
         assertEquals(
             PhotoRejection.TOO_DARK,
-            PhotoQualityPolicy.decide(faceCount = 0, largestFaceWidthFraction = 0f, meanLuminance = 0.05)
+            PhotoQualityPolicy.decide(faceCount = 1, largestFaceWidthFraction = 0.35f, meanLuminance = 0.05)
         )
     }
 
@@ -208,6 +339,68 @@ class PersonalHeroPoliciesTest {
     fun `a good photo passes`() {
         assertNull(
             PhotoQualityPolicy.decide(faceCount = 1, largestFaceWidthFraction = 0.35f, meanLuminance = 0.5)
+        )
+    }
+
+    @Test
+    fun `face too small is its own rejection class with the settled copy (RW-50)`() {
+        // GEN-6 (RW-50): the gen-5 enum had NO face-too-small
+        // class, so §10.4's settled copy could never render. A face
+        // below the guided checks' own minimum fraction (0.18) now
+        // rejects as FACE_TOO_SMALL.
+        assertEquals(
+            PhotoRejection.FACE_TOO_SMALL,
+            PhotoQualityPolicy.decide(
+                faceCount = 1, largestFaceWidthFraction = 0.10f, meanLuminance = 0.5
+            )
+        )
+        // At the threshold exactly: acceptable.
+        assertNull(
+            PhotoQualityPolicy.decide(
+                faceCount = 1,
+                largestFaceWidthFraction = GuidedSelfieChecks.MIN_FACE_WIDTH_FRACTION,
+                meanLuminance = 0.5
+            )
+        )
+        assertEquals(
+            "Your face is small in that photo — A closer selfie works best — a mirror selfie is great too. Or let the camera guide you…",
+            PhotoQualityPolicy.stringFor(PhotoRejection.FACE_TOO_SMALL)
+        )
+    }
+
+    @Test
+    fun `head turned away is judged on upload with the settled copy (RW-50)`() {
+        // GEN-6 (RW-50): §10.4 judges head-turn on upload, against
+        // the guided capture's straight-on gate (18 degrees).
+        assertEquals(
+            PhotoRejection.TURNED_AWAY,
+            PhotoQualityPolicy.decide(
+                faceCount = 1, largestFaceWidthFraction = 0.35f,
+                meanLuminance = 0.5, maxAbsHeadTurnDegrees = 30f
+            )
+        )
+        assertNull(
+            PhotoQualityPolicy.decide(
+                faceCount = 1, largestFaceWidthFraction = 0.35f,
+                meanLuminance = 0.5,
+                maxAbsHeadTurnDegrees = GuidedSelfieChecks.MAX_HEAD_TURN_DEGREES
+            )
+        )
+        assertEquals(
+            MakeItMeStrings.C3C_REJECT_TOO_DARK,
+            PhotoQualityPolicy.stringFor(PhotoRejection.TURNED_AWAY)
+        )
+    }
+
+    @Test
+    fun `too dark and too close carry the settled section 10-4 wording (RW-50)`() {
+        assertEquals(
+            "Try facing a window or light, looking at the camera.",
+            PhotoQualityPolicy.stringFor(PhotoRejection.TOO_DARK)
+        )
+        assertEquals(
+            "Hold the phone at arm's length, so your whole face fits with space around it.",
+            PhotoQualityPolicy.stringFor(PhotoRejection.TOO_CLOSE)
         )
     }
 

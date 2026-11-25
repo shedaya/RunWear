@@ -60,29 +60,36 @@ import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.flow.first
 import kotlinx.datetime.toJavaLocalDateTime
 import java.time.LocalDateTime
 
-// Widget palette mirrors the phone app's kit (ui/theme RunWearColors):
-// background #0A0A0A, card #262626, text #FFFFFF / #B3B3B3 / #737373,
-// primary teal #00796B, and the app's per-category colors for item icons.
-// Glance cannot load the app's Bebas font, so display type is Bold system
-// at display size (per the widgets/watch audit re-skin spec).
-private val WidgetBackground = Color(0xFF0A0A0A)
-private val WidgetCard = Color(0xFF262626)
+// Widget palette mirrors the phone app's kit (ui/theme RunWearColors).
+// GEN-5 design pass (RW-28 Addendum 5): the widget carried the
+// RETIRED cool-grey set (#0A0A0A / #262626 / #1A1A1A, pure-white
+// ink, teal primary) long after the design adopted the cream +
+// Warm Charcoal pair — the same off-system disease Sol named in
+// Settings. The widget renders on the dark pair: ground #16130F,
+// sheet #211D17, card #2A251E, warm ink #F5F1EA, muted #B8AEA0,
+// and the pine dark accent #5CC79F as its primary.
+// Display type is Bold system at display size (per the widgets/watch
+// audit re-skin spec) — Glance composes its own type, and the app's
+// one script face (Great Vibes) is wordmarks-only besides.
+private val WidgetBackground = Color(0xFF16130F)
+private val WidgetCard = Color(0xFF2A251E)
 
 /**
  * The garment panel's raised surface (square compositions): a subtle
- * tint step above the tile background (#0A0A0A). Glance has no shadow
+ * tint step above the tile background (#16130F). Glance has no shadow
  * primitive — the tint step plus rounded corners is the approximation.
  * The secondary chips keep the lighter WidgetCard tint so they still
  * read as raised on the panel.
  */
-private val WidgetPanel = Color(0xFF1A1A1A)
-private val WidgetTextPrimary = Color(0xFFFFFFFF)
-private val WidgetTextSecondary = Color(0xFFB3B3B3)
-private val WidgetTextMuted = Color(0xFF737373)
-private val WidgetPrimary = Color(0xFF00796B)
+private val WidgetPanel = Color(0xFF211D17)
+private val WidgetTextPrimary = Color(0xFFF5F1EA)
+private val WidgetTextSecondary = Color(0xFFB8AEA0)
+private val WidgetTextMuted = Color(0xFFB8AEA0)
+private val WidgetPrimary = Color(0xFF5CC79F)
 
 /**
  * Home-screen outfit widget (redesign spec §B.3).
@@ -119,10 +126,19 @@ class OutfitWidget : GlanceAppWidget() {
         val lastGood = store.read()
         val nowMs = System.currentTimeMillis()
 
+        // WS-2: the widget's figures project the canonical store
+        // through the user's unit preference, read here at render
+        // time (never stored with the snapshot). Direct repository
+        // construction keeps the fresh path's no-Hilt seam intact.
+        val displayUnit = runCatching {
+            PreferencesRepository(context.applicationContext)
+                .preferencesFlow.first().temperatureUnit
+        }.getOrDefault(com.runwear.shared.domain.model.TemperatureUnit.FAHRENHEIT)
+
         val state: WidgetState = when {
             lastGood != null &&
                 WidgetFreshness.ageMs(lastGood.savedAtEpochMs, nowMs) < WidgetFreshness.FRESH_ENOUGH_MS ->
-                lastGood.toWidgetState()
+                lastGood.toWidgetState(displayUnit)
 
             else -> when (val outcome = WidgetDataLoader.load(
                 weatherRepository = entryPoint(context).weatherRepository(),
@@ -134,12 +150,12 @@ class OutfitWidget : GlanceAppWidget() {
                     // Just persist; this very render shows the fresh data and
                     // the publisher's updateAll belongs to out-of-band writes.
                     store.write(outcome.lastGood)
-                    outcome.lastGood.toWidgetState()
+                    outcome.lastGood.toWidgetState(displayUnit)
                 }
                 WidgetDataLoader.Outcome.NoPermission ->
-                    lastGood?.toWidgetState() ?: WidgetState.NoPermission
+                    lastGood?.toWidgetState(displayUnit) ?: WidgetState.NoPermission
                 is WidgetDataLoader.Outcome.Failed ->
-                    lastGood?.toWidgetState()
+                    lastGood?.toWidgetState(displayUnit)
                         ?: WidgetState.Error(outcome.category, outcome.detail)
             }
         }
@@ -195,13 +211,16 @@ class RefreshWidgetAction : ActionCallback {
     }
 }
 
-private fun WidgetLastGood.toWidgetState(): WidgetState.Success = WidgetState.Success(
+private fun WidgetLastGood.toWidgetState(
+    displayUnit: com.runwear.shared.domain.model.TemperatureUnit
+): WidgetState.Success = WidgetState.Success(
     weather = weather,
     outfit = outfit,
     locationName = locationName,
     lastUpdated = savedAtLocal,
     savedAtEpochMs = savedAtEpochMs,
-    laterTodayLine = laterTodayLine
+    laterTodayLine = laterTodayLine,
+    temperatureUnit = displayUnit
 )
 
 @Composable
@@ -276,18 +295,18 @@ private fun RefreshAffordance(refreshing: Boolean) {
  */
 private fun footerSegments(state: WidgetState.Success, full: Boolean): List<String> {
     val w = state.weather
-    val feels = "Feels like ${formatTemperature(w.feelsLike, w.isCelsius)}"
+    val feels = "Feels like ${formatTemperature(w.feelsLike, state.temperatureUnit)}"
     if (!full) return listOf(feels, w.weatherCode.description)
     return listOf(
         feels,
-        "Actual ${formatTemperature(w.temperature, w.isCelsius)}",
-        "Wind ${formatWind(w)}",
+        "Actual ${formatTemperature(w.temperature, state.temperatureUnit)}",
+        "Wind ${formatWind(w, state.temperatureUnit)}",
         w.weatherCode.description
     )
 }
 
 private fun actualSegment(state: WidgetState.Success): String =
-    "Actual ${formatTemperature(state.weather.temperature, state.weather.isCelsius)}"
+    "Actual ${formatTemperature(state.weather.temperature, state.temperatureUnit)}"
 
 /**
  * One garment row: the item's garment emoji as its marker + name (Sol,
@@ -490,7 +509,7 @@ private fun HeroBlock(state: WidgetState.Success, plan: WidgetLayout.SlotPlan) {
             Spacer(modifier = GlanceModifier.height(2.dp))
         }
         Text(
-            text = formatTemperature(state.weather.feelsLike, state.weather.isCelsius),
+            text = formatTemperature(state.weather.feelsLike, state.temperatureUnit),
             style = TextStyle(
                 color = ColorProvider(WidgetTextPrimary),
                 fontSize = plan.tempSp.sp,
@@ -624,7 +643,7 @@ private fun HorizontalWidgetContent(
         // Weather as a supporting stack: feels-like, condition, wind.
         Column(horizontalAlignment = Alignment.End) {
             Text(
-                text = formatTemperature(state.weather.feelsLike, state.weather.isCelsius),
+                text = formatTemperature(state.weather.feelsLike, state.temperatureUnit),
                 style = TextStyle(
                     color = ColorProvider(WidgetTextPrimary),
                     fontSize = WidgetLayout.Sizes.HORIZ_TEMP.sp,
@@ -642,7 +661,7 @@ private fun HorizontalWidgetContent(
             )
             if (plan.showWind) {
                 Text(
-                    text = "Wind ${formatWind(state.weather)}",
+                    text = "Wind ${formatWind(state.weather, state.temperatureUnit)}",
                     style = TextStyle(
                         color = ColorProvider(WidgetTextMuted),
                         fontSize = WidgetLayout.Sizes.HORIZ_WIND.sp
@@ -962,18 +981,17 @@ private fun RetryRow() {
     }
 }
 
-private fun formatTemperature(value: Double, isCelsius: Boolean): String {
-    return if (isCelsius) {
-        "${value.toInt()}°C"
-    } else {
-        "${value.toInt()}°F"
-    }
-}
+/** WS-2: a canonical °F value projected through the render-time unit. */
+private fun formatTemperature(
+    valueFahrenheit: Double,
+    unit: com.runwear.shared.domain.model.TemperatureUnit
+): String = unit.formatTemperature(valueFahrenheit)
 
 /** Wind in the app's own unit convention (WeatherConditionsRow): mph, or km/h when Celsius. */
-private fun formatWind(weather: WeatherConditions): String {
-    return "${weather.windSpeed.toInt()} ${if (weather.isCelsius) "km/h" else "mph"}"
-}
+private fun formatWind(
+    weather: WeatherConditions,
+    unit: com.runwear.shared.domain.model.TemperatureUnit
+): String = unit.formatWind(weather.windSpeed)
 
 sealed class WidgetState {
     object Loading : WidgetState()
@@ -989,7 +1007,10 @@ sealed class WidgetState {
         val locationName: String,
         val lastUpdated: LocalDateTime,
         val savedAtEpochMs: Long,
-        val laterTodayLine: String?
+        val laterTodayLine: String?,
+        /** WS-2: the render-time unit projection (never persisted with the data). */
+        val temperatureUnit: com.runwear.shared.domain.model.TemperatureUnit =
+            com.runwear.shared.domain.model.TemperatureUnit.FAHRENHEIT
     ) : WidgetState()
 }
 

@@ -1,6 +1,7 @@
 package com.runwear.app.makeitme
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -56,27 +57,16 @@ class PhotoIntakePolicyTest {
     }
 
     @Test
-    fun `full body guidance carries the ruled elements`() {
-        val guidance = MakeItMeStrings.C2D_FULL_BODY_GUIDANCE
-        assertTrue(
-            "the guidance leads with Sol's positive line",
-            guidance.startsWith("Photos of you running work best.")
+    fun `full body guidance string is deleted - DA-23`() {
+        // GEN-6 WAVE C (DA-23): C2D_FULL_BODY_GUIDANCE contradicted
+        // the settled face-only intake and had zero call sites; it
+        // is deleted from the deck — the source must not carry it.
+        val strings = java.io.File(
+            "src/main/java/com/runwear/app/makeitme/MakeItMeStrings.kt"
+        ).takeIf { it.exists() } ?: java.io.File(
+            "app/src/main/java/com/runwear/app/makeitme/MakeItMeStrings.kt"
         )
-        assertTrue(
-            "the structural ask: one full-body photo in plain athletic wear",
-            guidance.contains("one full-body photo in plain athletic wear")
-        )
-        assertTrue(
-            "the solo-frame note that keeps race photos out of the C3b rejection",
-            guidance.contains("just you in the frame")
-        )
-        assertTrue(
-            "the reason names the full-length outfits it rescues",
-            guidance.contains("tights and jackets")
-        )
-        assertTrue(
-            "the multiple-people limit is stated before it can reject anyone",
-            guidance.contains("Photos with other people in them can't be used.")
-        )
+        assertFalse(strings.readText().contains("C2D_FULL_BODY_GUIDANCE ="))
     }
+
 }

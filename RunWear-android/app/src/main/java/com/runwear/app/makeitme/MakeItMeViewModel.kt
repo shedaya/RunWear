@@ -20,17 +20,25 @@ data class MakeItMeUiState(
     val mode: MakeItMeMode = MakeItMeMode.STOCK,
     val personalizationOn: Boolean = false,
     val freeGenerationsUsed: Int = 0,
+    /** Gen-3 X-9: any look currently generating (the meter seam's in-flight input). */
+    val anyLookMaking: Boolean = false,
+    /** GEN-5 (RW-29 FA-10): the real in-flight count behind [anyLookMaking]. */
+    val looksMakingCount: Int = 0,
     val referenceCount: Int = 0,
     val forkDecided: Boolean = false,
     /** RevenueCat-side entitlement (drives the subscribed UI state). */
     val rcEntitled: Boolean = false,
     /** Server-side entitlement flag (webhook + reconciliation driven; gates fill/replenishment). */
     val serverEntitled: Boolean = false,
-    val gender: String = "UNISEX"
+    val gender: String = "UNISEX",
+    /** GEN-3 (convergence band): real bank coverage (ready/total), or null. */
+    val bankCoverage: PersonalHeroService.BankCoverage? = null,
+    /** GEN-3 (band HOLD): the entitlement is in its free-trial period. */
+    val inTrial: Boolean = false
 )
 
 /**
- * RW-14 "Make it me" UI logic: merges the personal backend state
+ * RW-14 "Make It Me" UI logic: merges the personal backend state
  * ([PersonalHeroRepository]) with the RevenueCat entitlement
  * ([BillingManager]) into the spec's three modes, and runs the flow
  * actions (consent, upload, first look, replace, delete, purchase).
@@ -44,8 +52,9 @@ class MakeItMeViewModel @Inject constructor(
 
     val uiState: StateFlow<MakeItMeUiState> = combine(
         repository.state,
-        billing.makeItMeActive
-    ) { personal, rcActive ->
+        billing.makeItMeActive,
+        billing.makeItMeInTrial
+    ) { personal, rcActive, inTrial ->
         val entitled = rcActive || personal.entitled
         MakeItMeUiState(
             mode = when {
@@ -55,11 +64,15 @@ class MakeItMeViewModel @Inject constructor(
             },
             personalizationOn = personal.personalizationOn,
             freeGenerationsUsed = personal.freeGenerationsUsed,
+            anyLookMaking = personal.anyLookMaking,
+            looksMakingCount = personal.looksMakingCount,
             referenceCount = personal.referenceCount,
             forkDecided = personal.forkDecided,
             rcEntitled = rcActive,
             serverEntitled = personal.entitled,
-            gender = personal.gender
+            gender = personal.gender,
+            bankCoverage = personal.bankCoverage,
+            inTrial = inTrial
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, MakeItMeUiState())
 
@@ -68,6 +81,9 @@ class MakeItMeViewModel @Inject constructor(
 
     init {
         billing.configure()
+        // GEN-5 (EX-15): the band watch runs for the ViewModel's
+        // life; it only spends a refresh while the band shows.
+        startBandWatch()
         viewModelScope.launch {
             repository.initialize()
             billing.refreshCustomerInfo()
@@ -93,6 +109,20 @@ class MakeItMeViewModel @Inject constructor(
 
     fun decideForkAsStock() {
         viewModelScope.launch { repository.markForkDecided() }
+    }
+
+    /**
+     * RW-133: resolve one banked cell's stored photograph for the
+     * full-screen viewer (the library's own read carries labels
+     * and states, not photo URLs — photos are served one cell at
+     * a time by the serve function, so a tile tap resolves its
+     * cell here). Null when the cell has no serving photo.
+     */
+    fun resolveLookPhoto(combinationId: String, onResult: (String?) -> Unit) {
+        viewModelScope.launch {
+            val look = runCatching { repository.cellLookFor(combinationId) }.getOrNull()
+            onResult(look?.hit?.imageUrl)
+        }
     }
 
     // ── Upload flow ────────────────────────────────────────────────────
@@ -153,6 +183,25 @@ class MakeItMeViewModel @Inject constructor(
     }
 
     /** Signed display URLs for the registered reference photos (Settings "Your photos"). */
+    /**
+     * GEN-6 WAVE C (RW-61): load the "Your looks" library cells
+     * from the bank read (heroes + job statuses). Null onResult
+     * when the read fails — the surface shows its empty state
+     * rather than invented cells.
+     */
+    fun loadLooksLibrary(
+        onResult: (List<LooksLibraryPolicy.LookCell>?) -> Unit
+    ) {
+        viewModelScope.launch {
+            val bank = service.fetchBankCells()
+            onResult(
+                bank?.let { (heroes, jobs) ->
+                    LooksLibraryPolicy.build(heroes, jobs)
+                }
+            )
+        }
+    }
+
     fun loadReferenceUrls(onResult: (List<String>) -> Unit) {
         viewModelScope.launch {
             val paths = service.fetchReferencePaths()
@@ -168,14 +217,33 @@ class MakeItMeViewModel @Inject constructor(
         viewModelScope.launch { onResult(repository.deleteEverything()) }
     }
 
+    /** "Delete my data" — completes only when the server's receipt
+     * confirms the account itself is deleted. */
+    fun deleteData(onResult: (Boolean) -> Unit) {
+        viewModelScope.launch { onResult(repository.deleteAllData()) }
+    }
+
     // ── Subscription ───────────────────────────────────────────────────
 
     fun purchase(activity: Activity, packageToPurchase: Package, onResult: (BillingManager.PurchaseOutcome) -> Unit) {
+        // Make It Me OFF in this build (MakeItMeAvailability): no
+        // purchase can start — RevenueCat's purchase call is never
+        // reached, whatever surface asks.
+        if (!MakeItMeAvailability.purchaseAllowed()) {
+            onResult(BillingManager.PurchaseOutcome.Failed("Make It Me is unavailable in this build."))
+            return
+        }
         purchaseInFlight.value = true
         viewModelScope.launch {
             val outcome = billing.purchase(activity, packageToPurchase)
             purchaseInFlight.value = false
-            if (outcome == BillingManager.PurchaseOutcome.Success) {
+            if (outcome == BillingManager.PurchaseOutcome.Success ||
+                outcome == BillingManager.PurchaseOutcome.AlreadySubscribed
+            ) {
+                // GEN-6 (DA-10): an already-held entitlement syncs
+                // the same way a fresh purchase does — the state
+                // lands SUBSCRIBED and every surface (Settings,
+                // paywall) renders the subscribed/management state.
                 onSubscriptionActivated()
             }
             onResult(outcome)
@@ -185,16 +253,19 @@ class MakeItMeViewModel @Inject constructor(
     /**
      * After a successful purchase: sync identity + entitlement first —
      * the reconcile backstop verifies the purchase against RevenueCat
-     * server-side, flips the flag, and kicks the matrix fill itself on
-     * a grant. The direct fill call stays as the second trigger (it is
-     * also the correct one when the webhook landed the flag first);
-     * the function refuses non-entitled users, so it is a harmless
-     * no-op in every other state.
+     * server-side and flips the flag. GEN-5 (RW-28 Addendum 8,
+     * Defect 1): there is deliberately NO direct fill call here any
+     * longer — under the deployed convergence contract a fill call
+     * without forecast cells enqueues nothing (that empty call was
+     * the defect), and this view model holds no forecast. The fill
+     * trigger of record is the main view model's forecast path: it
+     * names the 7-day forecast cells on the entitlement transition
+     * this sync produces and on every forecast refresh while
+     * entitled.
      */
     private fun onSubscriptionActivated() {
         viewModelScope.launch {
             repository.syncBillingIdentity()
-            runCatching { repository.startPersonalFill() }
             repository.refreshFromServer()
         }
     }
@@ -206,6 +277,43 @@ class MakeItMeViewModel @Inject constructor(
         }
     }
 
+    /**
+     * GEN-5 (RW-29 EX-15): while the convergence band is showing
+     * (subscribed, bank not yet fully ready), coverage is
+     * re-read on a slow loop so a bank that completes mid-session
+     * retires the band without the user leaving and returning.
+     * The gen-4 read rode only unrelated profile refreshes, so a
+     * completed bank could leave the band up for the whole
+     * session. The loop idles cheaply when no band is showing.
+     */
+    fun startBandWatch() {
+        viewModelScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(30_000)
+                val state = uiState.value
+                val coverage = state.bankCoverage
+                val bandShowing = state.mode == MakeItMeMode.SUBSCRIBED &&
+                    (coverage == null || coverage.ready < coverage.total)
+                if (bandShowing) refresh()
+            }
+        }
+    }
+
     /** The current RevenueCat offering ("default"), or null when unreachable. */
     suspend fun offering(): com.revenuecat.purchases.Offering? = billing.currentOffering()
+
+    /**
+     * GEN-5 (RW-29 FA-7): the paywall's Restore door. A restore
+     * that lands the entitlement activates the subscription state
+     * exactly like a purchase does.
+     */
+    fun restorePurchases(onResult: (BillingManager.PurchaseOutcome) -> Unit) {
+        viewModelScope.launch {
+            val outcome = billing.restorePurchases()
+            if (outcome == BillingManager.PurchaseOutcome.Success) {
+                onSubscriptionActivated()
+            }
+            onResult(outcome)
+        }
+    }
 }

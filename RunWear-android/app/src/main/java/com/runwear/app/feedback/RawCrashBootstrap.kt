@@ -276,7 +276,7 @@ object RawCrashBootstrap {
         }
     }
 
-    /** One feedback item on the existing contract. True only on a confirmed send. */
+    /** One AUTOMATED diagnostic item (RW-18: files under `diagnostics`, never the human `something_wrong` stream). True only on a confirmed send. */
     private fun postFeedback(installId: String, text: String): Boolean {
         val bundle = JSONObject().apply {
             put("engineVersion", GetOutfitRecommendationUseCase.ENGINE_VERSION)
@@ -284,7 +284,7 @@ object RawCrashBootstrap {
         val payload = TelemetryPayloads.feedback(
             appVersion = BuildConfig.VERSION_NAME,
             installId = installId,
-            category = FeedbackCategory.SOMETHING_WRONG,
+            categoryId = FeedbackRouting.automatedCategoryId(AutomatedReportCategory.DIAGNOSTICS),
             text = text,
             replyEmail = null,
             entryPoint = null,

@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.util.Log
 import com.revenuecat.purchases.CustomerInfo
+import com.revenuecat.purchases.awaitRestore
 import com.revenuecat.purchases.Offering
 import com.revenuecat.purchases.Package
 import com.revenuecat.purchases.Purchases
@@ -59,6 +60,16 @@ class BillingManager @Inject constructor(
     /** RevenueCat-side truth for the make_it_me entitlement. */
     val makeItMeActive: StateFlow<Boolean> = _makeItMeActive.asStateFlow()
 
+    private val _makeItMeInTrial = MutableStateFlow(false)
+    /**
+     * GEN-3 (convergence band, Sol Nov 4): true while the
+     * entitlement's current period is a free TRIAL (RevenueCat
+     * periodType). Banking is Premium-only behaviour — a trial
+     * user gets on-demand looks, no bank — so surfaces that
+     * represent the bank must be able to tell the two apart.
+     */
+    val makeItMeInTrial: StateFlow<Boolean> = _makeItMeInTrial.asStateFlow()
+
     @Volatile
     private var configured = false
 
@@ -82,6 +93,9 @@ class BillingManager @Inject constructor(
     private fun applyCustomerInfo(info: CustomerInfo) {
         _customerInfo.value = info
         _makeItMeActive.value = info.entitlements[ENTITLEMENT_ID]?.isActive == true
+        _makeItMeInTrial.value =
+            info.entitlements[ENTITLEMENT_ID]?.periodType ==
+                com.revenuecat.purchases.PeriodType.TRIAL
     }
 
     /** The app_user_id RevenueCat currently runs under, if configured. */
@@ -159,10 +173,55 @@ class BillingManager @Inject constructor(
         data object Success : PurchaseOutcome
         data object Cancelled : PurchaseOutcome
         data class Failed(val message: String) : PurchaseOutcome
+
+        /**
+         * GEN-6 WAVE A (DA-10): the entitlement was ALREADY active
+         * when purchase was tapped — the flow was never launched.
+         * The caller routes the user to the subscribed state
+         * instead of dead-ending in the store's "You're already
+         * subscribed…" error (the owner's recording, 2:51–2:53).
+         */
+        data object AlreadySubscribed : PurchaseOutcome
+    }
+
+    /**
+     * GEN-5 (RW-29 FA-7): restore purchases — the gen-4 build had
+     * NO restore path anywhere, so a subscriber who reinstalled
+     * or switched devices met a paywall with no way back to the
+     * subscription they already own. Restores through RevenueCat
+     * and reports whether the entitlement came back active.
+     */
+    suspend fun restorePurchases(): PurchaseOutcome {
+        if (!configured) return PurchaseOutcome.Failed("Billing is unavailable.")
+        // SDK 9.x: the coroutine form is Purchases.awaitRestore()
+        // (there is no restorePurchasesWith in this version).
+        val info = runCatching {
+            Purchases.sharedInstance.awaitRestore()
+        }.getOrElse { error ->
+            return PurchaseOutcome.Failed(error.message ?: "Restore failed.")
+        }
+        applyCustomerInfo(info)
+        return if (info.entitlements[ENTITLEMENT_ID]?.isActive == true) {
+            PurchaseOutcome.Success
+        } else {
+            PurchaseOutcome.Failed(
+                "No active subscription found for this account."
+            )
+        }
     }
 
     suspend fun purchase(activity: Activity, packageToPurchase: Package): PurchaseOutcome {
         if (!configured) return PurchaseOutcome.Failed("Billing is unavailable.")
+        // GEN-6 WAVE A (DA-10): recognise the entitlement BEFORE
+        // launching the purchase flow. A fresh customer-info read
+        // (not just the cached flow — the recording's user had a
+        // live subscription the app had not yet surfaced) decides;
+        // already-entitled users never reach the store sheet that
+        // errors out on them.
+        val fresh = runCatching { refreshCustomerInfo() }.getOrNull()
+        val alreadyActive = makeItMeActive.value ||
+            fresh?.entitlements?.get(ENTITLEMENT_ID)?.isActive == true
+        if (alreadyActive) return PurchaseOutcome.AlreadySubscribed
         return suspendCancellableCoroutine { cont ->
             Purchases.sharedInstance.purchaseWith(
                 com.revenuecat.purchases.PurchaseParams.Builder(activity, packageToPurchase).build(),

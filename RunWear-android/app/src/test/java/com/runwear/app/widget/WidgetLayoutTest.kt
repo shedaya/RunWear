@@ -33,8 +33,7 @@ class WidgetLayoutTest {
 
     private fun weather(
         feelsLike: Double = 51.0,
-        code: WeatherCode = WeatherCode.CLEAR_SKY,
-        celsius: Boolean = false
+        code: WeatherCode = WeatherCode.CLEAR_SKY
     ) = WeatherConditions(
         dateTime = LocalDateTime(2026, 10, 27, 13, 15),
         temperature = feelsLike + 3,
@@ -49,8 +48,7 @@ class WidgetLayoutTest {
         isSnowing = false,
         cloudCover = 10,
         uvIndex = 4.0,
-        weatherCode = code,
-        isCelsius = celsius
+        weatherCode = code
     )
 
     /** Sol's field case: 51°F clear — short sleeve + shorts, nothing else. */
@@ -104,20 +102,26 @@ class WidgetLayoutTest {
     private val outfits = listOf(bare51, bare51Sun, layered, rainMax, longNames)
     private val layeredOutfits = listOf(layered, rainMax, longNames)
 
-    private fun fullSegments(w: WeatherConditions): List<String> {
-        val unit = if (w.isCelsius) "°C" else "°F"
-        val windUnit = if (w.isCelsius) "km/h" else "mph"
+    // WS-2: the mirror of the widget's segment builders — canonical
+    // stored values projected through the render-time unit.
+    private fun fullSegments(
+        w: WeatherConditions,
+        unit: com.runwear.shared.domain.model.TemperatureUnit =
+            com.runwear.shared.domain.model.TemperatureUnit.FAHRENHEIT
+    ): List<String> {
         return listOf(
-            "Feels like ${w.feelsLike.toInt()}$unit",
-            "Actual ${w.temperature.toInt()}$unit",
-            "Wind ${w.windSpeed.toInt()} $windUnit",
+            "Feels like ${unit.formatTemperature(w.feelsLike)}",
+            "Actual ${unit.formatTemperature(w.temperature)}",
+            "Wind ${unit.formatWind(w.windSpeed)}",
             w.weatherCode.description
         )
     }
 
     private fun smallSegments(w: WeatherConditions): List<String> {
-        val unit = if (w.isCelsius) "°C" else "°F"
-        return listOf("Feels like ${w.feelsLike.toInt()}$unit", w.weatherCode.description)
+        return listOf(
+            "Feels like ${com.runwear.shared.domain.model.TemperatureUnit.FAHRENHEIT.formatTemperature(w.feelsLike)}",
+            w.weatherCode.description
+        )
     }
 
     private val laterLine = "By 6 PM: add a Light Running Jacket"
@@ -139,11 +143,12 @@ class WidgetLayoutTest {
         outfit: OutfitRecommendation,
         fontScale: Float,
         later: String? = laterLine,
-        bucket: Pair<Int, Int> = bucketFor(kind)
+        bucket: Pair<Int, Int> = bucketFor(kind),
+        segmentsOverride: List<String>? = null
     ): WidgetLayout.SlotPlan {
         val (innerW, innerH) = innerFor(kind, bucket.first, bucket.second)
         val full = kind == WidgetLayout.Kind.MEDIUM_SQUARE || kind == WidgetLayout.Kind.LARGE
-        val segments = if (full) fullSegments(outfit.weather) else smallSegments(outfit.weather)
+        val segments = segmentsOverride ?: if (full) fullSegments(outfit.weather) else smallSegments(outfit.weather)
         return WidgetLayout.plan(
             kind = kind,
             outfit = outfit,
@@ -276,15 +281,24 @@ class WidgetLayoutTest {
 
     @Test
     fun `matrix - celsius outfit plans fit and pack within width`() {
+        // WS-2: there is no Celsius weather object anymore — the
+        // canonical store holds °F (51.8°F ≙ 11°C) and the Celsius
+        // reading is a render-time projection of it.
         val celsius = OutfitRecommendation(
-            weather = weather(feelsLike = 11.0, code = WeatherCode.PARTLY_CLOUDY, celsius = true),
+            weather = weather(feelsLike = 51.8, code = WeatherCode.PARTLY_CLOUDY),
             topBase = ClothingItem.LONG_SLEEVE_LIGHT,
             topOuter = ClothingItem.LIGHT_JACKET,
             bottom = ClothingItem.LIGHT_TIGHTS,
             head = ClothingItem.BASEBALL_CAP
         )
         for (kind in WidgetLayout.Kind.values()) {
-            val plan = planFor(kind, celsius, fontScale = 1.15f)
+            val plan = planFor(
+                kind, celsius, fontScale = 1.15f,
+                segmentsOverride = fullSegments(
+                    celsius.weather,
+                    com.runwear.shared.domain.model.TemperatureUnit.CELSIUS
+                )
+            )
             assertTrue("$kind celsius plan overflows", plan.fitsHeight)
             val (bucketW, bucketH) = bucketFor(kind)
             val innerW = innerFor(kind, bucketW, bucketH).first
@@ -295,7 +309,10 @@ class WidgetLayoutTest {
                 )
             }
         }
-        val segments = fullSegments(celsius.weather)
+        val segments = fullSegments(
+            celsius.weather,
+            com.runwear.shared.domain.model.TemperatureUnit.CELSIUS
+        )
         assertTrue(segments.any { it.contains("°C") })
         assertTrue(segments.any { it.contains("km/h") })
     }

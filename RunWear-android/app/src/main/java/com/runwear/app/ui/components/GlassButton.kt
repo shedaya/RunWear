@@ -16,8 +16,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.style.TextOverflow
@@ -32,8 +30,10 @@ import androidx.compose.ui.unit.sp
  * - padding: 10px 16px
  * - font-size: 14px, font-weight: 600
  */
-private val GlassBackground = Color.White.copy(alpha = 0.12f)
-private val GlassBorder = Color.White.copy(alpha = 0.15f)
+// WS-8: the glass values are the theme's glass tokens (white 12% /
+// white 15%) — read them from RunWearColors instead of re-declaring.
+private val GlassBackground get() = com.runwear.app.ui.theme.RunWearColors.GlassBackground
+private val GlassBorder get() = com.runwear.app.ui.theme.RunWearColors.GlassBorder
 
 /**
  * Glass morphism button with translucent background and subtle border.
@@ -50,15 +50,18 @@ fun GlassButton(
     icon: ImageVector,
     text: String? = null,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** WS-1: photo-zone chrome goes non-interactive at the end of
+     * its handoff fade — a disabled Surface swallows no taps. */
+    enabled: Boolean = true
 ) {
-    val hapticFeedback = LocalHapticFeedback.current
-
+    // WS-9 fix (P-2): NO haptic on tap. §1.7's complete map assigns
+    // these chrome taps (location pill, Settings) no haptic at all,
+    // and reserves the long-press effect for the recents contextual
+    // bar — the pre-fix code fired LongPress on EVERY tap here.
     Surface(
-        onClick = {
-            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-            onClick()
-        },
+        onClick = onClick,
+        enabled = enabled,
         modifier = modifier,
         shape = RoundedCornerShape(100.dp), // Pill shape
         color = GlassBackground,
@@ -103,15 +106,14 @@ fun GlassButtonIcon(
     icon: ImageVector,
     onClick: () -> Unit,
     contentDescription: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** WS-1: see [GlassButton.enabled]. */
+    enabled: Boolean = true
 ) {
-    val hapticFeedback = LocalHapticFeedback.current
-
+    // WS-9 fix (P-2): no haptic on tap — see [GlassButton].
     Surface(
-        onClick = {
-            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-            onClick()
-        },
+        onClick = onClick,
+        enabled = enabled,
         modifier = modifier.size(44.dp),
         shape = CircleShape,
         color = GlassBackground,

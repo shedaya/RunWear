@@ -45,8 +45,23 @@ object TelemetryPayloads {
         replyEmail: String?,
         entryPoint: String?,
         bundle: JSONObject
+    ): JSONObject = feedback(appVersion, installId, category.id, text, replyEmail, entryPoint, bundle)
+
+    /**
+     * RW-18: the same payload shape for AUTOMATED submissions, filed
+     * under an [AutomatedReportCategory] id (diagnostics / crash_report)
+     * — never a human category.
+     */
+    fun feedback(
+        appVersion: String,
+        installId: String,
+        categoryId: String,
+        text: String,
+        replyEmail: String?,
+        entryPoint: String?,
+        bundle: JSONObject
     ): JSONObject = envelope(TelemetryConfig.FEEDBACK_SCHEMA, appVersion, installId).apply {
-        put("category", category.id)
+        put("category", categoryId)
         put("text", text)
         if (!replyEmail.isNullOrBlank()) put("replyEmail", replyEmail.trim())
         if (entryPoint != null) put("entryPoint", entryPoint)

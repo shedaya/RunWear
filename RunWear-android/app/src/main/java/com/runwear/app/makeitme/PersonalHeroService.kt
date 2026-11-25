@@ -261,7 +261,15 @@ class PersonalHeroService @Inject constructor(
         /** RW-16.16: the server's per-cell look state (v5+ payloads). */
         val lookState: String? = null,
         /** RW-16.16: the failure reason CLASS for a failed look. */
-        val lookReason: String? = null
+        val lookReason: String? = null,
+        /**
+         * RW-26: the convergence serve kind the server reports —
+         * "exact" for the cell's own banked photo, "scaffold" when
+         * the serve is the user's OWN banked photo carrying the
+         * exact prescription under the nearest conditions while the
+         * exact photo generates. Absent on older payloads.
+         */
+        val serveKind: String? = null
     )
 
     suspend fun getPersonalHero(combinationId: String): HeroLookup? {
@@ -276,7 +284,14 @@ class PersonalHeroService @Inject constructor(
             version = body["version"]?.jsonPrimitive?.intOrNull,
             heroId = body["hero_id"]?.jsonPrimitive?.contentOrNull,
             lookState = body["look_state"]?.jsonPrimitive?.contentOrNull,
-            lookReason = body["look_reason"]?.jsonPrimitive?.contentOrNull
+            lookReason = body["look_reason"]?.jsonPrimitive?.contentOrNull,
+            // RW-130 contract v2: serve_tier is the single
+            // classification (exact | scaffold | similar | none);
+            // serve_kind / the legacy scaffold boolean remain as
+            // fallbacks for payloads from the older server line.
+            serveKind = body["serve_tier"]?.jsonPrimitive?.contentOrNull
+                ?: body["serve_kind"]?.jsonPrimitive?.contentOrNull
+                ?: if (body["scaffold"]?.jsonPrimitive?.booleanOrNull == true) "scaffold" else null
         )
     }
 
@@ -326,11 +341,41 @@ class PersonalHeroService @Inject constructor(
         }
     }
 
+    /**
+     * RW-16.27: flag one of the caller's own personalized heroes
+     * ("This doesn't look like me", spec §4) — the same flag_hero
+     * action iOS calls. The hero must belong to the caller (a missing
+     * hero and someone else's are the same 404 server-side). On
+     * success the hero is retired in the same call (it stops being
+     * served on the very next get-personal-hero), a snapshot lands
+     * in personal_hero_flags, and a regeneration job is queued for
+     * the cell unless an active job already covers it. True only
+     * when the server confirmed the flag.
+     */
+    suspend fun flagPersonalHero(heroId: String, reason: PersonalHeroFlagReason): Boolean {
+        val body = """{"action":"flag_hero","hero_id":"$heroId","reason":"${reason.code}"}"""
+        return callFunction("request-personal-generation", body) is FunctionResult.Ok
+    }
+
     // ── Subscriber fill / delete ───────────────────────────────────────
 
-    /** Enqueue the 20-cell matrix for the (entitled) caller. */
-    suspend fun startPersonalFill(): Boolean =
-        callFunction("start-personal-fill", "{}") is FunctionResult.Ok
+    /**
+     * GEN-5 (RW-28 Addendum 8, Defect 1 — convergence diagnosis,
+     * Nov 5, 2026): ask the deployed start-personal-fill (v13,
+     * RW-16.30 convergence model) to enqueue the forecast-imminent
+     * cells THIS caller names in [priorityCells] — the owed fill
+     * set: the user's 7-day forecast cells first (imminent first),
+     * then the 20-cell canonical core matrix (the scaffold
+     * substrate), each id derived by the serve path's own
+     * derivation (Addendum 8, second follow-up).
+     * The deployed function enqueues ONLY named cells (intersected
+     * server-side with the canonical launch set); the gen-4 client
+     * called it with an empty body, so no fill was ever requested
+     * and the bank grew only by cells the user personally opened.
+     * Re-calling with the same cells is harmless by design.
+     */
+    suspend fun startPersonalFill(priorityCells: List<String>): Boolean =
+        callFunction("start-personal-fill", fillRequestBody(priorityCells)) is FunctionResult.Ok
 
     /**
      * Entitlement reconciliation (the RW-16.12 backstop): ask the
@@ -338,13 +383,20 @@ class PersonalHeroService @Inject constructor(
      * RevenueCat's record. The client asserts nothing — the function
      * derives the user from this session's JWT and verifies the
      * subscriber state against RevenueCat itself before acting; on a
-     * grant it also kicks start-personal-fill server-side. Silent and
-     * idempotent by design (the function writes only on a real
-     * transition). True when the call completed; the caller re-reads
-     * the profile afterwards to mirror any change.
+     * grant it also kicks start-personal-fill server-side — under
+     * the deployed convergence contract that kick names no cells
+     * and enqueues nothing, so the fill trigger of record is the
+     * client's own startPersonalFill call with forecast cells
+     * (Defect 1). Silent and idempotent by design (the function
+     * writes only on a real transition). True when the call
+     * completed; the caller re-reads the profile afterwards to
+     * mirror any change.
      */
     suspend fun reconcileEntitlement(): Boolean =
-        callFunction("reconcile-personal-entitlement", "{}") is FunctionResult.Ok
+        // GEN-5 (RW-28 Addendum 8, Item 4a): name this client's
+        // platform so the function's RevenueCat lookup queries the
+        // matching storefront view instead of a hard-coded one.
+        callFunction("reconcile-personal-entitlement", "{\"platform\":\"android\"}") is FunctionResult.Ok
 
     data class DeleteOutcome(val storageRemoved: Int, val totalRowsRemoved: Int)
 
@@ -356,6 +408,34 @@ class PersonalHeroService @Inject constructor(
         return DeleteOutcome(
             storageRemoved = body["storage_objects_removed"]?.jsonPrimitive?.intOrNull ?: 0,
             totalRowsRemoved = totalRows
+        )
+    }
+
+    data class DataDeleteOutcome(
+        val storageRemoved: Int,
+        val totalRowsRemoved: Int,
+        val accountDeleted: Boolean
+    )
+
+    /**
+     * Full account-data deletion (delete-my-data, RW-16.30 decision
+     * 5a): the photos sweep plus the webhook log and the account
+     * itself. The server reports a failed account deletion in the
+     * receipt (account_deleted = false) instead of failing the call;
+     * that maps to a null outcome here so callers claim nothing —
+     * the data is gone but the account is not, and the user's retry
+     * completes it.
+     */
+    suspend fun deleteMyData(): DataDeleteOutcome? {
+        val result = callFunction("delete-my-data", "{}")
+        val body = (result as? FunctionResult.Ok)?.body ?: return null
+        if (body["account_deleted"]?.jsonPrimitive?.booleanOrNull != true) return null
+        val rows = body["rows_removed"]?.jsonObject
+        val totalRows = rows?.values?.sumOf { it.jsonPrimitive.intOrNull ?: 0 } ?: 0
+        return DataDeleteOutcome(
+            storageRemoved = body["storage_objects_removed"]?.jsonPrimitive?.intOrNull ?: 0,
+            totalRowsRemoved = totalRows,
+            accountDeleted = true
         )
     }
 
@@ -387,6 +467,118 @@ class PersonalHeroService @Inject constructor(
                 gender = row["gender"]?.jsonPrimitive?.contentOrNull ?: "UNISEX"
             )
         }.onFailure { Log.w(TAG, "profile fetch failed", it) }.getOrNull()
+    }
+
+    /**
+     * GEN-3 (convergence band): the caller's REAL bank coverage.
+     * GEN-5 (RW-28 Addendum 8, Defect 2 — convergence diagnosis,
+     * Nov 5, 2026): [total] is the BANK'S TARGET SET — the fill
+     * set actually owed (the 20-cell core matrix plus the current
+     * forecast horizon — the same composed set the client names
+     * in priority_cells), never the engaged set. The gen-4
+     * denominator (banked ∪ ever-enqueued cells) manufactured
+     * ~90% at 8-of-48 true coverage and would have read 100% with
+     * 40 target cells still missing. [ready] counts only banked
+     * cells that belong to the target. Both tables are owner-read
+     * under RLS (the jobs policy exists "for progress UI"). Null
+     * when there is no session or either read fails — the band
+     * never shows invented counts.
+     */
+    data class BankCoverage(
+        val ready: Int,
+        val total: Int,
+        /**
+         * RW-126 (Nov 7, 2026): target cells whose generation ended
+         * terminally FAILED with no delivered hero — recorded
+         * failures (including the duplicate-insert races RW-126(b)
+         * proved were being miscounted as open work). The band's
+         * settle rule counts them as SETTLED, never as outstanding:
+         * a bank whose remaining cells all failed terminally is
+         * finished, and the band must retire instead of announcing
+         * generation that no longer exists.
+         */
+        val failed: Int = 0
+    ) {
+        /** Target cells neither delivered nor terminally failed. */
+        val outstanding: Int get() = (total - ready - failed).coerceAtLeast(0)
+    }
+
+    suspend fun fetchBankCoverage(targetCells: Set<String>): BankCoverage? {
+        val session = session() ?: return null
+        suspend fun cells(table: String): Set<String>? = runCatching {
+            val response = http.get(
+                "$BASE_URL/rest/v1/$table?select=combination_id"
+            ) {
+                header("apikey", ANON_KEY)
+                header("Authorization", "Bearer ${session.accessToken}")
+            }
+            if (!response.status.isSuccess()) return@runCatching null
+            json.parseToJsonElement(response.bodyAsText()).jsonArray
+                .mapNotNull { it.jsonObject["combination_id"]?.jsonPrimitive?.contentOrNull }
+                .toSet()
+        }.onFailure { Log.w(TAG, "bank coverage read failed ($table)", it) }.getOrNull()
+        val heroCells = cells("personal_heroes") ?: return null
+        // RW-126: the jobs read carries STATUS so terminal failures
+        // settle the band (see BankCoverage.failed). A cell counts
+        // failed only when a FAILED job exists and no hero landed.
+        val jobStatuses = runCatching {
+            val response = http.get(
+                "$BASE_URL/rest/v1/personal_generation_jobs?select=combination_id,status"
+            ) {
+                header("apikey", ANON_KEY)
+                header("Authorization", "Bearer ${session.accessToken}")
+            }
+            if (!response.status.isSuccess()) return@runCatching null
+            json.parseToJsonElement(response.bodyAsText()).jsonArray
+                .mapNotNull { row ->
+                    val id = row.jsonObject["combination_id"]?.jsonPrimitive?.contentOrNull
+                        ?: return@mapNotNull null
+                    val status = row.jsonObject["status"]?.jsonPrimitive?.contentOrNull
+                        ?: return@mapNotNull null
+                    id to status
+                }
+        }.onFailure { Log.w(TAG, "bank coverage job read failed", it) }.getOrNull()
+            ?: return null
+        val jobCells = jobStatuses.map { it.first }.toSet()
+        val failedCells = jobStatuses
+            .filter { it.second == "FAILED" }
+            .map { it.first }
+            .toSet() - heroCells
+        return deriveBankCoverage(heroCells, jobCells, targetCells, failedCells)
+    }
+
+    /**
+     * GEN-6 WAVE C (RW-61): the looks library's bank read — the
+     * same two owner-read tables as [fetchBankCoverage], but
+     * carrying each job's STATUS so a gate-failed cell (a FAILED
+     * job with no banked hero) is visible as itself. Returns
+     * (heroCells, jobStatuses); null when either read fails.
+     */
+    suspend fun fetchBankCells(): Pair<Set<String>, Map<String, String>>? {
+        val session = session() ?: return null
+        suspend fun read(table: String, select: String): List<kotlinx.serialization.json.JsonObject>? =
+            runCatching {
+                val response = http.get("$BASE_URL/rest/v1/$table?select=$select") {
+                    header("apikey", ANON_KEY)
+                    header("Authorization", "Bearer ${session.accessToken}")
+                }
+                if (!response.status.isSuccess()) return@runCatching null
+                json.parseToJsonElement(response.bodyAsText()).jsonArray
+                    .map { it.jsonObject }
+            }.onFailure { Log.w(TAG, "bank cells read failed ($table)", it) }.getOrNull()
+        val heroes = read("personal_heroes", "combination_id") ?: return null
+        val jobs = read("personal_generation_jobs", "combination_id,status") ?: return null
+        val heroCells = heroes.mapNotNull {
+            it["combination_id"]?.jsonPrimitive?.contentOrNull
+        }.toSet()
+        val jobStatuses = jobs.mapNotNull { row ->
+            val id = row["combination_id"]?.jsonPrimitive?.contentOrNull
+                ?: return@mapNotNull null
+            val status = row["status"]?.jsonPrimitive?.contentOrNull
+                ?: return@mapNotNull null
+            id to status
+        }.toMap()
+        return heroCells to jobStatuses
     }
 
     /** The caller's registered reference-photo storage paths, in order. */
@@ -456,4 +648,58 @@ class PersonalHeroService @Inject constructor(
         private val KEY_REFRESH_TOKEN = stringPreferencesKey("mim_refresh_token")
         private val KEY_USER_ID = stringPreferencesKey("mim_user_id")
     }
+}
+
+/**
+ * GEN-3 (convergence band): coverage from the two owner-read cell
+ * sets. GEN-5 (RW-28 Addendum 8, Defect 2): when the fill's target
+ * set is known (the forecast cells the client names — see
+ * [fillRequestBody]), total IS that set and ready counts only
+ * banked cells inside it, so the bar cannot reach 100% while
+ * target cells are missing. Before any target has been derived
+ * this session (the transient before the first forecast load),
+ * the engaged union is the fallback denominator — the only state
+ * in which it can still appear, and it self-corrects on the first
+ * derivation. Pure, so the band's counts are unit-pinned without
+ * a network.
+ */
+internal fun deriveBankCoverage(
+    heroCells: Set<String>,
+    jobCells: Set<String>,
+    targetCells: Set<String> = emptySet(),
+    failedCells: Set<String> = emptySet()
+): PersonalHeroService.BankCoverage =
+    if (targetCells.isNotEmpty()) {
+        PersonalHeroService.BankCoverage(
+            ready = heroCells.count { it in targetCells },
+            total = targetCells.size,
+            // RW-126: terminally failed target cells (recorded,
+            // no hero) are settled — they never hold the band open.
+            failed = failedCells.count { it in targetCells }
+        )
+    } else {
+        // RW-FIXWAVE (architecture review §2 row 19): NO engaged-
+        // union fallback. Before the session's first forecast
+        // derivation the denominator is UNKNOWN, and the retired
+        // gen-4 union formula manufactured a wrong fraction for
+        // exactly that window of every cold session (worse after
+        // process death, when the in-memory target is gone but
+        // heroes/jobs persist). Unknown is reported as total 0,
+        // which the band policy renders as no band — an honest
+        // absence instead of an invented percentage. The
+        // repository also persists the target set (see
+        // PersonalHeroRepository) so the window is one read long.
+        PersonalHeroService.BankCoverage(ready = 0, total = 0, failed = 0)
+    }
+
+/**
+ * GEN-5 (RW-28 Addendum 8, Defect 1): the start-personal-fill
+ * request body — the forecast-derived priority cells, in forecast
+ * order, deduplicated. Pure, so the contract the gate checks
+ * (grant → fill requested for forecast cells) is unit-pinned.
+ */
+internal fun fillRequestBody(priorityCells: List<String>): String {
+    val cells = priorityCells.distinct()
+    val joined = cells.joinToString(",") { "\"$it\"" }
+    return """{"priority_cells":[$joined]}"""
 }

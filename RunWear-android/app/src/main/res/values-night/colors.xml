@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- GEN-5 (RW-29 cream map): Warm Charcoal ground for the
+         splash in the dark appearance; the launcher pine is
+         appearance-independent and stays in values/. -->
+    <color name="runwear_background">#FF16130F</color>
+</resources>

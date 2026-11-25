@@ -24,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -68,7 +69,14 @@ fun DateTimePill(
     onDateClick: () -> Unit,
     onTimeClick: () -> Unit,
     onNowClick: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /**
+     * RW-25: the pill's home moved from the photo to the sheet. On the
+     * sheet it renders FLAT — tonal surface fill, ink text, no glass,
+     * no border — while the default keeps the original PWA glass
+     * treatment for any photo-side use.
+     */
+    onSheet: Boolean = false
 ) {
     val isToday = dateTime.toLocalDate() == referenceNow.toLocalDate()
     val isTomorrow = dateTime.toLocalDate() == referenceNow.toLocalDate().plusDays(1)
@@ -90,13 +98,40 @@ fun DateTimePill(
     val glassActiveSection = Color.White.copy(alpha = 0.15f)
     // Teal accent for "Now" shortcut
     val tealAccent = RunWearColors.Primary.copy(alpha = 0.25f)
-    val tealText = Color(0xFF4DB6AC)
+    val tealText = com.runwear.app.ui.theme.PineAccentOnDark
+
+    // RW-25 flat-on-sheet tokens: tonal fill from the M3 scheme, ink
+    // from the palette, the "Now" accent in the pine family.
+    val containerColor = if (onSheet) MaterialTheme.colorScheme.surfaceVariant else glassBackground
+    // WS-1 (Part 1 §1.1): the day/time strip's selection settles in
+    // 120 ms — the active section's color crossfades at the micro
+    // token instead of snapping when the selection state changes.
+    val activeSectionColor by androidx.compose.animation.animateColorAsState(
+        targetValue = if (onSheet) MaterialTheme.colorScheme.surface else glassActiveSection,
+        animationSpec = androidx.compose.animation.core.tween(
+            HeroMotionTokens.DAY_STRIP_SETTLE_MS
+        ),
+        label = "dayStripSettle"
+    )
+    val primaryInk = if (onSheet) RunWearColors.TextPrimary else com.runwear.app.ui.theme.PhotoInk
+    val secondaryInk = if (onSheet) RunWearColors.TextSecondary else com.runwear.app.ui.theme.PhotoInk.copy(alpha = 0.7f)
+    val dividerColor = if (onSheet) {
+        RunWearColors.TextSecondary.copy(alpha = 0.3f)
+    } else {
+        Color.White.copy(alpha = 0.2f)
+    }
+    val nowAccentBackground = if (onSheet) {
+        RunWearColors.Primary.copy(alpha = 0.16f)
+    } else {
+        tealAccent
+    }
+    val nowAccentText = if (onSheet) RunWearColors.PineAccent else tealText
 
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(100.dp),
-        color = glassBackground,
-        border = BorderStroke(1.dp, glassBorder)
+        color = containerColor,
+        border = if (onSheet) null else BorderStroke(1.dp, glassBorder)
     ) {
         Row(
             modifier = Modifier.padding(4.dp),
@@ -106,7 +141,7 @@ fun DateTimePill(
             Surface(
                 onClick = onDateClick,
                 shape = RoundedCornerShape(100.dp),
-                color = glassActiveSection
+                color = activeSectionColor
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -116,14 +151,14 @@ fun DateTimePill(
                     Icon(
                         Icons.Outlined.CalendarToday,
                         contentDescription = "Select date",
-                        tint = Color.White,
+                        tint = primaryInk,
                         modifier = Modifier.size(14.dp)
                     )
                     Text(
                         text = dateText,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color.White,
+                        color = primaryInk,
                         // Overlay audit (Oct 30): hero overlay labels
                         // never wrap/stack in narrow panes.
                         maxLines = 1,
@@ -137,7 +172,7 @@ fun DateTimePill(
                 modifier = Modifier
                     .width(1.dp)
                     .height(20.dp)
-                    .background(Color.White.copy(alpha = 0.2f))
+                    .background(dividerColor)
             )
 
             // Time button — in the NOW state it reads "Now" in the teal accent
@@ -156,14 +191,14 @@ fun DateTimePill(
                     Icon(
                         Icons.Outlined.Schedule,
                         contentDescription = "Select time",
-                        tint = if (isNowSelected) tealText else Color.White.copy(alpha = 0.7f),
+                        tint = if (isNowSelected) nowAccentText else secondaryInk,
                         modifier = Modifier.size(14.dp)
                     )
                     Text(
                         text = timeText,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = if (isNowSelected) tealText else Color.White.copy(alpha = 0.7f),
+                        color = if (isNowSelected) nowAccentText else secondaryInk,
                         maxLines = 1,
                         softWrap = false
                     )
@@ -179,7 +214,7 @@ fun DateTimePill(
                 Surface(
                     onClick = { onNowClick?.invoke() },
                     shape = RoundedCornerShape(100.dp),
-                    color = tealAccent,
+                    color = nowAccentBackground,
                     modifier = Modifier.padding(start = 4.dp)
                 ) {
                     Row(
@@ -190,14 +225,14 @@ fun DateTimePill(
                         Icon(
                             Icons.Outlined.Refresh,
                             contentDescription = "Jump to now",
-                            tint = tealText,
+                            tint = nowAccentText,
                             modifier = Modifier.size(12.dp)
                         )
                         Text(
                             text = "Now",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = tealText
+                            color = nowAccentText
                         )
                     }
                 }
@@ -240,13 +275,13 @@ fun DateButton(
             Icon(
                 Icons.Outlined.CalendarToday,
                 contentDescription = "Select date",
-                tint = Color.White,
+                tint = com.runwear.app.ui.theme.PhotoInk,
                 modifier = Modifier.size(18.dp)
             )
             Text(
                 text = dateText,
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color.White,
+                color = com.runwear.app.ui.theme.PhotoInk,
                 fontWeight = FontWeight.Medium
             )
         }
@@ -279,13 +314,13 @@ fun TimeButton(
             Icon(
                 Icons.Outlined.Schedule,
                 contentDescription = "Select time",
-                tint = Color.White,
+                tint = com.runwear.app.ui.theme.PhotoInk,
                 modifier = Modifier.size(18.dp)
             )
             Text(
                 text = timeText,
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color.White,
+                color = com.runwear.app.ui.theme.PhotoInk,
                 fontWeight = FontWeight.Medium
             )
         }

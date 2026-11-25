@@ -37,15 +37,21 @@ import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 
-private const val RESOURCES_VERSION = "2"
+// GEN-5: bumped for the design-pass palette change so installed
+// tiles re-render in the Warm Charcoal pair. Addendum 10: bumped
+// again for the safe-area padding + large-font layout changes so
+// installed tiles re-render in the compliant layout.
+private const val RESOURCES_VERSION = "4"
 
-// Tile palette mirrors the phone app's kit: white display type, #B3B3B3
-// secondary, #737373 muted, primary teal #00796B. Item rows use the app's
-// category icons (baked in category colors — ProtoLayout cannot tint).
-private const val TILE_TEXT_PRIMARY = 0xFFFFFFFF.toInt()
-private const val TILE_TEXT_SECONDARY = 0xFFB3B3B3.toInt()
-private const val TILE_TEXT_MUTED = 0xFF737373.toInt()
-private const val TILE_PRIMARY = 0xFF00796B.toInt()
+// Tile palette mirrors the phone app's kit — GEN-5 design pass:
+// the Warm Charcoal pair (warm ink #F5F1EA, muted #B8AEA0) and the
+// pine dark accent #5CC79F, replacing the retired cool greys and
+// teal. Item rows use the app's category icons (baked in the phone
+// dark category colors — ProtoLayout cannot tint).
+private const val TILE_TEXT_PRIMARY = 0xFFF5F1EA.toInt()
+private const val TILE_TEXT_SECONDARY = 0xFFB8AEA0.toInt()
+private const val TILE_TEXT_MUTED = 0xFFB8AEA0.toInt()
+private const val TILE_PRIMARY = 0xFF5CC79F.toInt()
 
 @OptIn(ExperimentalHorologistApi::class)
 class OutfitTileService : SuspendingTileService() {
@@ -100,7 +106,7 @@ class OutfitTileService : SuspendingTileService() {
         val layout = when (tileState) {
             is TileState.Loading -> createLoadingLayout()
             is TileState.Error -> createErrorLayout(tileState.message)
-            is TileState.Success -> createOutfitLayout(tileState.weather, tileState.outfit, tileState.locationName)
+            is TileState.Success -> createOutfitLayout(tileState.weather, tileState.outfit, tileState.locationName, tileState.temperatureUnit, tileState.comfortPreference)
             is TileState.NoPermission -> createNoPermissionLayout()
         }
 
@@ -148,10 +154,9 @@ class OutfitTileService : SuspendingTileService() {
 
                 val weather = weatherRepository.getCurrentWeather(
                     location.latitude,
-                    location.longitude,
-                    prefs.temperatureUnit
+                    location.longitude
                 ).getOrThrow()
-                Log.w(TAG, "loadTileData: got weather ${weather.effectiveTemperature}°")
+                Log.w(TAG, "loadTileData: got weather ${weather.feelsLike}°")
 
                 val locationName = weatherRepository.reverseGeocode(
                     location.latitude,
@@ -161,7 +166,7 @@ class OutfitTileService : SuspendingTileService() {
                 val outfit = getOutfitRecommendation.execute(weather, prefs.comfortPreference)
                 Log.w(TAG, "loadTileData: got outfit, topBase=${outfit.topBase}")
 
-                TileState.Success(weather, outfit, locationName)
+                TileState.Success(weather, outfit, locationName, prefs.temperatureUnit, prefs.comfortPreference)
             }
 
             result ?: TileState.Error("Timed out loading weather")
@@ -178,11 +183,17 @@ class OutfitTileService : SuspendingTileService() {
     private fun createOutfitLayout(
         weather: WeatherConditions,
         outfit: OutfitRecommendation,
-        locationName: String
+        locationName: String,
+        /** WS-2: render-time projection of the canonical store. */
+        temperatureUnit: com.runwear.shared.domain.model.TemperatureUnit,
+        comfortPreference: com.runwear.shared.domain.model.ComfortPreference =
+            com.runwear.shared.domain.model.ComfortPreference.NEUTRAL
     ): LayoutElementBuilders.LayoutElement {
-        val unit = if (weather.isCelsius) "°C" else "°F"
-        val feelsText = "${weather.feelsLike.toInt()}$unit"
-        val actualText = "${weather.effectiveTemperature.toInt()}$unit"
+        // DA-13: headline = comfort-adjusted feels-like (WearTempFrame);
+        // the subordinate line's actual is the ACTUAL temperature —
+        // gen-5 printed the feels-like value there a second time.
+        val feelsText = com.runwear.wear.presentation.WearTempFrame.headlineText(weather, comfortPreference, temperatureUnit)
+        val actualText = temperatureUnit.formatTemperature(weather.temperature)
 
         val clickable = ModifiersBuilders.Clickable.Builder()
             .setId("open_app")
@@ -204,6 +215,19 @@ class OutfitTileService : SuspendingTileService() {
             .setModifiers(
                 ModifiersBuilders.Modifiers.Builder()
                     .setClickable(clickable)
+                    // Addendum 10 (WATCH SHAPES): safe-area padding
+                    // on the root keeps every text row and control
+                    // inside the round display's usable chord —
+                    // full-bleed rows were clipped by the curved
+                    // edge on round faces.
+                    .setPadding(
+                        ModifiersBuilders.Padding.Builder()
+                            .setStart(dp(18f))
+                            .setEnd(dp(18f))
+                            .setTop(dp(10f))
+                            .setBottom(dp(10f))
+                            .build()
+                    )
                     .build()
             )
             .addContent(
@@ -250,7 +274,10 @@ class OutfitTileService : SuspendingTileService() {
                                     .setColor(argb(TILE_TEXT_SECONDARY))
                                     .build()
                             )
-                            .setMaxLines(1)
+                            // Addendum 10 (LARGE FONT): wraps to
+                            // two lines instead of ellipsising at
+                            // the largest font scale.
+                            .setMaxLines(2)
                             .setOverflow(LayoutElementBuilders.TEXT_OVERFLOW_ELLIPSIZE_END)
                             .build()
                     )
@@ -288,16 +315,24 @@ class OutfitTileService : SuspendingTileService() {
         items.add(outfit.bottom)
         outfit.head?.let { items.add(it) }
 
-        val displayItems = items.take(4)
+        // Addendum 10 (LARGE FONT): three rows instead of four.
+        // The tile host does not report the system font scale to
+        // providers (DeviceParameters in tiles 1.4 carries no font
+        // scale), so the layout must be safe at the largest scale
+        // by construction: with names now wrapping to two lines,
+        // four rows could push the summary off the round display
+        // at fontScale 1.30; three cannot. The full outfit remains
+        // one tap away in the app, per the tile's own door.
+        val displayItems = items.take(3)
 
         return Column.Builder()
-            .setWidth(wrap())
+            .setWidth(expand())
             .setHorizontalAlignment(LayoutElementBuilders.HORIZONTAL_ALIGN_START)
             .apply {
                 displayItems.forEach { item ->
                     addContent(
                         Row.Builder()
-                            .setWidth(wrap())
+                            .setWidth(expand())
                             .setVerticalAlignment(LayoutElementBuilders.VERTICAL_ALIGN_CENTER)
                             .addContent(
                                 LayoutElementBuilders.Image.Builder()
@@ -318,7 +353,11 @@ class OutfitTileService : SuspendingTileService() {
                                             .setColor(argb(TILE_TEXT_PRIMARY))
                                             .build()
                                     )
-                                    .setMaxLines(1)
+                                    // Addendum 10 (LARGE FONT):
+                                    // item names wrap to two lines
+                                    // inside the padded row instead
+                                    // of truncating mid-name.
+                                    .setMaxLines(2)
                                     .setOverflow(LayoutElementBuilders.TEXT_OVERFLOW_ELLIPSIZE_END)
                                     .build()
                             )
@@ -505,7 +544,11 @@ class OutfitTileService : SuspendingTileService() {
         data class Success(
             val weather: WeatherConditions,
             val outfit: OutfitRecommendation,
-            val locationName: String
+            val locationName: String,
+            val temperatureUnit: com.runwear.shared.domain.model.TemperatureUnit =
+                com.runwear.shared.domain.model.TemperatureUnit.FAHRENHEIT,
+            val comfortPreference: com.runwear.shared.domain.model.ComfortPreference =
+                com.runwear.shared.domain.model.ComfortPreference.NEUTRAL
         ) : TileState()
     }
 }

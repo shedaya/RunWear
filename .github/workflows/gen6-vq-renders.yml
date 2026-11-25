@@ -1,0 +1,74 @@
+name: GEN-6 VQ Renders (Android)
+
+# GEN-6 VQ harness (Android): dispatch-only evidence run for the visual QA
+# execution. Runs the same :app / :wear unit-test tasks as the Android
+# gate (which execute the Robolectric native-graphics render tests) and
+# uploads every PNG those render tests produce, so the VQ executor can
+# grade rendered output from the candidate. Product code is untouched by
+# this workflow; it changes no gate behaviour.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  renders:
+    name: Android render evidence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: SDK platforms (diagnostic)
+        continue-on-error: true
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$SDKMANAGER" ] || SDKMANAGER=sdkmanager
+          yes | "$SDKMANAGER" "platforms;android-35" "platforms;android-36" "build-tools;35.0.0" || true
+
+      - name: Run unit tests (render tests included)
+        working-directory: RunWear-android
+        run: |
+          ./gradlew :app:testDebugUnitTest :wear:testDebugUnitTest \
+            --stacktrace 2>&1 | tee "$RUNNER_TEMP/gradle-vq.log"
+          exit "${PIPESTATUS[0]}"
+
+      - name: Collect render PNGs
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/vq-renders"
+          cd RunWear-android
+          find . -path ./build -prune -o -type f -name '*.png' -print 2>/dev/null | head -5 || true
+          find . -type d \( -name 'render-out*' -o -name 'wear-screenshots' -o -name 'wear-compliance' \) | while read -r d; do
+            rel=$(echo "$d" | sed 's|^\./||; s|/|__|g')
+            mkdir -p "$RUNNER_TEMP/vq-renders/$rel"
+            cp "$d"/*.png "$RUNNER_TEMP/vq-renders/$rel/" 2>/dev/null || true
+            cp "$d"/*.txt "$RUNNER_TEMP/vq-renders/$rel/" 2>/dev/null || true
+          done
+          find "$RUNNER_TEMP/vq-renders" -type f | head -100
+          echo "PNG count: $(find "$RUNNER_TEMP/vq-renders" -name '*.png' | wc -l)"
+
+      - name: Upload render evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gen6-vq-renders
+          path: ${{ runner.temp }}/vq-renders
+          if-no-files-found: warn
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gen6-vq-test-results
+          path: RunWear-android/**/build/test-results/**/*.xml
+          if-no-files-found: warn

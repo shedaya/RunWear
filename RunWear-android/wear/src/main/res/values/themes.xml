@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Addendum 10 (Wear Play compliance, SPLASH): branded launch.
+         The activity starts in the Splash theme, whose window
+         background is the 48x48dp dark app icon centred on black
+         (@drawable/splash_background); MainActivity switches to the
+         plain app theme before setContent, so the splash is visible
+         only during startup, exactly as the guideline requires. -->
+    <style name="Theme.RunWear.Wear" parent="@android:style/Theme.DeviceDefault" />
+
+    <style name="Theme.RunWear.Wear.Splash" parent="@android:style/Theme.DeviceDefault">
+        <item name="android:windowBackground">@drawable/splash_background</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+</resources>

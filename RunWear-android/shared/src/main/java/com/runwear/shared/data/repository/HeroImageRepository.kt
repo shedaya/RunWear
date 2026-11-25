@@ -1,5 +1,7 @@
 package com.runwear.shared.data.repository
 
+import com.runwear.shared.domain.model.ComfortPreference
+import com.runwear.shared.domain.model.FallbackAssetProvenance
 import com.runwear.shared.domain.model.GenderPreference
 import com.runwear.shared.domain.model.HeroImageResult
 import com.runwear.shared.domain.model.HeroPoolPolicy
@@ -88,7 +90,8 @@ class HeroImageRepository @Inject constructor() {
     suspend fun getHeroImage(
         weather: WeatherConditions?,
         outfit: OutfitRecommendation?,
-        gender: GenderPreference = GenderPreference.UNISEX
+        gender: GenderPreference = GenderPreference.UNISEX,
+        comfort: ComfortPreference
     ): HeroImageResult = withContext(Dispatchers.IO) {
         if (weather == null || outfit == null) {
             return@withContext HeroImageResult(
@@ -100,18 +103,41 @@ class HeroImageRepository @Inject constructor() {
 
         // v3.10: Use hero-specific gender (random when UNISEX) for image variety
         val heroGender = getHeroImageGender(gender)
-        val combination = OutfitCombination.fromConditions(weather, outfit, heroGender)
+        val combination = OutfitCombination.fromConditions(
+            weather, outfit, heroGender,
+            frameFeelsLikeF = com.runwear.shared.domain.usecase.GetOutfitRecommendationUseCase.adjustedFeelsLikeF(weather, comfort)
+        )
 
         try {
-            val searchResult = getRandomImage(combination)
-            if (searchResult.image == null) {
-                getFallbackImage(combination)
+            val searchResult = getRandomImage(combination, outfit)
+            val result = if (searchResult.image == null) {
+                // GEN-4: the exact cascade found nothing — the chain
+                // continues (scaffold from the live pool, then the
+                // bundled floor) instead of terminating at the
+                // exact-gated bundled walk.
+                getScaffoldOrFallback(combination, outfit)
             } else {
-                poolResult(combination, searchResult)
+                poolResult(combination, searchResult, outfit)
             }
+            // WS-7 / RW-26(c): every serve records its source at serve
+            // time (pool / bundled-fallback / scaffold; a rotation-floor
+            // pick of the bundled candidate records as bundled-fallback —
+            // the URL is the ground truth inside emitForResult, except
+            // that a SCAFFOLD serve source is never relabelled).
+            HeroServeTelemetry.emitForResult(
+                result, combination,
+                trigger = when {
+                    searchResult.image != null -> "pool-cascade"
+                    result.isScaffold -> "hero-fallback-chain"
+                    else -> "bundled-fallback"
+                }
+            )
+            result
         } catch (e: Exception) {
             // On error, return fallback
-            getFallbackImage(combination)
+            val result = getFallbackImage(combination, outfit)
+            HeroServeTelemetry.emitForResult(result, combination, trigger = "bundled-fallback-error")
+            result
         }
     }
 
@@ -124,9 +150,10 @@ class HeroImageRepository @Inject constructor() {
      */
     private fun poolResult(
         combination: OutfitCombination,
-        searchResult: ImageSearchResult
+        searchResult: ImageSearchResult,
+        outfit: OutfitRecommendation
     ): HeroImageResult {
-        val image = searchResult.image ?: return getFallbackImage(combination)
+        val image = searchResult.image ?: return getFallbackImage(combination, outfit)
         val heroWeather = HeroWeatherCondition.fromWeatherCode(combination.weatherCode)
         // Full candidate list for the refresh control: every servable
         // pool row at the winning cascade level, in pool order. For the
@@ -140,18 +167,16 @@ class HeroImageRepository @Inject constructor() {
                 servedCombinationId = row.combinationId
             )
         }
-        val candidates = if (HeroPoolPolicy.isFloorCell(combination.tempBracket, heroWeather, combination.timeOfDay)) {
-            val floorUrl = getWeatherAwareFallback(combination.tempBracket, heroWeather)
-            if (poolCandidates.any { it.imageUrl == floorUrl }) {
-                poolCandidates
-            } else {
-                poolCandidates + com.runwear.shared.domain.model.HeroCandidate(
-                    imageUrl = floorUrl,
-                    thumbnailUrl = floorUrl,
-                    imageRowId = null,
-                    servedCombinationId = combination.id
-                )
-            }
+        // GEN-2 A2 (W-4): the floor candidate joins the rotation ONLY
+        // when its adjudicated garments match this prescription
+        // (gatedFloorCandidate) — pre-fix it entered unchecked, so the
+        // rotation could deal the bracket's cold-end photo (COOL:
+        // headband + gloves) under a prescription carrying neither.
+        val floorCandidate = gatedFloorCandidate(combination, outfit)
+        val candidates = if (floorCandidate != null &&
+            poolCandidates.none { it.imageUrl == floorCandidate.imageUrl }
+        ) {
+            poolCandidates + floorCandidate
         } else {
             poolCandidates
         }
@@ -162,17 +187,38 @@ class HeroImageRepository @Inject constructor() {
                 combinationId = combination.id,
                 imageRowId = image.id,
                 servedCombinationId = image.combinationId,
-                candidates = candidates
+                candidates = candidates,
+                serveSource = com.runwear.shared.domain.model.HeroServeSource.POOL
             )
         }
         val picked = candidates.random()
+        // WS-7: a random pick that lands on the rotation-floor bundled
+        // candidate (no pool row id) IS a bundled-fallback serve, and
+        // records as one — with the asset's manifest provenance.
+        val pickedIsBundled = picked.imageRowId == null &&
+            picked.imageUrl.startsWith("file:///android_asset/hero_fallback/")
         return HeroImageResult(
             imageUrl = picked.imageUrl,
             thumbnailUrl = picked.thumbnailUrl ?: picked.imageUrl,
             combinationId = combination.id,
             imageRowId = picked.imageRowId,
             servedCombinationId = picked.servedCombinationId,
-            candidates = candidates
+            candidates = candidates,
+            serveSource = if (pickedIsBundled) {
+                com.runwear.shared.domain.model.HeroServeSource.BUNDLED_FALLBACK
+            } else {
+                com.runwear.shared.domain.model.HeroServeSource.POOL
+            },
+            fallbackProvenance = if (pickedIsBundled) {
+                com.runwear.shared.domain.model.HeroImageSelector.fallbackProvenance(picked.imageUrl)
+            } else {
+                null
+            },
+            fallbackAssetFile = if (pickedIsBundled) {
+                com.runwear.shared.domain.model.HeroImageSelector.fallbackAssetFile(picked.imageUrl)
+            } else {
+                null
+            }
         )
     }
 
@@ -218,6 +264,9 @@ class HeroImageRepository @Inject constructor() {
      * [candidates] is the SERVABLE (review-approved) pool at the cascade
      * level that produced [image]; [exactMatchCount] counts servable exact
      * matches only, so replenishment targets images users can actually see.
+     * RW-20: both now count only rows that also pass the point-grain
+     * prescription filter — the images a user can actually be served for
+     * the current conditions, which is the honest replenishment signal.
      */
     private data class ImageSearchResult(
         val image: GeneratedImage?,
@@ -238,7 +287,10 @@ class HeroImageRepository @Inject constructor() {
      * | 4        | Opposite Gender + Weather + Temp | MALE_CLEAR_COLD_%          |
      * | 5        | Opposite Gender + Clear + Temp   | MALE_CLEAR_COLD_%          |
      */
-    private suspend fun getRandomImage(combination: OutfitCombination): ImageSearchResult {
+    private suspend fun getRandomImage(
+        combination: OutfitCombination,
+        outfit: OutfitRecommendation
+    ): ImageSearchResult {
         // Lazy client (1.1.2): unavailable → the caller falls back.
         val client = supabase ?: return ImageSearchResult(null, 0, false)
         val heroWeather = HeroWeatherCondition.fromWeatherCode(combination.weatherCode)
@@ -250,18 +302,7 @@ class HeroImageRepository @Inject constructor() {
         val requestedCombo = "${gender}_${weather}_${temp}_${time}"
         val oppositeGender = if (gender == "MALE") "FEMALE" else "MALE"
 
-        // v3.11: Extended cascade with opposite gender fallback
-        val queries = mutableListOf(
-            "${gender}_${weather}_${temp}_${time}_%",  // 1. Exact
-            "${gender}_${weather}_${temp}_%",          // 2. Any time
-        )
-        // 3. Clear weather fallback (only if not already CLEAR)
-        if (weather != "CLEAR") {
-            queries.add("${gender}_CLEAR_${temp}_%")
-        }
-        // 4-5. Fall back to opposite gender (better than the bundled fallback)
-        queries.add("${oppositeGender}_${weather}_${temp}_%")
-        queries.add("${oppositeGender}_CLEAR_${temp}_%")
+        val queries = heroCascadePatterns(gender, weather, temp, time, oppositeGender)
 
         var exactMatchCount = 0
         var foundViaFallback = false
@@ -284,7 +325,11 @@ class HeroImageRepository @Inject constructor() {
                 // Review gate: pending/rejected generations are never
                 // served. Pre-migration rows decode reviewStatus = null
                 // and count as approved (HeroPoolPolicy).
-                val images = servableImages(rows)
+                // RW-20 point-grain gate: of the servable rows, only
+                // those whose adjudicated garments and person count
+                // agree with THIS request's exact prescription may be
+                // served; a level with no agreeing row cascades onward.
+                val images = pointGrainImages(rows, outfit)
 
                 if (images.isNotEmpty()) {
                     // Check if this is an exact match query
@@ -309,18 +354,126 @@ class HeroImageRepository @Inject constructor() {
     }
 
     /**
-     * Get a fallback image when no cached image is available.
-     * Uses bundled pool-derived images categorized by temperature bracket AND weather condition.
-     * This is a 2D matrix: 6 temp brackets × 4 weather conditions = 24 image categories.
+     * GEN-4: the chain below the exact cascade. The exact pool
+     * cascade ([getRandomImage]) found no photo that may CLAIM this
+     * prescription; the hero still must not settle on the gradient:
+     *
+     *  - SCAFFOLD: one broad same-gender read of the live approved
+     *    pool (the app's existing anon PostgREST path), resolved to
+     *    the nearest covered photo by [com.runwear.shared.domain.model.HeroFallbackChain].
+     *    Computed from the live candidate set at serve time, so a
+     *    replenishment row that makes this prescription exact wins
+     *    through the cascade above with no client change (and an
+     *    exact row this broad read surfaces serves as EXACT here).
+     *  - FLOOR: the pool read is unreachable/empty (or holds no
+     *    same-gender one-person photo) → [getFallbackImage]'s
+     *    bundled chain, whose floor asset always exists.
      */
-    private fun getFallbackImage(combination: OutfitCombination): HeroImageResult {
-        val weatherCondition = HeroWeatherCondition.fromWeatherCode(combination.weatherCode)
-        val url = getWeatherAwareFallback(combination.tempBracket, weatherCondition)
-
+    private suspend fun getScaffoldOrFallback(
+        combination: OutfitCombination,
+        outfit: OutfitRecommendation
+    ): HeroImageResult {
+        val client = supabase ?: return getFallbackImage(combination, outfit)
+        val heroWeather = HeroWeatherCondition.fromWeatherCode(combination.weatherCode)
+        val gender = combination.genderPreference.name
+        val rows = try {
+            client.from("generated_images")
+                .select {
+                    filter { like("combination_id", "${gender}_%") }
+                    // The whole same-gender library: the scaffold
+                    // metric must see every covered neighbour, not a
+                    // page of the nearest cell.
+                    limit(1000)
+                }
+                .decodeList<GeneratedImage>()
+        } catch (e: Exception) {
+            android.util.Log.w("HeroImage", "[Hero] Scaffold pool read failed", e)
+            return getFallbackImage(combination, outfit)
+        }
+        val resolution = com.runwear.shared.domain.model.HeroFallbackChain.resolve(
+            gender = combination.genderPreference,
+            bracket = combination.tempBracket,
+            weather = heroWeather,
+            outfit = outfit,
+            poolCandidates = poolPhotoCandidates(rows),
+            bundledCandidates = emptyList()
+        ) ?: return getFallbackImage(combination, outfit)
+        val candidate = resolution.candidate
         return HeroImageResult(
-            imageUrl = url,
-            thumbnailUrl = url,
-            combinationId = combination.id
+            imageUrl = candidate.url,
+            thumbnailUrl = candidate.url,
+            combinationId = combination.id,
+            imageRowId = candidate.rowId,
+            servedCombinationId = candidate.combinationId,
+            candidates = listOf(
+                com.runwear.shared.domain.model.HeroCandidate(
+                    imageUrl = candidate.url,
+                    thumbnailUrl = candidate.url,
+                    imageRowId = candidate.rowId,
+                    servedCombinationId = candidate.combinationId
+                )
+            ),
+            serveSource = resolution.serveSource,
+            isScaffold = resolution.isScaffold,
+            chainTier = resolution.tier.name
+        )
+    }
+
+    /**
+     * Get a fallback image when no cached image is available.
+     *
+     * GEN-2 A2 (W-4/W-5) + GEN-4: the resolution runs through the
+     * bundled chain ([com.runwear.shared.domain.model.HeroImageSelector.bundledChainResult]):
+     * the exact point-grain gate decides which bundled asset may
+     * serve as the prescription's own photo; when none matches
+     * exactly, the nearest same-gender bundled asset serves as the
+     * labelled FLOOR scaffold (serve source SCAFFOLD, isScaffold) —
+     * never the bare gradient, and never recorded as the exact
+     * photo. (Pre-GEN-4 this walk terminated at no photo for the
+     * census's 26 uncovered signatures.)
+     */
+    private fun getFallbackImage(
+        combination: OutfitCombination,
+        outfit: OutfitRecommendation
+    ): HeroImageResult {
+        val weatherCondition = HeroWeatherCondition.fromWeatherCode(combination.weatherCode)
+        return com.runwear.shared.domain.model.HeroImageSelector.bundledChainResult(
+            combination.tempBracket, weatherCondition, combination.genderPreference,
+            outfit, combination.id
+        )
+    }
+
+    /**
+     * GEN-2 A2 (W-4): the rotation-floor candidate for one
+     * resolution, or null when the floor may not deal. The floor
+     * stands (HeroPoolPolicy: floor cells only) and the candidate is
+     * resolved gender-aware as before (RW-26) — but it joins the
+     * rotation ONLY when the asset's adjudicated garments match the
+     * current prescription, under the same point-grain gate as every
+     * other serve. Internal (not private) so the gate is unit-tested
+     * without a Supabase client.
+     */
+    internal fun gatedFloorCandidate(
+        combination: OutfitCombination,
+        outfit: OutfitRecommendation
+    ): com.runwear.shared.domain.model.HeroCandidate? {
+        val heroWeather = HeroWeatherCondition.fromWeatherCode(combination.weatherCode)
+        if (!HeroPoolPolicy.isFloorCell(combination.tempBracket, heroWeather, combination.timeOfDay)) {
+            return null
+        }
+        val floorUrl = getWeatherAwareFallback(
+            combination.tempBracket, heroWeather, combination.genderPreference
+        )
+        if (!com.runwear.shared.domain.model.HeroImageSelector
+                .fallbackMatchesPrescription(floorUrl, outfit)
+        ) {
+            return null
+        }
+        return com.runwear.shared.domain.model.HeroCandidate(
+            imageUrl = floorUrl,
+            thumbnailUrl = floorUrl,
+            imageRowId = null,
+            servedCombinationId = combination.id
         )
     }
 
@@ -328,7 +481,33 @@ class HeroImageRepository @Inject constructor() {
      * Get weather-aware fallback image URL.
      * Priority: temp + weather match > temp only > default
      */
-    internal fun getWeatherAwareFallback(tempBracket: TempBracket, weatherCondition: HeroWeatherCondition): String {
+    internal fun getWeatherAwareFallback(tempBracket: TempBracket, weatherCondition: HeroWeatherCondition): String =
+        getWeatherAwareFallback(tempBracket, weatherCondition, GenderPreference.UNISEX)
+
+    /**
+     * WS-7 (2026-11-03): gender-aware form — mirror of the engine's
+     * HeroImageSelector resolver (the two copies are kept in agreement
+     * by HeroFallbackImagesTest / HeroFallbackGenderTest). A MALE or
+     * FEMALE request resolves to the requested cell's own paired asset
+     * (every cell is paired); gender never outranks the scene (D-19's
+     * bound). UNISEX keeps the legacy chain exactly.
+     */
+    internal fun getWeatherAwareFallback(
+        tempBracket: TempBracket,
+        weatherCondition: HeroWeatherCondition,
+        gender: GenderPreference
+    ): String {
+        // WS-7 bound (D-19): mirror of HeroImageSelector — a gendered
+        // request starts and normally ends at the requested cell's own
+        // paired asset; gender never outranks the scene at a paired
+        // cell. The scene-first walk serves only non-cells.
+        if (gender != GenderPreference.UNISEX) {
+            pairedFallbackAsset(tempBracket, weatherCondition, gender)?.let { return it }
+            for (cell in orderedFallbackCells(tempBracket, weatherCondition)) {
+                pairedFallbackAsset(cell.first, cell.second, gender)?.let { return it }
+            }
+        }
+
         // Try to get exact temp + weather match
         val bracketImages = FALLBACK_IMAGES_2D[tempBracket]
         val weatherImages = bracketImages?.get(weatherCondition)
@@ -345,7 +524,49 @@ class HeroImageRepository @Inject constructor() {
 
         // Ultimate fallback - mild + clear
         return FALLBACK_IMAGES_2D[TempBracket.MILD]?.get(HeroWeatherCondition.CLEAR)
-            ?: "file:///android_asset/hero_fallback/mild_clear.webp"
+            ?: "file:///android_asset/hero_fallback/mild_clear_female.webp"
+    }
+
+    /** WS-7: the gender-paired bundled asset for an exact cell (mirror of the engine's). */
+    internal fun pairedFallbackAsset(
+        tempBracket: TempBracket,
+        weatherCondition: HeroWeatherCondition,
+        gender: GenderPreference
+    ): String? = FALLBACK_IMAGES_PAIRED[tempBracket to weatherCondition]?.get(gender)
+
+    /** The subject gender of this copy's bundled asset for a cell (RW-26). */
+    internal fun fallbackSubjectGender(
+        tempBracket: TempBracket,
+        weatherCondition: HeroWeatherCondition
+    ): GenderPreference? = FALLBACK_SUBJECT_GENDER[tempBracket to weatherCondition]
+
+    /** Mirror of HeroImageSelector.orderedFallbackCells (RW-26). */
+    private fun orderedFallbackCells(
+        tempBracket: TempBracket,
+        weatherCondition: HeroWeatherCondition
+    ): List<Pair<TempBracket, HeroWeatherCondition>> {
+        val cells = LinkedHashSet<Pair<TempBracket, HeroWeatherCondition>>()
+        fun addBracket(bracket: TempBracket) {
+            cells.add(bracket to weatherCondition)
+            for (w in listOf(
+                HeroWeatherCondition.CLEAR, HeroWeatherCondition.CLOUDY,
+                HeroWeatherCondition.RAIN, HeroWeatherCondition.SNOW
+            )) {
+                cells.add(bracket to w)
+            }
+        }
+        addBracket(tempBracket)
+        val idx = BRACKET_WARMTH_ORDER.indexOf(tempBracket)
+        val neighbours = BRACKET_WARMTH_ORDER
+            .filter { it != tempBracket }
+            .sortedWith(
+                compareBy(
+                    { kotlin.math.abs(BRACKET_WARMTH_ORDER.indexOf(it) - idx) },
+                    { -BRACKET_WARMTH_ORDER.indexOf(it) }
+                )
+            )
+        for (b in neighbours) addBracket(b)
+        return cells.filter { FALLBACK_IMAGES_PAIRED.containsKey(it) }
     }
 
     /**
@@ -362,67 +583,256 @@ class HeroImageRepository @Inject constructor() {
         private const val SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImViaWNxem5sY2picWN1a2pmemNmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk1NDA5MzgsImV4cCI6MjA4NTExNjkzOH0.0Zl7DF4y6riHWzNEDqMwtYZerbFVXAlpFGbeJ3S1Bg4"
 
         /**
-         * Weather-aware fallback images: 2D matrix of temp bracket × weather condition.
-         * 6 temp brackets × 4 weather conditions = up to 24 unique fallback images.
-         * Based on RunWear Hero Image System Specification.
-         *
-         * Since 2026-10-29 every cell is a BUNDLED asset (shared/src/main/assets/
-         * hero_fallback/) derived from an approved generated_images pool row, so
-         * the fallback renders fully offline. Before that, the cells were remote
-         * Unsplash stock URLs. Keep in sync with HeroImageSelector's copy of this
-         * table in the engine module (a unit test asserts the two agree).
-         *
-         * Image selection:
-         * - CLEAR: Sunny, bright conditions
-         * - CLOUDY: Overcast, gray sky
-         * - RAIN: Wet conditions, rain gear visible
-         * - SNOW: Winter snow conditions
+         * RW-26 (2026-11-02), reframed by WS-7 (2026-11-03): subject
+         * gender of the RW-20-era bundled asset for each legacy cell.
+         * Mirror of the engine HeroImageSelector census — the two
+         * copies are pinned to each other by HeroFallbackGenderTest.
+         * Since WS-7 every cell carries both genders' paired assets;
+         * this census now only names which paired file the UNISEX
+         * legacy view (FALLBACK_IMAGES_2D) lands on per legacy cell.
+         * (Diagnosis: release-prep/rw-gender-preference-diagnosis-2026-11-02.md.)
          */
-        internal val FALLBACK_IMAGES_2D: Map<TempBracket, Map<HeroWeatherCondition, String>> = mapOf(
-            // HOT (80°F+) - Snow impossible
-            TempBracket.HOT to mapOf(
-                HeroWeatherCondition.CLEAR to "file:///android_asset/hero_fallback/hot_clear.webp", // Tank top, bright sunny
-                HeroWeatherCondition.CLOUDY to "file:///android_asset/hero_fallback/hot_cloudy.webp", // Summer overcast
-                HeroWeatherCondition.RAIN to "file:///android_asset/hero_fallback/hot_rain.webp" // Summer rain
-                // SNOW: null - Not possible when HOT
-            ),
-            // WARM (65-79°F) - Snow very unlikely
-            TempBracket.WARM to mapOf(
-                HeroWeatherCondition.CLEAR to "file:///android_asset/hero_fallback/warm_clear.webp", // T-shirt sunny
-                HeroWeatherCondition.CLOUDY to "file:///android_asset/hero_fallback/warm_cloudy.webp", // Warm overcast
-                HeroWeatherCondition.RAIN to "file:///android_asset/hero_fallback/warm_rain.webp" // Warm rain
-                // SNOW: null - Very unlikely when WARM
-            ),
-            // MILD (50-64°F) - All conditions possible
-            TempBracket.MILD to mapOf(
-                HeroWeatherCondition.CLEAR to "file:///android_asset/hero_fallback/mild_clear.webp", // Light layers sunny
-                HeroWeatherCondition.CLOUDY to "file:///android_asset/hero_fallback/mild_cloudy.webp", // Mild overcast
-                HeroWeatherCondition.RAIN to "file:///android_asset/hero_fallback/mild_rain.webp", // Spring/fall rain
-                HeroWeatherCondition.SNOW to "file:///android_asset/hero_fallback/mild_snow.webp" // Light snow
-            ),
-            // COOL (35-49°F) - All conditions possible
-            TempBracket.COOL to mapOf(
-                HeroWeatherCondition.CLEAR to "file:///android_asset/hero_fallback/cool_clear.webp", // Long sleeves sunny
-                HeroWeatherCondition.CLOUDY to "file:///android_asset/hero_fallback/cool_cloudy.webp", // Cool overcast
-                HeroWeatherCondition.RAIN to "file:///android_asset/hero_fallback/cool_rain.webp", // Cool rainy
-                HeroWeatherCondition.SNOW to "file:///android_asset/hero_fallback/cool_snow.webp" // Cool snow
-            ),
-            // COLD (20-34°F) - All conditions possible
-            TempBracket.COLD to mapOf(
-                HeroWeatherCondition.CLEAR to "file:///android_asset/hero_fallback/cold_clear.webp", // Jacket sunny
-                HeroWeatherCondition.CLOUDY to "file:///android_asset/hero_fallback/cold_cloudy.webp", // Cold overcast
-                HeroWeatherCondition.RAIN to "file:///android_asset/hero_fallback/cold_rain.webp", // Cold rain/sleet
-                HeroWeatherCondition.SNOW to "file:///android_asset/hero_fallback/cold_snow.webp" // Snowy run
-            ),
-            // FREEZING (<20°F) - All conditions possible
-            TempBracket.FREEZING to mapOf(
-                HeroWeatherCondition.CLEAR to "file:///android_asset/hero_fallback/freezing_clear.webp", // Winter gear sunny
-                HeroWeatherCondition.CLOUDY to "file:///android_asset/hero_fallback/freezing_cloudy.webp", // Freezing overcast
-                HeroWeatherCondition.RAIN to "file:///android_asset/hero_fallback/freezing_rain.webp", // Freezing rain/sleet
-                HeroWeatherCondition.SNOW to "file:///android_asset/hero_fallback/freezing_snow.webp" // Heavy snow
-            )
+        internal val FALLBACK_SUBJECT_GENDER: Map<Pair<TempBracket, HeroWeatherCondition>, GenderPreference> = mapOf(
+            (TempBracket.FREEZING to HeroWeatherCondition.CLEAR) to GenderPreference.FEMALE,
+            (TempBracket.FREEZING to HeroWeatherCondition.CLOUDY) to GenderPreference.FEMALE,
+            (TempBracket.FREEZING to HeroWeatherCondition.SNOW) to GenderPreference.MALE,
+            (TempBracket.COLD to HeroWeatherCondition.CLEAR) to GenderPreference.FEMALE,
+            (TempBracket.COLD to HeroWeatherCondition.CLOUDY) to GenderPreference.FEMALE,
+            (TempBracket.COLD to HeroWeatherCondition.RAIN) to GenderPreference.FEMALE,
+            (TempBracket.COLD to HeroWeatherCondition.SNOW) to GenderPreference.FEMALE,
+            (TempBracket.COOL to HeroWeatherCondition.CLEAR) to GenderPreference.FEMALE,
+            (TempBracket.COOL to HeroWeatherCondition.CLOUDY) to GenderPreference.FEMALE,
+            (TempBracket.COOL to HeroWeatherCondition.RAIN) to GenderPreference.FEMALE,
+            (TempBracket.COOL to HeroWeatherCondition.SNOW) to GenderPreference.MALE,
+            (TempBracket.MILD to HeroWeatherCondition.CLEAR) to GenderPreference.FEMALE,
+            (TempBracket.MILD to HeroWeatherCondition.CLOUDY) to GenderPreference.FEMALE,
+            (TempBracket.MILD to HeroWeatherCondition.RAIN) to GenderPreference.FEMALE,
+            (TempBracket.MILD to HeroWeatherCondition.SNOW) to GenderPreference.FEMALE,
+            (TempBracket.WARM to HeroWeatherCondition.CLEAR) to GenderPreference.MALE,
+            (TempBracket.WARM to HeroWeatherCondition.CLOUDY) to GenderPreference.MALE,
+            (TempBracket.WARM to HeroWeatherCondition.RAIN) to GenderPreference.FEMALE,
+            (TempBracket.HOT to HeroWeatherCondition.CLEAR) to GenderPreference.FEMALE,
+            (TempBracket.HOT to HeroWeatherCondition.CLOUDY) to GenderPreference.MALE,
+            (TempBracket.HOT to HeroWeatherCondition.RAIN) to GenderPreference.FEMALE
         )
+
+        /** Warmth order (coldest first) for walking neighbouring brackets (RW-26). */
+        internal val BRACKET_WARMTH_ORDER: List<TempBracket> = listOf(
+            TempBracket.FREEZING, TempBracket.COLD, TempBracket.COOL,
+            TempBracket.MILD, TempBracket.WARM, TempBracket.HOT
+        )
+
+        /**
+         * WS-7 (RW-26 full fix, 2026-11-03): the gender-paired
+         * fallback matrix — 22 cells x MALE/FEMALE = 44 bundled
+         * assets from the staged bundle manifest
+         * (release-prep/rw26-fallback-bundle-2026-11-03/MANIFEST.md:
+         * 23 NEW + 12 RE-RENDER + 9 KEEP). FREEZING x RAIN restored
+         * (Sol's Nov 3 ruling) — the RW-20 designed degradation
+         * (FREEZING RAIN -> freezing_clear) is RETIRED for gendered
+         * serves. Mirror of the engine HeroImageSelector table; the
+         * two copies are pinned to each other by the fallback tests.
+         */
+        internal val FALLBACK_IMAGES_PAIRED: Map<Pair<TempBracket, HeroWeatherCondition>, Map<GenderPreference, String>> = mapOf(
+        (TempBracket.FREEZING to HeroWeatherCondition.CLEAR) to mapOf(
+            GenderPreference.FEMALE to "file:///android_asset/hero_fallback/freezing_clear_female.webp",
+            GenderPreference.MALE to "file:///android_asset/hero_fallback/freezing_clear_male.webp"
+        ),
+        (TempBracket.FREEZING to HeroWeatherCondition.CLOUDY) to mapOf(
+            GenderPreference.FEMALE to "file:///android_asset/hero_fallback/freezing_cloudy_female.webp",
+            GenderPreference.MALE to "file:///android_asset/hero_fallback/freezing_cloudy_male.webp"
+        ),
+        (TempBracket.FREEZING to HeroWeatherCondition.RAIN) to mapOf(
+            GenderPreference.FEMALE to "file:///android_asset/hero_fallback/freezing_rain_female.webp",
+            GenderPreference.MALE to "file:///android_asset/hero_fallback/freezing_rain_male.webp"
+        ),
+        (TempBracket.FREEZING to HeroWeatherCondition.SNOW) to mapOf(
+            GenderPreference.FEMALE to "file:///android_asset/hero_fallback/freezing_snow_female.webp",
+            GenderPreference.MALE to "file:///android_asset/hero_fallback/freezing_snow_male.webp"
+        ),
+        (TempBracket.COLD to HeroWeatherCondition.CLEAR) to mapOf(
+            GenderPreference.FEMALE to "file:///android_asset/hero_fallback/cold_clear_female.webp",
+            GenderPreference.MALE to "file:///android_asset/hero_fallback/cold_clear_male.webp"
+        ),
+        (TempBracket.COLD to HeroWeatherCondition.CLOUDY) to mapOf(
+            GenderPreference.FEMALE to "file:///android_asset/hero_fallback/cold_cloudy_female.webp",
+            GenderPreference.MALE to "file:///android_asset/hero_fallback/cold_cloudy_male.webp"
+        ),
+        (TempBracket.COLD to HeroWeatherCondition.RAIN) to mapOf(
+            GenderPreference.FEMALE to "file:///android_asset/hero_fallback/cold_rain_female.webp",
+            GenderPreference.MALE to "file:///android_asset/hero_fallback/cold_rain_male.webp"
+        ),
+        (TempBracket.COLD to HeroWeatherCondition.SNOW) to mapOf(
+            GenderPreference.FEMALE to "file:///android_asset/hero_fallback/cold_snow_female.webp",
+            GenderPreference.MALE to "file:///android_asset/hero_fallback/cold_snow_male.webp"
+        ),
+        (TempBracket.COOL to HeroWeatherCondition.CLEAR) to mapOf(
+            GenderPreference.FEMALE to "file:///android_asset/hero_fallback/cool_clear_female.webp",
+            GenderPreference.MALE to "file:///android_asset/hero_fallback/cool_clear_male.webp"
+        ),
+        (TempBracket.COOL to HeroWeatherCondition.CLOUDY) to mapOf(
+            GenderPreference.FEMALE to "file:///android_asset/hero_fallback/cool_cloudy_female.webp",
+            GenderPreference.MALE to "file:///android_asset/hero_fallback/cool_cloudy_male.webp"
+        ),
+        (TempBracket.COOL to HeroWeatherCondition.RAIN) to mapOf(
+            GenderPreference.FEMALE to "file:///android_asset/hero_fallback/cool_rain_female.webp",
+            GenderPreference.MALE to "file:///android_asset/hero_fallback/cool_rain_male.webp"
+        ),
+        (TempBracket.COOL to HeroWeatherCondition.SNOW) to mapOf(
+            GenderPreference.FEMALE to "file:///android_asset/hero_fallback/cool_snow_female.webp",
+            GenderPreference.MALE to "file:///android_asset/hero_fallback/cool_snow_male.webp"
+        ),
+        (TempBracket.MILD to HeroWeatherCondition.CLEAR) to mapOf(
+            GenderPreference.FEMALE to "file:///android_asset/hero_fallback/mild_clear_female.webp",
+            GenderPreference.MALE to "file:///android_asset/hero_fallback/mild_clear_male.webp"
+        ),
+        (TempBracket.MILD to HeroWeatherCondition.CLOUDY) to mapOf(
+            GenderPreference.FEMALE to "file:///android_asset/hero_fallback/mild_cloudy_female.webp",
+            GenderPreference.MALE to "file:///android_asset/hero_fallback/mild_cloudy_male.webp"
+        ),
+        (TempBracket.MILD to HeroWeatherCondition.RAIN) to mapOf(
+            GenderPreference.FEMALE to "file:///android_asset/hero_fallback/mild_rain_female.webp",
+            GenderPreference.MALE to "file:///android_asset/hero_fallback/mild_rain_male.webp"
+        ),
+        (TempBracket.MILD to HeroWeatherCondition.SNOW) to mapOf(
+            GenderPreference.FEMALE to "file:///android_asset/hero_fallback/mild_snow_female.webp",
+            GenderPreference.MALE to "file:///android_asset/hero_fallback/mild_snow_male.webp"
+        ),
+        (TempBracket.WARM to HeroWeatherCondition.CLEAR) to mapOf(
+            GenderPreference.FEMALE to "file:///android_asset/hero_fallback/warm_clear_female.webp",
+            GenderPreference.MALE to "file:///android_asset/hero_fallback/warm_clear_male.webp"
+        ),
+        (TempBracket.WARM to HeroWeatherCondition.CLOUDY) to mapOf(
+            GenderPreference.FEMALE to "file:///android_asset/hero_fallback/warm_cloudy_female.webp",
+            GenderPreference.MALE to "file:///android_asset/hero_fallback/warm_cloudy_male.webp"
+        ),
+        (TempBracket.WARM to HeroWeatherCondition.RAIN) to mapOf(
+            GenderPreference.FEMALE to "file:///android_asset/hero_fallback/warm_rain_female.webp",
+            GenderPreference.MALE to "file:///android_asset/hero_fallback/warm_rain_male.webp"
+        ),
+        (TempBracket.HOT to HeroWeatherCondition.CLEAR) to mapOf(
+            GenderPreference.FEMALE to "file:///android_asset/hero_fallback/hot_clear_female.webp",
+            GenderPreference.MALE to "file:///android_asset/hero_fallback/hot_clear_male.webp"
+        ),
+        (TempBracket.HOT to HeroWeatherCondition.CLOUDY) to mapOf(
+            GenderPreference.FEMALE to "file:///android_asset/hero_fallback/hot_cloudy_female.webp",
+            GenderPreference.MALE to "file:///android_asset/hero_fallback/hot_cloudy_male.webp"
+        ),
+        (TempBracket.HOT to HeroWeatherCondition.RAIN) to mapOf(
+            GenderPreference.FEMALE to "file:///android_asset/hero_fallback/hot_rain_female.webp",
+            GenderPreference.MALE to "file:///android_asset/hero_fallback/hot_rain_male.webp"
+        ),
+        )
+
+        /**
+         * WS-7 / D-22: per-asset provenance (pool source combination,
+         * source row id, point-grain rung) for every bundled file,
+         * from the staged bundle manifest. Mirror of the engine table.
+         */
+        internal val FALLBACK_PROVENANCE: Map<String, FallbackAssetProvenance> = mapOf(
+        "freezing_clear_female" to FallbackAssetProvenance("FEMALE_CLEAR_FREEZING_NIGHT_v4", "dc5b7be8-947c-462d-9cf5-d800e867363b", "T1"),
+        "freezing_clear_male" to FallbackAssetProvenance("MALE_CLEAR_FREEZING_MIDDAY_v1", "616cdf4f-6dfb-4ca0-bc51-b045f1c32d57", "T3"),
+        "freezing_cloudy_female" to FallbackAssetProvenance("FEMALE_CLOUDY_FREEZING_MIDDAY_v1177", "6fcb0994-ade3-4490-b8ca-60704b349490", "T3"),
+        "freezing_cloudy_male" to FallbackAssetProvenance("MALE_CLOUDY_FREEZING_MIDDAY_459e0be6", "69ab00a0-e806-4cf4-a848-3014a4e2029d", "T3"),
+        "freezing_rain_female" to FallbackAssetProvenance("FEMALE_RAIN_FREEZING_MIDDAY_b7e866a8", "0b891b30-75ed-4337-939c-6219d9f1309a", "T3"),
+        "freezing_rain_male" to FallbackAssetProvenance("MALE_RAIN_FREEZING_DAWN_b7e866a8", "ad138c05-da7e-4cc3-ac63-f73bcf3bc21b", "T1"),
+        "freezing_snow_female" to FallbackAssetProvenance("FEMALE_SNOW_FREEZING_MIDDAY_v2", "36a47e4d-685a-4d12-98ff-653a88e8d866", "T1"),
+        "freezing_snow_male" to FallbackAssetProvenance("MALE_SNOWY_FREEZING_DAWN_v6", "5c9047fc-3958-4991-9ada-a66ac359e295", "T1"),
+        "cold_clear_female" to FallbackAssetProvenance("FEMALE_CLEAR_COLD_NIGHT_v2", "4a46575d-3b63-4e94-84e0-f07f9558e50a", "T1"),
+        "cold_clear_male" to FallbackAssetProvenance("MALE_CLEAR_COLD_MIDDAY_27f65a1f", "dd83ab86-0030-4b27-90cb-3e60221d9ce0", "T1"),
+        "cold_cloudy_female" to FallbackAssetProvenance("FEMALE_CLOUDY_COLD_MIDDAY_v3", "579a244b-3160-4350-b8a4-0c69b00bd353", "T3"),
+        "cold_cloudy_male" to FallbackAssetProvenance("MALE_CLOUDY_COLD_MIDDAY_v5", "0d69b957-8755-43f7-ba8b-957b6b144eb8", "T1"),
+        "cold_rain_female" to FallbackAssetProvenance("FEMALE_RAIN_COLD_MIDDAY_v18", "9ec95942-fb00-4d38-a8bb-845bcd8c149a", "T3"),
+        "cold_rain_male" to FallbackAssetProvenance("MALE_RAIN_COLD_MIDDAY_v12", "ef52a837-8354-40fd-a0cd-362696d6ee23", "T3"),
+        "cold_snow_female" to FallbackAssetProvenance("FEMALE_SNOW_COLD_DAWN_v4", "a3f54b7c-81e5-4bd9-8362-aa77f3e4b5d3", "T1"),
+        "cold_snow_male" to FallbackAssetProvenance("MALE_SNOW_COLD_DAWN_v2", "c0b3f186-89d5-412d-9398-4065af6c39bd", "T1"),
+        "cool_clear_female" to FallbackAssetProvenance("FEMALE_CLEAR_COOL_MIDDAY_84c10525", "6e8a4250-d42e-415f-b7a1-ffc5723ac453", "T1"),
+        "cool_clear_male" to FallbackAssetProvenance("MALE_CLEAR_COOL_MIDDAY_84c10525", "f4b95431-0943-435b-95c7-304b95762e51", "T1"),
+        "cool_cloudy_female" to FallbackAssetProvenance("FEMALE_CLOUDY_COOL_MIDDAY_84c10525", "ecaa6fe9-701f-4034-b253-e20ff57409ca", "T1"),
+        "cool_cloudy_male" to FallbackAssetProvenance("MALE_CLOUDY_COOL_MIDDAY_84c10525", "3e6ad6b9-992a-4af9-aacb-bfb96325575b", "T1"),
+        "cool_rain_female" to FallbackAssetProvenance("FEMALE_RAIN_COOL_DUSK_f213805f", "6a256bd2-29a4-46c6-a832-b604c2299016", "T1"),
+        "cool_rain_male" to FallbackAssetProvenance("MALE_RAIN_COOL_MIDDAY_f213805f", "c345ae20-76d8-4b81-8bd7-8643e9770df5", "T3"),
+        "cool_snow_female" to FallbackAssetProvenance("FEMALE_SNOW_COOL_MIDDAY_84c10525", "7ad70bbc-f5ac-4b68-90de-b260404c1f3d", "T1"),
+        "cool_snow_male" to FallbackAssetProvenance("MALE_SNOW_COOL_MIDDAY_v26", "f8e3791a-6fe2-472c-ad80-e058a00ed792", "T1"),
+        "mild_clear_female" to FallbackAssetProvenance("FEMALE_CLEAR_MILD_DUSK_v4", "d42b35c7-c78d-49c3-a918-b3cf5adf755a", "T1"),
+        "mild_clear_male" to FallbackAssetProvenance("MALE_CLEAR_MILD_MIDDAY_89c065aa", "e6970789-4adb-41a6-8923-22fd40e17a66", "T1"),
+        "mild_cloudy_female" to FallbackAssetProvenance("FEMALE_CLOUDY_MILD_DUSK_v3", "207ff224-58ee-4869-8cff-5cf3db231f4e", "T1"),
+        "mild_cloudy_male" to FallbackAssetProvenance("MALE_CLOUDY_MILD_MIDDAY_491df101", "72f96eea-edb5-4d0c-97a0-a20530cfe88f", "T1"),
+        "mild_rain_female" to FallbackAssetProvenance("FEMALE_RAIN_MILD_DAWN_v15", "f11a3e51-c7ee-4d1e-9d32-e8b7206654f6", "T1"),
+        "mild_rain_male" to FallbackAssetProvenance("MALE_RAINY_MILD_NIGHT_v3", "a9c80dda-fe17-4ad5-88c9-fdf353def761", "T1"),
+        "mild_snow_female" to FallbackAssetProvenance("FEMALE_SNOW_MILD_DAWN_v16", "f0f85719-0185-4c4c-8036-b03ef2757738", "T1"),
+        "mild_snow_male" to FallbackAssetProvenance("MALE_SNOW_MILD_MIDDAY_v11", "b756edc2-9f19-4ec1-942c-b071ba1e3709", "T1"),
+        "warm_clear_female" to FallbackAssetProvenance("FEMALE_CLEAR_WARM_MIDDAY_89c065aa", "9886f191-13dd-4ae2-bcce-9f1094fcc9ca", "T1"),
+        "warm_clear_male" to FallbackAssetProvenance("MALE_CLEAR_WARM_MIDDAY_v3", "9e4d573a-24cf-4d25-b454-888d9c121a71", "T1"),
+        "warm_cloudy_female" to FallbackAssetProvenance("FEMALE_CLOUDY_WARM_MIDDAY_v2", "7d3d5933-1dd7-4cd1-89ac-d7c06be8a836", "T1"),
+        "warm_cloudy_male" to FallbackAssetProvenance("MALE_CLOUDY_WARM_DAWN_v5", "121c9ee8-87b3-4e81-9090-e982ea35e62e", "T1"),
+        "warm_rain_female" to FallbackAssetProvenance("FEMALE_RAIN_WARM_DAWN_v867", "952172e9-748b-44d7-a68a-3652496d2625", "T1"),
+        "warm_rain_male" to FallbackAssetProvenance("MALE_RAINY_WARM_MIDDAY_v4", "c368c886-a602-448b-93d7-4b7f9f1871a2", "T1"),
+        "hot_clear_female" to FallbackAssetProvenance("FEMALE_CLEAR_HOT_MIDDAY_v1067", "08c2e0ac-0631-46ad-9a76-36eda0a0bc30", "T1"),
+        "hot_clear_male" to FallbackAssetProvenance("MALE_CLEAR_HOT_MIDDAY_v1", "01cae610-4e85-404a-ad6b-79ce037c1d88", "T1"),
+        "hot_cloudy_female" to FallbackAssetProvenance("FEMALE_CLOUDY_HOT_MIDDAY_v1", "52097737-5b23-4419-bb63-917d84beaf7d", "T1"),
+        "hot_cloudy_male" to FallbackAssetProvenance("MALE_CLOUDY_HOT_DUSK_v2", "c6b19c8f-7e31-45a9-9a83-ba30d1cf9363", "T1"),
+        "hot_rain_female" to FallbackAssetProvenance("FEMALE_RAIN_HOT_MIDDAY_49cd4d15", "6ef05e97-3003-428a-9bce-0e61b11b0bee", "T1"),
+        "hot_rain_male" to FallbackAssetProvenance("MALE_RAIN_HOT_DAWN_49cd4d15", "66c5acd7-d0a6-4eba-b765-f12ec29e2eca", "T1"),
+        )
+
+        /**
+         * The UNISEX legacy view: the 21 legacy cells, each mapped to
+         * the paired file whose subject matches the RW-20 census
+         * (FALLBACK_SUBJECT_GENDER) — the legacy chain (exact cell ->
+         * bracket CLEAR -> MILD x CLEAR) lands exactly where it
+         * always landed. FREEZING x RAIN is absent by design, so the
+         * legacy chain still degrades it to freezing_clear.
+         */
+        internal val FALLBACK_IMAGES_2D: Map<TempBracket, Map<HeroWeatherCondition, String>> by lazy {
+            FALLBACK_SUBJECT_GENDER.entries
+                .map { (cell, subject) ->
+                    cell.first to (cell.second to FALLBACK_IMAGES_PAIRED.getValue(cell).getValue(subject))
+                }
+                .groupBy({ it.first }, { it.second })
+                .mapValues { it.value.toMap() }
+        }
     }
+}
+
+/**
+ * RW-23: the hero cascade pattern list, in serving order.
+ *
+ * Canonical levels (v3.11, preserved exactly):
+ * 1. exact, 2. any-time, 3. clear-weather only when weather != "CLEAR",
+ * 4. opposite gender + weather, 5. opposite gender + clear.
+ *
+ * Legacy-token levels (appended AFTER every canonical level):
+ * 523 pool rows live under legacy RAINY/SNOWY combination tokens no
+ * canonical pattern can match (105 of them fully on-prescription);
+ * they join the cascade only after every canonical level, under the
+ * same review + point-grain gates.
+ */
+internal fun heroCascadePatterns(
+    gender: String,
+    weather: String,
+    temp: String,
+    time: String,
+    oppositeGender: String
+): List<String> {
+    val queries = mutableListOf(
+        "${gender}_${weather}_${temp}_${time}_%",
+        "${gender}_${weather}_${temp}_%"
+    )
+    if (weather != "CLEAR") {
+        queries.add("${gender}_CLEAR_${temp}_%")
+    }
+    queries.add("${oppositeGender}_${weather}_${temp}_%")
+    queries.add("${oppositeGender}_CLEAR_${temp}_%")
+    if (weather == "RAIN") {
+        queries.add("${gender}_RAINY_${temp}_%")
+        queries.add("${oppositeGender}_RAINY_${temp}_%")
+    }
+    if (weather == "SNOW") {
+        queries.add("${gender}_SNOWY_${temp}_%")
+        queries.add("${oppositeGender}_SNOWY_${temp}_%")
+    }
+    return queries
 }
 
 /**
@@ -444,11 +854,113 @@ internal fun servableImages(rows: List<GeneratedImage>): List<GeneratedImage> =
     rows.filter { HeroPoolPolicy.isServable(it.reviewStatus) }
 
 /**
+ * RW-20: the servable rows that ALSO agree with the exact outfit
+ * prescription at point grain (HeroPointGrainPolicy). Every serving
+ * path draws from this list — a cascade level whose rows all fail the
+ * prescription yields an empty list here, so the caller cascades
+ * onward or falls back to the bundled image, exactly as it does for a
+ * level with no servable rows.
+ */
+internal fun pointGrainImages(
+    rows: List<GeneratedImage>,
+    outfit: OutfitRecommendation
+): List<GeneratedImage> = servableImages(rows).filter { row ->
+    com.runwear.shared.domain.model.HeroPointGrainPolicy.matches(
+        personCount = row.personCount,
+        topBaseClass = row.garmentClasses?.topBase,
+        outerClass = row.garmentClasses?.outer,
+        bottomClass = row.garmentClasses?.bottom,
+        prescribedTopBase = outfit.topBase,
+        prescribedTopOuter = outfit.topOuter,
+        prescribedBottom = outfit.bottom,
+        headClass = row.garmentClasses?.head,
+        handsClass = row.garmentClasses?.hands,
+        prescribedHead = outfit.head,
+        prescribedHands = outfit.hands
+    )
+}
+
+/**
+ * GEN-4: convert live pool rows to hero-chain candidates. Only
+ * servable (review-approved) rows convert — the scaffold tier draws
+ * from the same approved library as the exact tier. Gender, weather
+ * and bracket parse from the row's own combination_id
+ * ({GENDER}_{WEATHER}_{TEMP}_{TIME}_…, with the legacy RAINY/SNOWY
+ * weather tokens read as RAIN/SNOW); a row whose bracket token does
+ * not parse keeps a null bracket, which the metric penalises but
+ * never excludes. Multi-person rows stay in the list and are
+ * excluded by the chain itself (personCount is carried through).
+ */
+internal fun poolPhotoCandidates(
+    rows: List<GeneratedImage>
+): List<com.runwear.shared.domain.model.HeroPhotoCandidate> =
+    servableImages(rows).map { row ->
+        val tokens = row.combinationId.split("_")
+        com.runwear.shared.domain.model.HeroPhotoCandidate(
+            url = row.imageUrl,
+            source = com.runwear.shared.domain.model.HeroCandidateSource.POOL,
+            gender = when (tokens.getOrNull(0)) {
+                "MALE" -> GenderPreference.MALE
+                "FEMALE" -> GenderPreference.FEMALE
+                else -> GenderPreference.UNISEX
+            },
+            bracket = tokens.getOrNull(2)?.let { token ->
+                runCatching { TempBracket.valueOf(token) }.getOrNull()
+            },
+            weather = when (tokens.getOrNull(1)) {
+                "CLEAR" -> HeroWeatherCondition.CLEAR
+                "CLOUDY" -> HeroWeatherCondition.CLOUDY
+                "RAIN", "RAINY" -> HeroWeatherCondition.RAIN
+                "SNOW", "SNOWY" -> HeroWeatherCondition.SNOW
+                else -> null
+            },
+            garments = com.runwear.shared.domain.model.HeroGarmentSnapshot(
+                topBase = row.garmentClasses?.topBase,
+                outer = row.garmentClasses?.outer,
+                bottom = row.garmentClasses?.bottom,
+                head = row.garmentClasses?.head,
+                hands = row.garmentClasses?.hands
+            ),
+            personCount = row.personCount,
+            rowId = row.id,
+            combinationId = row.combinationId
+        )
+    }
+
+/**
+ * The adjudicated garment classes of a pool photo (RW-20 backfill,
+ * 2026-11-02): what the photo actually shows, as recorded by the
+ * RW-16.17 audit / regen adjudication and stored on the row as
+ * garment_classes. Vocabulary is the audit harness's: bottom ∈
+ * {shorts, short_shorts, capris, tights}, topBase ∈ {sleeveless,
+ * short, long}, head ∈ {balaclava, beanie, cap, headband, visor},
+ * hands ∈ {gloves, mittens}; null = not readable in the photo.
+ * Classes sourced from the row's stored prompt (unadjudicated rows)
+ * share the shape; [GeneratedImage.garmentSource] records which.
+ */
+@Serializable
+data class GarmentClasses(
+    @SerialName("topBase") val topBase: String? = null,
+    @SerialName("outer") val outer: Boolean? = null,
+    @SerialName("mid") val mid: Boolean? = null,
+    @SerialName("bottom") val bottom: String? = null,
+    @SerialName("head") val head: String? = null,
+    @SerialName("hands") val hands: String? = null,
+    @SerialName("sunglasses") val sunglasses: Boolean? = null,
+    @SerialName("gaiter") val gaiter: Boolean? = null
+)
+
+/**
  * Database model for generated_images table.
  * review_status arrives with the 2026-10-27 review-gate migration
  * ('approved' | 'pending' | 'rejected'); until that migration is applied
  * the column does not exist and the field decodes as null, which
  * HeroPoolPolicy treats as approved — serving is unchanged either way.
+ *
+ * person_count / garment_classes arrive with the RW-20 backfill
+ * (2026-11-02) and feed the point-grain serving filter
+ * (HeroPointGrainPolicy): null decodes on rows the backfill has not
+ * reached, and the filter fails closed on unreadable garments.
  */
 @Serializable
 data class GeneratedImage(
@@ -457,7 +969,10 @@ data class GeneratedImage(
     @SerialName("image_url") val imageUrl: String,
     @SerialName("thumbnail_url") val thumbnailUrl: String? = null,
     @SerialName("prompt") val prompt: String? = null,
-    @SerialName("review_status") val reviewStatus: String? = null
+    @SerialName("review_status") val reviewStatus: String? = null,
+    @SerialName("person_count") val personCount: Int? = null,
+    @SerialName("garment_classes") val garmentClasses: GarmentClasses? = null,
+    @SerialName("garment_source") val garmentSource: String? = null
 )
 
 

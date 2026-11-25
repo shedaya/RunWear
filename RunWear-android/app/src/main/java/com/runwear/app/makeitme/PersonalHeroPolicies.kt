@@ -68,6 +68,64 @@ object PersonalLookStatusPolicy {
 }
 
 /**
+ * RW-26: HOW the personal hero on screen was served, under the
+ * convergence architecture (design §1, frames 19–21):
+ *
+ * - EXACT — the cell's own banked photo. No badge.
+ * - SCAFFOLD — the user's OWN banked photo carrying the exact
+ *   prescription under the nearest conditions, served immediately
+ *   while the exact photo generates in the background. It shows AT
+ *   ONCE with an honest badge — and the surface stays SILENT: no
+ *   upsell copy, no meter draped over home (§9).
+ * - STOCK_QUIET — a gate-failed cell serves stock quietly: the home
+ *   screen never badges it; the explanation lives one tap away in
+ *   the looks library (frame 21).
+ */
+enum class PersonalServeKind {
+    EXACT, SCAFFOLD, STOCK_QUIET,
+    // RW-130 (Nov 7, 2026): the fallback ladder's tier 2 — the
+    // user's own photo from a neighbouring scenario, served when
+    // neither the exact cell nor a same-prescription scaffold is
+    // banked. Like SCAFFOLD it is a NON-EXACT personal serve:
+    // silent (no pill, no badge, no count), and it swaps silently
+    // when the exact cell lands. An unknown serve_tier value from
+    // a newer server must NEVER classify as SIMILAR or EXACT —
+    // kindFor falls to EXACT only for the exact/absent markers the
+    // shipped contract defines; see the forward-compat pin in
+    // RwFixWave2PoliciesTest.
+    SIMILAR
+}
+
+object ScaffoldRenderPolicy {
+
+    fun kindFor(
+        status: PersonalLookStatus,
+        serveKindRaw: String?,
+        found: Boolean
+    ): PersonalServeKind = when {
+        status is PersonalLookStatus.Failed -> PersonalServeKind.STOCK_QUIET
+        found && serveKindRaw == "scaffold" -> PersonalServeKind.SCAFFOLD
+        found && serveKindRaw == "similar" -> PersonalServeKind.SIMILAR
+        else -> PersonalServeKind.EXACT
+    }
+
+    /** True for every non-exact personal serve (scaffold + similar):
+     * the photo is the user's own but it is not the requested
+     * cell's photo, so no exact-serve label may attach to it. */
+    fun isNonExactServe(kind: PersonalServeKind): Boolean =
+        kind == PersonalServeKind.SCAFFOLD || kind == PersonalServeKind.SIMILAR
+
+    /** The home badge for a serve kind.
+     * GEN-6 WAVE A (RW-34): NO serve kind carries a badge any more.
+     * The owner ruled Nov 5, 2026 that the scaffold "Your photo"
+     * label is not an approved pill — a scaffold serve is SILENT
+     * (see HeroPillPolicy, which likewise resolves scaffold to no
+     * pill). This seam stays so every legacy badge call site
+     * resolves to silence rather than painting the removed label. */
+    fun homeBadge(kind: PersonalServeKind): String? = null
+}
+
+/**
  * The named cache trap (acceptance 16): a stored personalized image is
  * replaced server-side (matrix cell lands, replenishment variant rotates
  * in, flagged regeneration completes) and the cell's version marker bumps.
@@ -85,12 +143,25 @@ object PersonalHeroCachePolicy {
     data class CachedEntry(
         val version: Int,
         val imageUrl: String,
-        val fetchedAtMs: Long
+        val fetchedAtMs: Long,
+        /**
+         * RW-16.27: the backend hero row id — what a personal flag
+         * (flag_hero) addresses. The iOS cache entry carries it for
+         * the same reason; Android's entry lacked it, which is part
+         * of why Android had no personal-flag path. Null for entries
+         * persisted before RW-16.27 (they re-derive it on the next
+         * fresh serve).
+         */
+        val heroId: String? = null
     )
 
     sealed interface Decision {
         /** Show this URL (from cache or freshly served — same handling). */
-        data class Serve(val imageUrl: String, val version: Int) : Decision
+        data class Serve(
+            val imageUrl: String,
+            val version: Int,
+            val heroId: String? = null
+        ) : Decision
 
         /** No verified personal hero for the cell: the pool hero serves. */
         data object NoPersonalHero : Decision
@@ -105,13 +176,16 @@ object PersonalHeroCachePolicy {
      *   non-null even on a miss, when the cell row exists but no hero is
      *   verified yet).
      * @param serverUrl the freshly signed URL when [found] is true.
+     * @param serverHeroId the serving hero's backend row id when
+     *   [found] is true (get-personal-hero's `hero_id`).
      */
     fun decide(
         cached: CachedEntry?,
         found: Boolean,
         serverVersion: Int?,
         serverUrl: String?,
-        nowMs: Long
+        nowMs: Long,
+        serverHeroId: String? = null
     ): Decision {
         if (!found || serverUrl == null) return Decision.NoPersonalHero
         val version = serverVersion ?: cached?.version ?: 1
@@ -123,10 +197,59 @@ object PersonalHeroCachePolicy {
             // Same version, URL still fresh: reuse — no re-download, and
             // (critically) the version check above means a REPLACED image
             // (version bump) never takes this branch.
-            return Decision.Serve(cached.imageUrl, version)
+            return Decision.Serve(
+                cached.imageUrl, version,
+                heroId = cached.heroId ?: serverHeroId
+            )
         }
-        return Decision.Serve(serverUrl, version)
+        return Decision.Serve(serverUrl, version, heroId = serverHeroId)
     }
+}
+
+/**
+ * RW-16.27: why a user flagged one of their OWN personalized heroes —
+ * the Android mirror of iOS's PersonalHeroFlagReason (same codes,
+ * same labels, same order). [code] is the value the backend's
+ * flag_hero action validates (the pool flag vocabulary plus the
+ * personal one); the first entry is the spec §4 control, verbatim.
+ * For a personal photo every reason routes to flag_hero, never to
+ * the pool insert — the pool payload cannot identify a personal
+ * hero and would retire nothing.
+ */
+enum class PersonalHeroFlagReason(val code: String, val label: String) {
+    DOESNT_LOOK_LIKE_ME("doesnt_look_like_me", "This doesn't look like me"),
+    // GEN-6 WAVE C (RW-62): the settled follow-on reasons
+    // (design-spec §17, frame 45) — "Wrong outfit for the weather",
+    // then "Something else". The gen-5 backend vocabulary
+    // ("Looks broken" / "Inappropriate" / "Doesn't match the
+    // outfit") is retired from this sheet.
+    WRONG_OUTFIT("outfit_mismatch", "Wrong outfit for the weather"),
+    SOMETHING_ELSE("looks_broken", "Something else")
+}
+
+/**
+ * WS-6 (D-17): the personal flag sheet's presentation hierarchy,
+ * per design frame 45 — the lead phrase is the sheet's HEADING,
+ * not a row under a generic header, and its consequence is stated
+ * in the sheet ("We'll stop showing this photo and make it
+ * again."). The heading is itself the lead reason's control
+ * (tapping it files DOESNT_LOOK_LIKE_ME); the remaining reasons
+ * follow as rows. Pure, so the gate pins the hierarchy.
+ */
+object PersonalFlagSheetContent {
+
+    /** The reason the heading states — and selects. */
+    val headingReason: PersonalHeroFlagReason = PersonalHeroFlagReason.DOESNT_LOOK_LIKE_ME
+
+    /** The heading text: the lead phrase itself. */
+    val heading: String = headingReason.label
+
+    /** The consequence line under the heading (frame 45, verbatim). */
+    const val HEADING_CONSEQUENCE: String = "We'll stop showing this photo and make it again."
+
+    /** The reasons that remain rows, in their settled order. */
+    val rowReasons: List<PersonalHeroFlagReason> =
+        PersonalHeroFlagReason.entries.filter { it != headingReason }
 }
 
 /**
@@ -138,7 +261,12 @@ object PersonalHeroCachePolicy {
 object MakeItMeUpsellRules {
 
     const val WEEK_MS: Long = 7L * 24L * 3600L * 1000L
-    const val FREE_ALLOWANCE: Int = 5
+    // RW-128 (Sol ruled Nov 7, 2026): the free allowance is 10,
+    // landed as ONE aligned change — server gates and both clients
+    // together. This constant is the single client source; every
+    // free-count string derives from it so the surfaces can never
+    // disagree about the number again.
+    const val FREE_ALLOWANCE: Int = 10
 
     fun shouldShow(
         personalizationOn: Boolean,
@@ -160,12 +288,26 @@ object MakeItMeUpsellRules {
     }
 }
 
-/** The four in-flow rejection classes (spec §7 C3a–C3d). */
+/** The in-flow rejection classes (spec §7 C3a–C3d + §10.4). */
 enum class PhotoRejection {
     FACE_UNCLEAR,
     MULTIPLE_PEOPLE,
     TOO_DARK,
-    TOO_CLOSE
+    TOO_CLOSE,
+    /** WS-6 (F-1): the subject face's in-plane roll is beyond the
+     *  gate and was not a correctable quarter-turn — the photo is
+     *  sideways/tilted and must be retaken upright. */
+    ROTATED,
+
+    /** GEN-6 WAVE A (RW-50): the face is too small in the frame —
+     *  design-spec §10.4's class, which the gen-5 enum lacked, so
+     *  the settled copy could never render. */
+    FACE_TOO_SMALL,
+
+    /** GEN-6 WAVE A (RW-50): the head is turned away beyond the
+     *  guided capture's straight-on gate — §10.4 judges head-turn
+     *  on upload as well as in the guided checks. */
+    TURNED_AWAY
 }
 
 /**
@@ -174,8 +316,20 @@ enum class PhotoRejection {
  * Inputs are measured by [PhotoQualityChecker] (ML Kit face detection +
  * a bitmap luminance sample); the decision itself is pure.
  *
- * Order matters: darkness is judged first because a too-dark photo also
- * yields "no face found", and the honest reason is the darkness (C3c).
+ * RW-26 F7 harmonization: the check order is ONE order on both
+ * platforms — face-count first (none -> FACE_UNCLEAR, more than one ->
+ * MULTIPLE_PEOPLE), then darkness, then too-close. Android previously
+ * judged darkness before face count; iOS judged count before darkness;
+ * both now use this order. PhotoIntakePolicy defines routing only (no
+ * check order), so the harmonized order lives here.
+ *
+ * GEN-6 WAVE A (RW-50): the order gains the two §10.4 judgements
+ * the gen-5 gate never made on upload — head-turn (after the roll
+ * gate, against the guided capture's own straight-on threshold)
+ * and face-too-small (after darkness, against the guided capture's
+ * own minimum face fraction) — so the upload door and the guided
+ * door judge a photo by the same checks, and every §10.4 rejection
+ * class is reachable.
  */
 object PhotoQualityPolicy {
 
@@ -188,21 +342,45 @@ object PhotoQualityPolicy {
     fun decide(
         faceCount: Int,
         largestFaceWidthFraction: Float,
-        meanLuminance: Double
+        meanLuminance: Double,
+        subjectHeadRollDegrees: Float = 0f,
+        maxAbsHeadTurnDegrees: Float = 0f
     ): PhotoRejection? {
-        if (meanLuminance < MIN_MEAN_LUMINANCE) return PhotoRejection.TOO_DARK
         if (faceCount == 0) return PhotoRejection.FACE_UNCLEAR
         if (faceCount > 1) return PhotoRejection.MULTIPLE_PEOPLE
+        // WS-6 (F-1): the roll gate sits right after the face-count
+        // checks — orientation is a framing defect of the one subject
+        // face, judged before exposure/framing-size. A photo reaching
+        // here with roll beyond the gate was not EXIF-correctable and
+        // not a clean quarter-turn (the checker corrects those), so
+        // it is rejected for retake, never waved through sideways.
+        if (!IntakeOrientation.rollWithinGate(subjectHeadRollDegrees)) {
+            return PhotoRejection.ROTATED
+        }
+        // GEN-6 (RW-50): head-turn, judged on upload per §10.4 with
+        // the guided capture's straight-on gate as the threshold.
+        if (maxAbsHeadTurnDegrees > GuidedSelfieChecks.MAX_HEAD_TURN_DEGREES) {
+            return PhotoRejection.TURNED_AWAY
+        }
+        if (meanLuminance < MIN_MEAN_LUMINANCE) return PhotoRejection.TOO_DARK
+        // GEN-6 (RW-50): face-too-small — the §10.4 class the gen-5
+        // enum lacked; the threshold is the guided checks' own.
+        if (largestFaceWidthFraction < GuidedSelfieChecks.MIN_FACE_WIDTH_FRACTION) {
+            return PhotoRejection.FACE_TOO_SMALL
+        }
         if (largestFaceWidthFraction > MAX_FACE_WIDTH_FRACTION) return PhotoRejection.TOO_CLOSE
         return null
     }
 
-    /** The spec §7 C3 string for a rejection. */
+    /** The spec §7 C3 / §10.4 string for a rejection. */
     fun stringFor(rejection: PhotoRejection): String = when (rejection) {
         PhotoRejection.FACE_UNCLEAR -> MakeItMeStrings.C3A_REJECT_FACE_UNCLEAR
         PhotoRejection.MULTIPLE_PEOPLE -> MakeItMeStrings.C3B_REJECT_MULTIPLE
         PhotoRejection.TOO_DARK -> MakeItMeStrings.C3C_REJECT_TOO_DARK
         PhotoRejection.TOO_CLOSE -> MakeItMeStrings.C3D_REJECT_TOO_CLOSE
+        PhotoRejection.ROTATED -> MakeItMeStrings.C3G_REJECT_ROTATED
+        PhotoRejection.FACE_TOO_SMALL -> MakeItMeStrings.C3H_REJECT_FACE_TOO_SMALL
+        PhotoRejection.TURNED_AWAY -> MakeItMeStrings.C3I_REJECT_TURNED_AWAY
     }
 }
 
@@ -364,4 +542,109 @@ object SessionGuardPolicy {
             RefreshOutcome.UNKNOWN, null -> Action.KEEP_STORED_AND_FAIL
         }
     }
+}
+
+/**
+ * Gen-3 WS-D/X-9 (Nov 4, 2026): THE single meter seam for Android.
+ *
+ * Diagnosis of why gen-2's W-18 discipline did not hold on Android:
+ * W-18's "one counter, one spelling seam" (a shared FreeLooksMeter)
+ * was implemented on iOS only — no such type existed in the Android
+ * codebase. Android Settings composed its meter directly from
+ * `PersonalState.freeGenerationsUsed`, a server mirror that (a) the
+ * server increments ONLY when a look is DELIVERED, and (b) the
+ * client re-read only at ViewModel init / explicit refresh — never
+ * when Settings opened, and never with any in-flight input. The
+ * repository DID learn about in-flight looks (noteLookStatus /
+ * cellLookFor → lastKnownStatus), but that map was private,
+ * per-cell, and never surfaced to Settings, so while a generation
+ * was visibly in flight the Settings block could only print the
+ * settled delivered count ("0 of 5 free looks used") — a number
+ * that is true of deliveries and false as a description of the
+ * user's state at that moment. A re-read patch on the same seam
+ * cannot fix this: re-reading the same delivered-only counter at
+ * the charge moment still yields 0 while the first look is making.
+ * The fix is a different input, not a fresher read of the old one:
+ * this seam composes the status block from BOTH the delivered
+ * count AND the repository's any-look-making state (now exposed
+ * on PersonalState), so the block can never present a settled
+ * number while the flow says a look is in flight.
+ */
+object FreeLooksMeter {
+
+    /** The free allowance every surface meters against. */
+    const val ALLOWANCE: Int = MakeItMeUpsellRules.FREE_ALLOWANCE
+
+    /**
+     * GEN-6 WAVE A (DA-08): the displayed used count, clamped to
+     * the allowance. The server counter is delivered-truth, but a
+     * surface must never print "7 of 5".
+     */
+    fun displayedUsed(deliveredUsed: Int): Int =
+        deliveredUsed.coerceIn(0, ALLOWANCE)
+
+    /**
+     * GEN-6 WAVE A (DA-08): the displayed in-flight count. The two
+     * meter inputs double-count: the repository's per-cell status
+     * map still says Making for a cell whose delivery has ALREADY
+     * incremented the delivered counter whenever the delivery was
+     * learned through a counter refresh (bank fill, another
+     * surface) rather than through that cell's own status read —
+     * so raw used + raw making printed 6 and 7 against an
+     * allowance of 5 in the owner's recording. The in-flight count
+     * a surface may show is bounded by the allowance the delivered
+     * count has not already consumed: used + making ≤ allowance on
+     * EVERY surface, by construction.
+     */
+    fun displayedMaking(deliveredUsed: Int, looksMaking: Int): Int =
+        looksMaking.coerceIn(0, ALLOWANCE - displayedUsed(deliveredUsed))
+
+    /** The status block's lines, composed as ONE block: status
+     *  line first, meter line second. Subscribed users carry no
+     *  meter — their settled subscribed line stands instead. */
+    fun block(deliveredUsed: Int, looksMaking: Int, subscribed: Boolean): List<String> =
+        if (subscribed) {
+            listOf(MakeItMeStrings.S3_STATUS, MakeItMeStrings.S5_STATE_C_SUB)
+        } else {
+            listOf(
+                statusLine(displayedMaking(deliveredUsed, looksMaking) > 0),
+                meterLine(deliveredUsed, looksMaking)
+            )
+        }
+
+    fun statusLine(lookMaking: Boolean): String =
+        if (lookMaking) MakeItMeStrings.S26_MAKING_STATUS else MakeItMeStrings.S3_STATUS
+
+    /**
+     * The meter line: the DELIVERED count, and — while looks are
+     * generating — the in-flight looks stated as pending in the
+     * same line, so the number can never read as settled truth
+     * the flow contradicts. Both numbers pass through the DA-08
+     * clamp above, so their sum can never exceed the allowance.
+     *
+     * GEN-5 (RW-29 FA-10): the pending count is the REAL
+     * in-flight count from the repository's per-cell status map.
+     * The gen-4 seam took a single Boolean, so the line always
+     * read "1 look is being made" however many looks were
+     * actually in flight.
+     */
+    fun meterLine(deliveredUsed: Int, looksMaking: Int): String {
+        val base = MakeItMeStrings.s4FreeUsed(displayedUsed(deliveredUsed))
+        val making = displayedMaking(deliveredUsed, looksMaking)
+        return when {
+            making <= 0 -> base
+            making == 1 -> "$base · 1 look is being made"
+            else -> "$base · $making looks are being made"
+        }
+    }
+
+    /**
+     * The paywall's meter line, from the same seam and inputs.
+     * GEN-5 (RW-28 item 29): the line is the VERBATIM settled
+     * string — the in-flight state is carried by the hero pill and
+     * the generating states, never by appending prose to the meter.
+     * GEN-6 (DA-08): the used count is the clamped display count.
+     */
+    fun paywallLine(deliveredUsed: Int, lookMaking: Boolean): String =
+        MakeItMeStrings.u2MeterLine(displayedUsed(deliveredUsed))
 }

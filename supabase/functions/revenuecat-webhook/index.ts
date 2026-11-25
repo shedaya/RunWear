@@ -27,6 +27,22 @@
 //   anonymous Supabase session exists) — out of this function's scope,
 //   named in the follow-up report.
 //
+// GEN-5 REVIEW NOTE (RW-28 Addendum 8, Item 4b, Nov 5, 2026): the
+// paragraph above is STALE about the client — the shipped Android
+// client does call Purchases.logIn(supabaseUid) (BillingManager
+// via PersonalHeroRepository.syncBillingIdentity, on session
+// start and on entitlement changes), so Android events are
+// mappable. The Nov 5 diagnosis found personal_webhook_events has
+// had NO entries for any user since Nov 2: this handler records
+// every authenticated event BEFORE processing, so total silence
+// means deliveries are not reaching it (or are failing its auth
+// check, which answers 401 before any insert). No code path in
+// this function produces that silence; the remaining suspects
+// are deployment-side — the RC dashboard webhook target and the
+// REVENUECAT_WEBHOOK_AUTH_KEY secret matching it — which live
+// outside this repository and are named as remaining work in the
+// gen-5 report.
+//
 // Event mapping (entitlement make_it_me; products rw_makeitme_monthly /
 // rw_makeitme_annual on both stores, Play ids carry the :monthly /
 // :annual base-plan suffix in RC):
@@ -179,6 +195,11 @@ serve(async (req: Request) => {
 
   let fill: unknown = null
   if (target) {
+    // GEN-5 (RW-28 Addendum 8, Defect 1): as in the reconciliation
+    // kick, this call names no forecast cells and enqueues
+    // nothing under the deployed convergence contract — the
+    // client's own priority_cells call is the fill trigger of
+    // record. Kept, harmless, for the repo contract.
     try {
       const resp = await fetch(`${SUPABASE_URL}/functions/v1/start-personal-fill`, {
         method: 'POST',

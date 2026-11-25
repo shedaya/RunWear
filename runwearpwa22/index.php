@@ -3075,7 +3075,7 @@
         // Amazon Associates affiliate tracking
         // Uses ascsubtag for platform attribution in Amazon dashboard
         // PWA = pwa, iOS app = ios, Android app = android, Wear OS = wearos
-        const AFFILIATE_TAG = 'runwear-20';
+        const AFFILIATE_TAG = 'runwearapp-20';
         const PLATFORM_SUBTAG = 'pwa'; // Change per platform: pwa, ios, android, wearos
         const AMAZON_BASE = 'https://www.amazon.com/s?k=';
 

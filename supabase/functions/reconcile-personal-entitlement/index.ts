@@ -118,12 +118,16 @@ export function entitlementFromSubscriber(subscriber: unknown): RcEntitlementSta
   return { state: 'active', productId, expiresDate: expires, isSandbox }
 }
 
-async function fetchRcState(userId: string): Promise<RcEntitlementState> {
+async function fetchRcState(userId: string, platform: string): Promise<RcEntitlementState> {
   let sawInactive = false
   for (const key of RC_KEYS) {
     try {
       const resp = await fetch(`${RC_API}/subscribers/${encodeURIComponent(userId)}`, {
-        headers: { 'Authorization': `Bearer ${key}`, 'X-Platform': 'ios' },
+        // GEN-5 (RW-28 Addendum 8, Item 4a): the platform comes
+        // from the caller's body (the Android client sends
+        // "android"); the gen-4 hard-coded 'ios' made every
+        // lookup an iOS-storefront view regardless of the caller.
+        headers: { 'Authorization': `Bearer ${key}`, 'X-Platform': platform },
       })
       if (!resp.ok) continue
       const state = entitlementFromSubscriber(await resp.json())
@@ -177,10 +181,39 @@ serve(async (req: Request) => {
     userId = data.user.id
   }
 
-  const rc = await fetchRcState(userId)
+  const platform = typeof body.platform === 'string' ? body.platform : 'ios'
+  let rc = await fetchRcState(userId, platform)
   if (rc.state === 'unknown') {
     // No usable answer from RevenueCat — change nothing, say so.
     return jsonResponse({ ok: false, error: 'rc_state_unknown', user_id: userId }, 502)
+  }
+
+  // GEN-5 (RW-28 Addendum 8, Item 4a): a DOWNGRADE is never
+  // applied on a single read. On Nov 5, 2026 the flag flapped
+  // true -> false (05:56 CST) -> true (06:31 CST) under this
+  // function: one reconcile observed a transiently inactive
+  // RevenueCat record and revoked a paying subscriber for 35
+  // minutes. When the stored flag is true and the fresh read says
+  // inactive, confirm with a second read after a pause; only a
+  // confirmed inactive applies the downgrade. A still-unconfirmed
+  // downgrade changes nothing and says so.
+  {
+    const { data: stored } = await admin
+      .from('personal_profiles')
+      .select('entitled')
+      .eq('user_id', userId)
+      .maybeSingle()
+    if (stored?.entitled === true && rc.state === 'inactive') {
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      const confirm = await fetchRcState(userId, platform)
+      if (confirm.state !== 'inactive') {
+        return jsonResponse({
+          ok: true, applied: false, reason: 'downgrade_unconfirmed',
+          user_id: userId, entitled: true,
+        })
+      }
+      rc = confirm
+    }
   }
   const target = rc.state === 'active'
 
@@ -208,6 +241,14 @@ serve(async (req: Request) => {
 
   let fill: unknown = null
   if (target) {
+    // GEN-5 (RW-28 Addendum 8, Defect 1): this kick names no
+    // forecast cells, and under the deployed convergence contract
+    // (start-personal-fill v13) it therefore enqueues nothing —
+    // server-side kicks cannot name forecast cells and are NOT the
+    // fill trigger. The trigger of record is the client's own
+    // start-personal-fill call carrying priority_cells derived
+    // from its 7-day forecast. The kick stays for the repo
+    // contract's sake and is harmless in both worlds.
     try {
       const resp = await fetch(`${SUPABASE_URL}/functions/v1/start-personal-fill`, {
         method: 'POST',

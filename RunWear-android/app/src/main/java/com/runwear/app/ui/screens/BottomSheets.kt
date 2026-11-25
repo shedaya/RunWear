@@ -7,17 +7,24 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Air
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.MyLocation
@@ -27,6 +34,9 @@ import androidx.compose.material.icons.outlined.WaterDrop
 import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.Alignment
@@ -35,7 +45,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.core.view.WindowCompat
@@ -48,8 +60,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.runwear.app.ui.components.HapticSpec
+import com.runwear.app.ui.components.conditionIcon
 import com.runwear.app.ui.components.getCategoryIconRes
-import com.runwear.app.ui.theme.BebasNeueFontFamily
 import com.runwear.app.ui.theme.RunWearColors
 import com.runwear.shared.data.repository.LocationResult
 import com.runwear.shared.domain.model.*
@@ -62,7 +75,7 @@ import java.time.format.DateTimeFormatter
 // AMAZON AFFILIATE - PWA v2.9 (Amazon ONLY)
 // ============================================================================
 
-private const val AMAZON_AFFILIATE_TAG = "runwear-20"
+private const val AMAZON_AFFILIATE_TAG = "runwearapp-20"
 private const val AMAZON_PLATFORM_SUBTAG = "android"
 
 internal fun buildAmazonSearchUrl(item: ClothingItem, gender: GenderPreference): String {
@@ -81,6 +94,57 @@ internal fun buildAmazonSearchUrl(item: ClothingItem, gender: GenderPreference):
 // DATE PICKER SHEET - PWA v2.9 Style
 // ============================================================================
 
+/**
+ * RW-26 (§8-I): the forecast-horizon rule for day browsing. The
+ * forecast fetch covers [HORIZON_DAYS] days; no weather is
+ * invented for days past it.
+ *
+ * RW-102 (Sol's directive, Nov 6, 2026 — supersedes the RW-26
+ * "named beyond-forecast" form): the date UI must not INCLUDE
+ * dates we can't give projections for. The strip therefore ENDS
+ * at the horizon — beyond-forecast days are not rendered at all,
+ * named or otherwise. [isBeyondHorizon] remains as the draft
+ * policy's refusal guard (defense in depth behind the strip).
+ * Pure — unit-tested.
+ */
+object ForecastHorizonPolicy {
+    const val HORIZON_DAYS = 7
+
+    fun isBeyondHorizon(dayOffset: Int): Boolean = dayOffset >= HORIZON_DAYS
+
+    /** The days the Choose-a-Day strip offers: today through the
+     *  horizon's last day, and nothing past it (RW-102). */
+    fun stripDays(today: LocalDate): List<LocalDate> =
+        (0 until HORIZON_DAYS).map { today.plusDays(it.toLong()) }
+}
+
+/**
+ * GEN-6 WAVE C (RW-53, date-path fix): the Choose-a-Day draft
+ * semantics — the same Confirm-gated mechanics as the time
+ * picker (design-spec §6, C1): tapping a day moves the DRAFT
+ * only; home re-solves ONLY on Confirm; Cancel (or dismiss)
+ * restores the prior selection exactly because the committed
+ * selection is never touched until Confirm. RW-102: the strip
+ * no longer renders days past the 7-day horizon at all; the
+ * refusal here remains as the policy-level guard behind it.
+ */
+object DatePickerDraftPolicy {
+
+    fun open(selectedDate: LocalDate): LocalDate = selectedDate
+
+    /** Move the draft; beyond-horizon days refuse the move. */
+    fun select(draft: LocalDate, date: LocalDate, today: LocalDate): LocalDate {
+        val offset = (date.toEpochDay() - today.toEpochDay()).toInt()
+        return if (ForecastHorizonPolicy.isBeyondHorizon(offset)) draft else date
+    }
+
+    /** Confirm commits the draft — the caller re-solves. */
+    fun confirm(draft: LocalDate): LocalDate = draft
+
+    /** Cancel restores the pre-open selection exactly. */
+    fun cancel(original: LocalDate): LocalDate = original
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DatePickerSheet(
@@ -90,8 +154,7 @@ fun DatePickerSheet(
     onSelectDate: (LocalDate) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val sheetState = rememberModalBottomSheetState()
-    val days = (0..6).map { today.plusDays(it.toLong()) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -99,17 +162,77 @@ fun DatePickerSheet(
         containerColor = RunWearColors.Surface,
         dragHandle = { ModalDragHandle() }
     ) {
+        DatePickerSheetContent(
+            selectedDate = selectedDate,
+            today = today,
+            onSelectDate = onSelectDate,
+            onDismiss = onDismiss
+        )
+    }
+}
+
+/**
+ * RW-73 DETENT RULING (Sol, Nov 6, 2026 — delegated to Tank's
+ * suggestion; BACKLOG RW-73): the picker sheets' content is a
+ * fixed stack with no vertical scroll consumer at default and
+ * moderate font scales — the settled sheet discipline. At the
+ * LARGEST font scale the untruncated content outgrows the
+ * ModalBottomSheet window-height cap, so — and only there —
+ * the content carries the sheet's one vertical scroll
+ * consumer, keeping Confirm reachable and whole. Both picker
+ * contents (Date here, Time in DayChartTimePicker.kt) gate on
+ * this one policy; the hosts' skipPartiallyExpanded discipline
+ * is unchanged.
+ */
+internal object PickerSheetScrollPolicy {
+    /** The largest font scale in the studio's test matrix (and
+     *  the top of the standard system ladder); scroll is
+     *  permitted at or above it, never below. */
+    const val SCROLL_FONT_SCALE: Float = 1.3f
+
+    fun scrollable(fontScale: Float): Boolean = fontScale >= SCROLL_FONT_SCALE
+}
+
+/**
+ * The Choose-a-Day sheet's content, extracted from the
+ * ModalBottomSheet host (a ModalBottomSheet cannot be driven to
+ * Expanded under Robolectric — the same extraction the location
+ * rows use) so the RW-53 render/interaction proofs can drive the
+ * production content directly.
+ */
+@Composable
+internal fun DatePickerSheetContent(
+    selectedDate: LocalDate,
+    today: LocalDate,
+    onSelectDate: (LocalDate) -> Unit,
+    onDismiss: () -> Unit,
+    // Hoisted so render proofs can drive the ruled scroll
+    // deterministically; the production host uses the default.
+    scrollState: ScrollState = rememberScrollState()
+) {
+    val haptic = LocalHapticFeedback.current
+    // RW-53: the draft — sheet-local until Confirm.
+    var draftDate by remember(selectedDate) {
+        mutableStateOf(DatePickerDraftPolicy.open(selectedDate))
+    }
+    // RW-102: the strip ENDS at the forecast horizon — no
+    // beyond-forecast cells are rendered (see ForecastHorizonPolicy).
+    val days = ForecastHorizonPolicy.stripDays(today)
+    // RW-73 detent ruling: the one vertical scroll consumer,
+    // present only at the largest font scale (see
+    // PickerSheetScrollPolicy).
+    val scrollable = PickerSheetScrollPolicy.scrollable(LocalDensity.current.fontScale)
+
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .then(if (scrollable) Modifier.verticalScroll(scrollState) else Modifier)
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
                 text = "SELECT DATE",
-                fontFamily = BebasNeueFontFamily,
-                fontSize = 24.sp,
-                letterSpacing = 0.48.sp,
+                style = MaterialTheme.typography.titleLarge,
                 color = RunWearColors.TextPrimary
             )
 
@@ -123,7 +246,10 @@ fun DatePickerSheet(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 days.forEach { date ->
-                    val isSelected = date == selectedDate
+                    // RW-102: every rendered cell is inside the
+                    // horizon by construction (stripDays) — the
+                    // draft policy's refusal remains behind the tap.
+                    val isSelected = date == draftDate
                     val label = when {
                         date == today -> "Today"
                         date == today.plusDays(1) -> "Tomorrow"
@@ -132,7 +258,14 @@ fun DatePickerSheet(
                     val sublabel = date.format(DateTimeFormatter.ofPattern("MMM d"))
 
                     Surface(
-                        onClick = { onSelectDate(date) },
+                        onClick = {
+                            // §1.7 (WS-9 fix, P-2): day selection
+                            // fires the selection-class tick.
+                            // RW-53: the tap moves the DRAFT —
+                            // nothing re-solves until Confirm.
+                            haptic.performHapticFeedback(HapticSpec.SELECTION)
+                            draftDate = DatePickerDraftPolicy.select(draftDate, date, today)
+                        },
                         shape = RoundedCornerShape(12.dp),
                         color = if (isSelected) RunWearColors.Primary else RunWearColors.BgCardLight
                     ) {
@@ -144,154 +277,64 @@ fun DatePickerSheet(
                                 text = label,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                 fontSize = 14.sp,
-                                color = if (isSelected) Color.White else RunWearColors.TextPrimary
+                                color = if (isSelected) com.runwear.app.ui.theme.PhotoInk else RunWearColors.TextPrimary
                             )
                             Text(
                                 text = sublabel,
                                 fontSize = 12.sp,
-                                color = if (isSelected) Color.White.copy(alpha = 0.8f) else RunWearColors.TextSecondary
+                                color = if (isSelected) com.runwear.app.ui.theme.PhotoInk.copy(alpha = 0.8f) else RunWearColors.TextSecondary
                             )
                         }
                     }
                 }
             }
 
-            Spacer(Modifier.height(32.dp))
-        }
-    }
-}
+            Spacer(Modifier.height(16.dp))
 
-// ============================================================================
-// TIME PICKER SHEET - PWA v2.9 Style
-// ============================================================================
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun TimePickerSheet(
-    selectedHour: Int,
-    onSelectTime: (Int) -> Unit,
-    onDismiss: () -> Unit
-) {
-    val sheetState = rememberModalBottomSheetState()
-    // Option B: the 5 AM–9 PM peak grid stays primary; the remaining hours
-    // live under a "Night & early morning" tier in the same sheet. If the
-    // current selection IS a night hour, the tier opens expanded so the
-    // selection is visible.
-    var nightExpanded by remember {
-        mutableStateOf(TimePickerHours.isNightHour(selectedHour))
-    }
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = RunWearColors.Surface,
-        dragHandle = { ModalDragHandle() }
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
             Text(
-                text = "SELECT TIME",
-                fontFamily = BebasNeueFontFamily,
-                fontSize = 24.sp,
-                letterSpacing = 0.48.sp,
-                color = RunWearColors.TextPrimary
-            )
-
-            Spacer(Modifier.height(24.dp))
-
-            // Peak tier — 3-column grid per PWA, unchanged
-            HourGrid(
-                hours = TimePickerHours.PEAK_HOURS,
-                selectedHour = selectedHour,
-                onSelectTime = onSelectTime
+                text = "Days past the 7-day forecast are beyond the forecast — no weather is invented for them.",
+                fontSize = 12.sp,
+                color = RunWearColors.TextSecondary,
+                textAlign = TextAlign.Center
             )
 
             Spacer(Modifier.height(20.dp))
 
-            // Night & early morning tier toggle (same sheet, same language)
-            Surface(
-                onClick = { nightExpanded = !nightExpanded },
-                shape = RoundedCornerShape(12.dp),
-                color = RunWearColors.BgCardLight,
-                modifier = Modifier.fillMaxWidth()
+            // RW-53: Confirm / Cancel — Confirm commits the draft
+            // (the host re-solves home to the new date); Cancel
+            // dismisses with the prior selection untouched.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                OutlinedButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text(
-                        text = "Night & early morning",
-                        fontWeight = FontWeight.Medium,
-                        fontSize = 14.sp,
-                        color = RunWearColors.TextPrimary
-                    )
-                    Icon(
-                        imageVector = if (nightExpanded) Icons.Outlined.ExpandLess
-                        else Icons.Outlined.ExpandMore,
-                        contentDescription = if (nightExpanded) "Hide night hours" else "Show night hours",
-                        tint = RunWearColors.TextSecondary,
-                        modifier = Modifier.size(20.dp)
-                    )
+                    Text("Cancel", fontWeight = FontWeight.SemiBold)
                 }
-            }
-
-            AnimatedVisibility(visible = nightExpanded) {
-                Column {
-                    Spacer(Modifier.height(12.dp))
-                    HourGrid(
-                        hours = TimePickerHours.NIGHT_HOURS,
-                        selectedHour = selectedHour,
-                        onSelectTime = onSelectTime
+                Button(
+                    onClick = { onSelectDate(DatePickerDraftPolicy.confirm(draftDate)) },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = RunWearColors.PineAccent,
+                        contentColor = com.runwear.app.ui.theme.PhotoInk
                     )
+                ) {
+                    Text("Confirm", fontWeight = FontWeight.SemiBold)
                 }
             }
 
             Spacer(Modifier.height(32.dp))
         }
-    }
 }
 
-/** The picker's 3-column hour grid, shared by the peak and night tiers. */
-@Composable
-private fun HourGrid(
-    hours: List<Int>,
-    selectedHour: Int,
-    onSelectTime: (Int) -> Unit
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        hours.chunked(3).forEach { rowHours ->
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                rowHours.forEach { hour ->
-                    val isSelected = hour == selectedHour
-
-                    Surface(
-                        onClick = { onSelectTime(hour) },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
-                        color = if (isSelected) RunWearColors.Primary else RunWearColors.BgCardLight
-                    ) {
-                        Text(
-                            text = TimePickerHours.label(hour),
-                            modifier = Modifier.padding(14.dp),
-                            textAlign = TextAlign.Center,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            color = if (isSelected) Color.White else RunWearColors.TextPrimary
-                        )
-                    }
-                }
-                repeat(3 - rowHours.size) { Spacer(Modifier.weight(1f)) }
-            }
-        }
-    }
-}
+// ============================================================================
+// TIME PICKER SHEET — GEN-4: moved to DayChartTimePicker.kt. The chart
+// replaces the HourGrid there; the tile grid is retired.
+// ============================================================================
 
 // ============================================================================
 // SETTINGS SHEET - PWA v2.9 Style
@@ -306,20 +349,30 @@ fun SettingsSheet(
     onToggleUnit: () -> Unit,
     onSetComfortPreference: (ComfortPreference) -> Unit,
     onSetGenderPreference: (GenderPreference) -> Unit,
+    /** RW-25: appearance (System / Light / Dark); defaulted so other
+     * call sites and tests don't churn. */
+    appearancePreference: AppearancePreference = AppearancePreference.SYSTEM,
+    onSetAppearancePreference: (AppearancePreference) -> Unit = {},
     analyticsOptIn: Boolean,
     onAnalyticsOptInChange: (Boolean) -> Unit,
     onSendFeedback: () -> Unit,
+    onRateRunWear: () -> Unit = {},
     makeItMeViewModel: com.runwear.app.makeitme.MakeItMeViewModel? = null,
     makeItMeState: com.runwear.app.makeitme.MakeItMeUiState =
         com.runwear.app.makeitme.MakeItMeUiState(),
     onMakeItMeOptInClick: () -> Unit = {},
     onMakeItMePhotosClick: () -> Unit = {},
+    onMakeItMeLooksClick: () -> Unit = {},
     onMakeItMeSubscribeClick: () -> Unit = {},
     onMakeItMeManageSubscriptionClick: () -> Unit = {},
     onMakeItMeDeleted: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
-    val sheetState = rememberModalBottomSheetState()
+    // WS-5 (D-13): one anchor — the sheet rests at full or hidden,
+    // nothing between (skipPartiallyExpanded). Dismissal is the
+    // sheet's own: swipe-down in one gesture or scrim tap, both
+    // through onDismissRequest.
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -327,175 +380,411 @@ fun SettingsSheet(
         containerColor = RunWearColors.Surface,
         dragHandle = { ModalDragHandle() }
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(24.dp)
-        ) {
+        SettingsSheetContent(
+            temperatureUnit = temperatureUnit,
+            comfortPreference = comfortPreference,
+            genderPreference = genderPreference,
+            onToggleUnit = onToggleUnit,
+            onSetComfortPreference = onSetComfortPreference,
+            onSetGenderPreference = onSetGenderPreference,
+            appearancePreference = appearancePreference,
+            onSetAppearancePreference = onSetAppearancePreference,
+            analyticsOptIn = analyticsOptIn,
+            onAnalyticsOptInChange = onAnalyticsOptInChange,
+            onSendFeedback = onSendFeedback,
+            onRateRunWear = onRateRunWear,
+            makeItMeViewModel = makeItMeViewModel,
+            makeItMeState = makeItMeState,
+            onMakeItMeOptInClick = onMakeItMeOptInClick,
+            onMakeItMePhotosClick = onMakeItMePhotosClick,
+            onMakeItMeLooksClick = onMakeItMeLooksClick,
+            onMakeItMeSubscribeClick = onMakeItMeSubscribeClick,
+            onMakeItMeManageSubscriptionClick = onMakeItMeManageSubscriptionClick,
+            onMakeItMeDeleted = onMakeItMeDeleted,
+            // GEN-2 A1 (W-8): the content is WEIGHT-bounded inside
+            // the sheet's own column (this call site is the
+            // ModalBottomSheet content's ColumnScope) — see the
+            // content's doc for the clipping mechanism this ends.
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+/**
+ * WS-5 (D-13 + D-14): the Settings sheet's content, separated from
+ * the sheet wrapper so the inventory is render-testable.
+ *
+ * Sheet discipline: the content's ONE scroll consumer is this
+ * LazyColumn, which the ModalBottomSheet owns through its nested
+ * scroll connection. The D-13 ghosting mechanism — a plain Column
+ * carrying its own verticalScroll nested inside the anchored sheet
+ * (two competing consumers) — is gone by construction.
+ *
+ * Inventory discipline: the sections are [SettingsInventory]'s
+ * registry, one item each, keyed by section id, in registry order.
+ * Every section renders in every configuration (see the registry's
+ * doc): the Make It Me section is composed unconditionally (it
+ * carries the plain not-started row with the feature flag OFF),
+ * Delete-my-data is its own section after it, and About closes the
+ * sheet, matching iOS's inventory.
+ *
+ * GEN-2 A1 (W-8) — why About was clipped and could never scroll
+ * into view: the sheet's column stacks the drag handle ABOVE this
+ * content, but the LazyColumn below was measured against the
+ * column's FULL height constraint (a Column measures unweighted
+ * children at the full incoming max height, it does not subtract
+ * its siblings). The list's viewport therefore extended past the
+ * sheet's bottom edge by the handle (and any inset stacked with
+ * it): at max scroll the list aligns its end — bottom padding
+ * first, then About — with that off-screen viewport bottom, so
+ * the last rows stay permanently below the visible edge no
+ * matter how far the user scrolls (Sol's Nov 4 recording: the
+ * "About" header as a half-height sliver, eight arrows drawn at
+ * it). The fix is the Stage-1 sheet discipline's anchor rule
+ * applied to the one scroll consumer: [SettingsSheet] passes a
+ * weight-bounded [modifier], so the viewport is exactly the space
+ * remaining in the sheet's bounded column and its bottom IS the
+ * sheet's bottom. The bottom content padding (32 dp) is then
+ * honest end-of-list space, fully reachable at max scroll.
+ */
+@Composable
+fun SettingsSheetContent(
+    temperatureUnit: TemperatureUnit,
+    comfortPreference: ComfortPreference,
+    genderPreference: GenderPreference,
+    onToggleUnit: () -> Unit,
+    onSetComfortPreference: (ComfortPreference) -> Unit,
+    onSetGenderPreference: (GenderPreference) -> Unit,
+    appearancePreference: AppearancePreference = AppearancePreference.SYSTEM,
+    onSetAppearancePreference: (AppearancePreference) -> Unit = {},
+    analyticsOptIn: Boolean,
+    onAnalyticsOptInChange: (Boolean) -> Unit,
+    onSendFeedback: () -> Unit,
+    onRateRunWear: () -> Unit = {},
+    makeItMeViewModel: com.runwear.app.makeitme.MakeItMeViewModel? = null,
+    makeItMeState: com.runwear.app.makeitme.MakeItMeUiState =
+        com.runwear.app.makeitme.MakeItMeUiState(),
+    onMakeItMeOptInClick: () -> Unit = {},
+    onMakeItMePhotosClick: () -> Unit = {},
+    onMakeItMeLooksClick: () -> Unit = {},
+    onMakeItMeSubscribeClick: () -> Unit = {},
+    onMakeItMeManageSubscriptionClick: () -> Unit = {},
+    onMakeItMeDeleted: () -> Unit = {},
+    modifier: Modifier = Modifier
+) {
+    val sections = SettingsInventory.sectionsFor(
+        makeItMeEnabled = com.runwear.app.makeitme.MakeItMeAvailability.ENABLED,
+        makeItMeMode = makeItMeState.mode
+    )
+    LazyColumn(
+        modifier = modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 32.dp)
+    ) {
+        item(key = "settings-title") {
             Text(
                 text = "SETTINGS",
-                fontFamily = BebasNeueFontFamily,
-                fontSize = 24.sp,
-                letterSpacing = 0.48.sp,
+                style = MaterialTheme.typography.titleLarge,
                 color = RunWearColors.TextPrimary,
                 modifier = Modifier.padding(bottom = 24.dp)
             )
-
-            // Temperature Unit - PWA v2.9 toggle style
-            SettingRow(
-                label = "Temperature Unit",
-                sublabel = "Display temperature in"
-            ) {
-                UnitToggle(
-                    isCelsius = temperatureUnit == TemperatureUnit.CELSIUS,
-                    onToggle = { onToggleUnit() }
-                )
-            }
-
-            HorizontalDivider(color = RunWearColors.BgCardLight, modifier = Modifier.padding(vertical = 16.dp))
-
-            // Body Temperature / Comfort
-            Column {
-                Text(
-                    text = "Body Temperature",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = RunWearColors.TextPrimary
-                )
-                Text(
-                    text = "How do you typically feel when running?",
-                    fontSize = 12.sp,
-                    color = RunWearColors.TextMuted,
-                    modifier = Modifier.padding(top = 2.dp, bottom = 12.dp)
-                )
-                ComfortSelector(
-                    selected = comfortPreference,
-                    onSelect = onSetComfortPreference
-                )
-            }
-
-            HorizontalDivider(color = RunWearColors.BgCardLight, modifier = Modifier.padding(vertical = 16.dp))
-
-            // Fit Preference - PWA v2.9 toggleable Male/Female
-            Column {
-                Text(
-                    text = "Fit Preference",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = RunWearColors.TextPrimary
-                )
-                Text(
-                    text = "Tap to select, tap again to deselect",
-                    fontSize = 12.sp,
-                    color = RunWearColors.TextMuted,
-                    modifier = Modifier.padding(top = 2.dp, bottom = 12.dp)
-                )
-                GenderToggleSettings(
-                    selected = genderPreference,
-                    onSelect = onSetGenderPreference
-                )
-            }
-
-            HorizontalDivider(color = RunWearColors.BgCardLight, modifier = Modifier.padding(vertical = 16.dp))
-
-            // RW-14 "Make it me" section (spec §3) — between Fit
-            // Preference and Send feedback.
-            if (makeItMeViewModel != null) {
-                com.runwear.app.makeitme.MakeItMeSettingsSection(
-                    viewModel = makeItMeViewModel,
-                    state = makeItMeState,
-                    onOptInClick = onMakeItMeOptInClick,
-                    onPhotosClick = onMakeItMePhotosClick,
-                    onSubscribeClick = onMakeItMeSubscribeClick,
-                    onManageSubscriptionClick = onMakeItMeManageSubscriptionClick,
-                    onDeleted = onMakeItMeDeleted
-                )
-
-                HorizontalDivider(color = RunWearColors.BgCardLight, modifier = Modifier.padding(vertical = 16.dp))
-            }
-
-            // Send feedback — the durable route into the feedback system.
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .clickable { onSendFeedback() }
-                    .padding(vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Send feedback",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = RunWearColors.TextPrimary
-                    )
-                    Text(
-                        text = "Tell us what happened, in your own words.",
-                        fontSize = 12.sp,
-                        color = RunWearColors.TextMuted,
-                        modifier = Modifier.padding(top = 2.dp)
-                    )
-                }
-                Icon(
-                    imageVector = Icons.Outlined.ChevronRight,
-                    contentDescription = null,
-                    tint = RunWearColors.TextMuted
-                )
-            }
-
-            HorizontalDivider(color = RunWearColors.BgCardLight, modifier = Modifier.padding(vertical = 16.dp))
-
-            // Help improve the app — the analytics opt-in (spec §4.3 copy).
-            // The toggle is OFF until the user turns it on; while it is off,
-            // nothing is counted and nothing is sent, crash reports included.
-            Column {
-                SettingRow(
-                    label = "Help improve the app",
-                    sublabel = "Count how the app is used"
-                ) {
-                    Switch(
-                        checked = analyticsOptIn,
-                        onCheckedChange = onAnalyticsOptInChange,
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = RunWearColors.Primary,
-                            uncheckedThumbColor = RunWearColors.TextMuted,
-                            uncheckedTrackColor = RunWearColors.BgCardLight
+        }
+        sections.forEach { section ->
+            when (section) {
+                SettingsSectionId.APPEARANCE -> item(key = section.name) {
+                    // Appearance FIRST (RW-26 §H) — System follows the
+                    // device; Light / Dark pin the app theme.
+                    Column {
+                        Text(
+                            text = "Appearance",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = RunWearColors.TextPrimary
                         )
-                    )
+                        Text(
+                            text = "Match your device, or always light or dark.",
+                            fontSize = 12.sp,
+                            color = RunWearColors.TextSecondary,
+                            modifier = Modifier.padding(top = 2.dp, bottom = 12.dp)
+                        )
+                        AppearanceSelector(
+                            selected = appearancePreference,
+                            onSelect = onSetAppearancePreference
+                        )
+                    }
+                    SettingsDivider()
                 }
-                Text(
-                    text = "We count how the app is used — which features get used and where " +
-                        "recommendations miss — and nothing else. No account, no advertising ID, " +
-                        "and your location never leaves the phone more precisely than the city " +
-                        "name. Turn this off and nothing is counted or sent.",
-                    fontSize = 12.sp,
-                    color = RunWearColors.TextMuted,
-                    modifier = Modifier.padding(top = 10.dp)
-                )
-                if (!analyticsOptIn) {
+                SettingsSectionId.TEMPERATURE_UNIT -> item(key = section.name) {
+                    SettingRow(
+                        label = "Temperature Unit",
+                        sublabel = "Display temperature in"
+                    ) {
+                        UnitToggle(
+                            isCelsius = temperatureUnit == TemperatureUnit.CELSIUS,
+                            onToggle = { onToggleUnit() }
+                        )
+                    }
+                    // RW-83 (settled, design-spec §6/§13): the
+                    // unit toggle's consequence line — what the
+                    // choice actually governs — stated under the
+                    // row, verbatim.
                     Text(
-                        text = "Off. Nothing is being counted.",
+                        text = "Used for today's outfit, the hourly chart, and your watch.",
                         fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = RunWearColors.TextPrimary,
-                        modifier = Modifier.padding(top = 6.dp)
+                        color = RunWearColors.TextSecondary,
+                        modifier = Modifier.padding(top = 6.dp, bottom = 2.dp)
                     )
+                    SettingsDivider()
                 }
-                Text(
-                    text = "If the app crashes, it can send us the technical details so we can " +
-                        "fix it. This happens only after a crash, and only with your permission here.",
-                    fontSize = 12.sp,
-                    color = RunWearColors.TextMuted,
-                    modifier = Modifier.padding(top = 10.dp)
-                )
+                SettingsSectionId.BODY_TEMPERATURE -> item(key = section.name) {
+                    Column {
+                        Text(
+                            text = "Body Temperature",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = RunWearColors.TextPrimary
+                        )
+                        Text(
+                            text = "How do you typically feel when running?",
+                            fontSize = 12.sp,
+                            color = RunWearColors.TextSecondary,
+                            modifier = Modifier.padding(top = 2.dp, bottom = 12.dp)
+                        )
+                        // GEN-6 WAVE C (DA-19): Settings uses the
+                        // SAME continuous slider form as onboarding
+                        // (the C-1 slider: haptics + temperature
+                        // tint shift) — one setting, one control
+                        // form. The 5-stop segmented selector is
+                        // retired from this surface.
+                        ComfortSliderControl(
+                            selected = comfortPreference,
+                            onSelect = onSetComfortPreference
+                        )
+                    }
+                    SettingsDivider()
+                }
+                SettingsSectionId.FIT_PREFERENCE -> item(key = section.name) {
+                    Column {
+                        Text(
+                            text = "Fit Preference",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = RunWearColors.TextPrimary
+                        )
+                        Text(
+                            // RW-81 (Nov 6, 2026): exactly two fit
+                            // options; neutral is the unselected
+                            // state, not a third labelled choice.
+                            text = "Whose fit should your recommendations shop for?",
+                            fontSize = 12.sp,
+                            color = RunWearColors.TextSecondary,
+                            modifier = Modifier.padding(top = 2.dp, bottom = 12.dp)
+                        )
+                        GenderToggleSettings(
+                            selected = genderPreference,
+                            onSelect = onSetGenderPreference
+                        )
+                    }
+                    SettingsDivider()
+                }
+                SettingsSectionId.MAKE_IT_ME -> item(key = section.name) {
+                    // RW-14 "Make It Me" section (spec §3) — between
+                    // Fit Preference and Support. WS-5 (D-14):
+                    // composed UNCONDITIONALLY — the section itself
+                    // decides what its state shows (with the flag
+                    // OFF, the plain not-started row of frame 36);
+                    // it may never emit nothing.
+                    com.runwear.app.makeitme.MakeItMeSettingsSection(
+                        viewModel = makeItMeViewModel,
+                        state = makeItMeState,
+                        onOptInClick = onMakeItMeOptInClick,
+                        onPhotosClick = onMakeItMePhotosClick,
+                        onLooksClick = onMakeItMeLooksClick,
+                        onSubscribeClick = onMakeItMeSubscribeClick,
+                        onManageSubscriptionClick = onMakeItMeManageSubscriptionClick,
+                        onDeleted = onMakeItMeDeleted
+                    )
+                    SettingsDivider()
+                }
+                SettingsSectionId.DELETE_MY_DATA -> item(key = section.name) {
+                    // WS-5 (D-14): the destructive section is its
+                    // OWN section, reachable without the Make It Me
+                    // section's emission — a stock-mode user still
+                    // has an account to delete (RW-16.30 decision
+                    // 5a). GEN-5 (RW-28 item 25): it is now the
+                    // headed DANGER ZONE, quarantined as the last
+                    // section of the sheet, holding both destructive
+                    // rows together.
+                    com.runwear.app.makeitme.DangerZoneSettingsSection(
+                        viewModel = makeItMeViewModel,
+                        state = makeItMeState,
+                        onDeleted = onMakeItMeDeleted
+                    )
+                    SettingsDivider()
+                }
+                SettingsSectionId.SEND_FEEDBACK -> item(key = section.name) {
+                    // Send feedback — the durable route into the
+                    // feedback system.
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable { onSendFeedback() }
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Send feedback",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = RunWearColors.TextPrimary
+                            )
+                            Text(
+                                text = "Tell us what happened, in your own words.",
+                                fontSize = 12.sp,
+                                color = RunWearColors.TextSecondary,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Outlined.ChevronRight,
+                            contentDescription = null,
+                            tint = RunWearColors.TextSecondary
+                        )
+                    }
+                    SettingsDivider()
+                }
+                SettingsSectionId.RATE_RUNWEAR -> item(key = section.name) {
+                    // GEN-6 WAVE C (RW-56): "Rate RunWear" in the
+                    // Settings Support rows (settled inventory,
+                    // design-spec §13) — it previously existed only
+                    // inside the rating-moment dialog.
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable { onRateRunWear() }
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Rate RunWear",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = RunWearColors.TextPrimary
+                            )
+                            Text(
+                                text = "Rate RunWear in the Play Store.",
+                                fontSize = 12.sp,
+                                color = RunWearColors.TextSecondary,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Outlined.ChevronRight,
+                            contentDescription = null,
+                            tint = RunWearColors.TextSecondary
+                        )
+                    }
+                    SettingsDivider()
+                }
+                SettingsSectionId.HELP_IMPROVE -> item(key = section.name) {
+                    // Help improve the app — the analytics opt-in
+                    // (spec §4.3 copy). The toggle is OFF until the
+                    // user turns it on; while it is off, nothing is
+                    // counted and nothing is sent, crash reports
+                    // included.
+                    Column {
+                        SettingRow(
+                            label = "Help improve the app",
+                            sublabel = "Count how the app is used"
+                        ) {
+                            Switch(
+                                checked = analyticsOptIn,
+                                onCheckedChange = onAnalyticsOptInChange,
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color.White,
+                                    checkedTrackColor = RunWearColors.Primary,
+                                    uncheckedThumbColor = RunWearColors.TextSecondary,
+                                    uncheckedTrackColor = RunWearColors.Hairline
+                                )
+                            )
+                        }
+                        Text(
+                            text = "We count how the app is used — which features get used and where " +
+                                "recommendations miss — and nothing else. No account, no advertising ID, " +
+                                "and your location never leaves the phone more precisely than the city " +
+                                "name. Turn this off and nothing is counted or sent.",
+                            fontSize = 12.sp,
+                            color = RunWearColors.TextSecondary,
+                            modifier = Modifier.padding(top = 10.dp)
+                        )
+                        if (!analyticsOptIn) {
+                            Text(
+                                text = "Off. Nothing is being counted.",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = RunWearColors.TextPrimary,
+                                modifier = Modifier.padding(top = 6.dp)
+                            )
+                        }
+                        Text(
+                            text = "If the app crashes, it can send us the technical details so we can " +
+                                "fix it. This happens only after a crash, and only with your permission here.",
+                            fontSize = 12.sp,
+                            color = RunWearColors.TextSecondary,
+                            modifier = Modifier.padding(top = 10.dp)
+                        )
+                    }
+                    SettingsDivider()
+                }
+                SettingsSectionId.ABOUT -> item(key = section.name) {
+                    // WS-5 (D-14): About — the section iOS's Settings
+                    // has always carried (Version, in its
+                    // "name (code)" form) and Android lacked.
+                    Column {
+                        Text(
+                            text = "About",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = RunWearColors.TextPrimary
+                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Version",
+                                fontSize = 14.sp,
+                                color = RunWearColors.TextSecondary
+                            )
+                            Text(
+                                text = SettingsInventory.versionLabel(
+                                    com.runwear.app.BuildConfig.VERSION_NAME,
+                                    com.runwear.app.BuildConfig.VERSION_CODE
+                                ),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = RunWearColors.TextPrimary
+                            )
+                        }
+                    }
+                }
             }
-
-            Spacer(Modifier.height(32.dp))
         }
     }
+}
+
+@Composable
+private fun SettingsDivider() {
+    // GEN-5 (RW-29 cream map): the divider is the Hairline
+    // token — BgCardLight equals the sheet in light mode, so
+    // every Settings structure line vanished there.
+    HorizontalDivider(color = RunWearColors.Hairline, modifier = Modifier.padding(vertical = 16.dp))
 }
 
 @Composable
@@ -520,7 +809,7 @@ private fun SettingRow(
                 Text(
                     text = it,
                     fontSize = 12.sp,
-                    color = RunWearColors.TextMuted,
+                    color = RunWearColors.TextSecondary,
                     modifier = Modifier.padding(top = 2.dp)
                 )
             }
@@ -537,10 +826,14 @@ private fun UnitToggle(
     isCelsius: Boolean,
     onToggle: () -> Unit
 ) {
+    // §1.7 (WS-9 fix, P-2): a Settings preference selection fires
+    // the selection-class tick. Both cells below only invoke
+    // onToggle when the tap actually changes the unit.
+    val haptic = LocalHapticFeedback.current
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(10.dp))
-            .background(RunWearColors.BgCardLight)
+            .background(RunWearColors.Hairline)
             .padding(3.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp)
     ) {
@@ -549,15 +842,21 @@ private fun UnitToggle(
             modifier = Modifier
                 .clip(RoundedCornerShape(8.dp))
                 .background(if (!isCelsius) RunWearColors.Primary else Color.Transparent)
-                .clickable { if (isCelsius) onToggle() }
+                .clickable {
+                    if (isCelsius) {
+                        haptic.performHapticFeedback(HapticSpec.SELECTION)
+                        onToggle()
+                    }
+                }
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "°F",
+                // GEN-5 (RW-28 item 24): full words, not symbols.
+                text = "Fahrenheit",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = if (!isCelsius) Color.White else RunWearColors.TextMuted
+                color = if (!isCelsius) com.runwear.app.ui.theme.PhotoInk else RunWearColors.TextSecondary
             )
         }
 
@@ -566,15 +865,139 @@ private fun UnitToggle(
             modifier = Modifier
                 .clip(RoundedCornerShape(8.dp))
                 .background(if (isCelsius) RunWearColors.Primary else Color.Transparent)
-                .clickable { if (!isCelsius) onToggle() }
+                .clickable {
+                    if (!isCelsius) {
+                        haptic.performHapticFeedback(HapticSpec.SELECTION)
+                        onToggle()
+                    }
+                }
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "°C",
+                text = "Celsius",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = if (isCelsius) Color.White else RunWearColors.TextMuted
+                color = if (isCelsius) com.runwear.app.ui.theme.PhotoInk else RunWearColors.TextSecondary
+            )
+        }
+    }
+}
+
+/**
+ * RW-25 Appearance Selector — the sheet's picker-row idiom (same
+ * track + selected-fill treatment as [ComfortSelector]) with the
+ * three appearance options.
+ */
+@Composable
+private fun AppearanceSelector(
+    selected: AppearancePreference,
+    onSelect: (AppearancePreference) -> Unit
+) {
+    // §1.7 (WS-9 fix, P-2): preference selection tick, on change
+    // (iOS fires its selection feedback on the value changing).
+    val haptic = LocalHapticFeedback.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(RunWearColors.Hairline)
+            .padding(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        AppearancePreference.entries.forEach { pref ->
+            val isSelected = pref == selected
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (isSelected) RunWearColors.Primary else Color.Transparent)
+                    .clickable {
+                        if (!isSelected) {
+                            haptic.performHapticFeedback(HapticSpec.SELECTION)
+                        }
+                        onSelect(pref)
+                    }
+                    .padding(vertical = 10.dp, horizontal = 4.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = pref.label,
+                    fontSize = 13.sp,
+                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                    color = if (isSelected) com.runwear.app.ui.theme.PhotoInk else RunWearColors.TextPrimary,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
+/**
+ * GEN-5 (C-1): the body-temperature tint shift, matching iOS's
+ * shared ComfortLevelControl — blue for the cold stops, pine for
+ * neutral, orange for the warm stops. One policy for the Settings
+ * selector and the onboarding slider, so the two surfaces can
+ * never drift apart.
+ */
+internal fun comfortStopTint(pref: ComfortPreference): Color = when (pref) {
+    ComfortPreference.RUNS_VERY_COLD, ComfortPreference.RUNS_COLD -> RunWearColors.TempCold
+    ComfortPreference.NEUTRAL -> RunWearColors.Primary
+    ComfortPreference.RUNS_WARM, ComfortPreference.RUNS_VERY_WARM -> RunWearColors.TempWarm
+}
+
+/**
+ * GEN-6 WAVE C (DA-19): the body-temperature SLIDER — the same
+ * control form onboarding uses (OnboardingScreen's C-1 slider):
+ * a continuous Material slider snapping across the five comfort
+ * stops, a selection haptic each time the stop changes, and the
+ * thumb/track tint shifting blue → pine → orange via
+ * [comfortStopTint]. Settings and onboarding now share the form,
+ * the tint policy and the haptic, so the two surfaces cannot
+ * drift apart again.
+ */
+@Composable
+internal fun ComfortSliderControl(
+    selected: ComfortPreference,
+    onSelect: (ComfortPreference) -> Unit
+) {
+    val stops = ComfortPreference.entries
+    val haptic = LocalHapticFeedback.current
+    var lastStopIndex by remember {
+        mutableStateOf(stops.indexOf(selected))
+    }
+    Column {
+        Slider(
+            value = stops.indexOf(selected).toFloat(),
+            onValueChange = { value ->
+                val stopIndex = value.roundToInt().coerceIn(0, stops.size - 1)
+                if (stopIndex != lastStopIndex) {
+                    lastStopIndex = stopIndex
+                    haptic.performHapticFeedback(HapticSpec.SELECTION)
+                }
+                onSelect(stops[stopIndex])
+            },
+            valueRange = 0f..(stops.size - 1).toFloat(),
+            steps = stops.size - 2,
+            colors = SliderDefaults.colors(
+                thumbColor = comfortStopTint(selected),
+                activeTrackColor = comfortStopTint(selected)
+            )
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = "Runs Cold",
+                fontSize = 12.sp,
+                color = RunWearColors.TextSecondary
+            )
+            Text(
+                text = "Runs Warm",
+                fontSize = 12.sp,
+                color = RunWearColors.TextSecondary
             )
         }
     }
@@ -588,11 +1011,13 @@ private fun ComfortSelector(
     selected: ComfortPreference,
     onSelect: (ComfortPreference) -> Unit
 ) {
+    // §1.7 (WS-9 fix, P-2): preference selection tick, on change.
+    val haptic = LocalHapticFeedback.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .background(RunWearColors.BgCardLight)
+            .background(RunWearColors.Hairline)
             .padding(3.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp)
     ) {
@@ -602,8 +1027,15 @@ private fun ComfortSelector(
                 modifier = Modifier
                     .weight(1f)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(if (isSelected) RunWearColors.Primary else Color.Transparent)
-                    .clickable { onSelect(pref) }
+                    // C-1: the selected stop carries its tint
+                    // (blue → pine → orange across the stops).
+                    .background(if (isSelected) comfortStopTint(pref) else Color.Transparent)
+                    .clickable {
+                        if (!isSelected) {
+                            haptic.performHapticFeedback(HapticSpec.SELECTION)
+                        }
+                        onSelect(pref)
+                    }
                     .padding(vertical = 10.dp, horizontal = 4.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -611,7 +1043,7 @@ private fun ComfortSelector(
                     text = pref.shortLabel,
                     fontSize = 10.sp,
                     fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                    color = if (isSelected) Color.White else RunWearColors.TextPrimary,
+                    color = if (isSelected) com.runwear.app.ui.theme.PhotoInk else RunWearColors.TextPrimary,
                     textAlign = TextAlign.Center,
                     maxLines = 2,
                     lineHeight = 12.sp
@@ -622,61 +1054,134 @@ private fun ComfortSelector(
 }
 
 /**
- * PWA v2.9 Gender Toggle for Settings - Full width Male/Female toggleable
+ * RW-81 (Sol's ruling, Nov 6, 2026; supersedes RW-28 item 24 and
+ * the Nov 4 three-option ruling): the Settings fit options —
+ * exactly TWO, full-word labels, in the onboarding order. Neutral
+ * (UNISEX) is NOT a labelled option: it is the state where neither
+ * button is selected, reached by tapping the selected button
+ * again, and it is also the fresh-install state. A stored UNISEX
+ * therefore shows NOTHING selected here — the value IS expressed,
+ * as the unselected state itself (the gen-4 N-8 failure was a
+ * control with no neutral state at all, not this).
  */
+internal val FitPreferenceOptions: List<Pair<String, GenderPreference>> = listOf(
+    "Men's" to GenderPreference.MALE,
+    "Women's" to GenderPreference.FEMALE
+)
+
+/**
+ * RW-81: the tap rule shared by every fit-preference seat
+ * (onboarding's segmented control and Settings' toggle): tapping
+ * an unselected option selects it; tapping the currently selected
+ * option deselects it, returning the preference to neutral
+ * (UNISEX). The stored data model is unchanged — UNISEX remains
+ * the neutral value and the repository default.
+ */
+internal fun fitPreferenceAfterTap(
+    current: GenderPreference,
+    tapped: GenderPreference
+): GenderPreference =
+    if (current == tapped) GenderPreference.UNISEX else tapped
+
 @Composable
 private fun GenderToggleSettings(
     selected: GenderPreference,
     onSelect: (GenderPreference) -> Unit
 ) {
+    // §1.7 (WS-9 fix, P-2): preference selection tick, on change.
+    val haptic = LocalHapticFeedback.current
+    val options = FitPreferenceOptions
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .background(RunWearColors.BgCardLight)
+            .background(RunWearColors.Hairline)
             .padding(3.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        // Male
-        val isMale = selected == GenderPreference.MALE
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .clip(RoundedCornerShape(8.dp))
-                .background(if (isMale) RunWearColors.Primary else Color.Transparent)
-                .clickable {
-                    onSelect(if (isMale) GenderPreference.UNISEX else GenderPreference.MALE)
-                }
-                .padding(vertical = 12.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "Male",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = if (isMale) Color.White else RunWearColors.TextSecondary
-            )
+        options.forEach { (label, pref) ->
+            val isSelected = selected == pref
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (isSelected) RunWearColors.Primary else Color.Transparent)
+                    .clickable {
+                        // RW-81: every tap changes the value
+                        // (select, switch, or deselect-to-neutral),
+                        // so the selection tick fires on every tap.
+                        haptic.performHapticFeedback(HapticSpec.SELECTION)
+                        onSelect(fitPreferenceAfterTap(selected, pref))
+                    }
+                    .padding(vertical = 12.dp, horizontal = 2.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = label,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (isSelected) com.runwear.app.ui.theme.PhotoInk else RunWearColors.TextSecondary,
+                    maxLines = 1
+                )
+            }
         }
+    }
+}
 
-        // Female
-        val isFemale = selected == GenderPreference.FEMALE
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .clip(RoundedCornerShape(8.dp))
-                .background(if (isFemale) RunWearColors.Primary else Color.Transparent)
-                .clickable {
-                    onSelect(if (isFemale) GenderPreference.UNISEX else GenderPreference.FEMALE)
+/**
+ * GEN-3 Y-15: the location picker's search-result rows, extracted
+ * from [LocationPickerSheet] unchanged (same LazyColumn, same row
+ * layout, same Surface onClick) so the tap-registration parity
+ * check (LocationPickerTapRegistrationTest) can drive the REAL
+ * row composable with real touch events — a ModalBottomSheet
+ * cannot be driven to Expanded under Robolectric. The sheet wraps
+ * each selection with its haptic + focus handling; this list owns
+ * only the rows and their clicks.
+ */
+@Composable
+internal fun LocationSearchResultRows(
+    results: List<LocationResult>,
+    onSelectResult: (LocationResult) -> Unit
+) {
+    LazyColumn(
+        modifier = Modifier.heightIn(max = 200.dp)
+    ) {
+        items(results) { result ->
+            Surface(
+                onClick = { onSelectResult(result) },
+                modifier = Modifier.fillMaxWidth(),
+                color = Color.Transparent
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = result.name,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 15.sp,
+                            color = RunWearColors.TextPrimary
+                        )
+                        if (result.detail.isNotEmpty()) {
+                            Text(
+                                text = result.detail,
+                                fontSize = 13.sp,
+                                color = RunWearColors.TextSecondary
+                            )
+                        }
+                    }
+                    Icon(
+                        Icons.Outlined.ChevronRight,
+                        contentDescription = null,
+                        tint = RunWearColors.TextSecondary
+                    )
                 }
-                .padding(vertical = 12.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "Female",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = if (isFemale) Color.White else RunWearColors.TextSecondary
-            )
+            }
+            HorizontalDivider(color = RunWearColors.Hairline)
         }
     }
 }
@@ -685,7 +1190,7 @@ private fun GenderToggleSettings(
 // LOCATION PICKER SHEET - PWA v2.9 Style with GPS + Manual options
 // ============================================================================
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun LocationPickerSheet(
     currentLocation: String,
@@ -695,11 +1200,34 @@ fun LocationPickerSheet(
     searchResults: List<LocationResult> = emptyList(),
     isSearching: Boolean = false,
     isUsingGPS: Boolean = false,
-    onUseCurrentLocation: () -> Unit = {}
+    /**
+     * GEN-3 X-13: the ACTUAL location-permission grant state,
+     * read by the caller from the permission system (never derived
+     * from [isUsingGPS] / the current place's source). The
+     * "Current location" row resolves its subtitle from this —
+     * see [LocationSheetState].
+     */
+    hasLocationPermission: Boolean = false,
+    onUseCurrentLocation: () -> Unit = {},
+    /**
+     * RW-141: the explicit Current location request's lifecycle,
+     * owned by the ViewModel — the row shows its progress and its
+     * failure, and the request itself survives this sheet.
+     */
+    currentLocationRequest: CurrentLocationRequestState = CurrentLocationRequestState.Idle,
+    /** RW-26 Section E: actually-selected places, most-recent-first. */
+    recents: List<RecentLocation> = emptyList(),
+    onRemoveRecent: (RecentLocation) -> Unit = {},
+    onUndoRemoveRecent: () -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var query by remember { mutableStateOf("") }
     val focusManager = LocalFocusManager.current
+    val haptic = LocalHapticFeedback.current
+    // RW-26: long-press raises the M3 contextual bar over a recent.
+    var contextRecent by remember { mutableStateOf<RecentLocation?>(null) }
+    val recentSnackbar = remember { SnackbarHostState() }
+    val recentScope = rememberCoroutineScope()
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -714,11 +1242,59 @@ fun LocationPickerSheet(
                 .imePadding()
                 .padding(horizontal = 24.dp)
         ) {
+            if (contextRecent != null) {
+                // M3 contextual bar (Android removal treatment, frame 24).
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(RunWearColors.BgCard, RoundedCornerShape(12.dp))
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = contextRecent!!.name,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = RunWearColors.TextPrimary,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = {
+                        val removed = contextRecent!!
+                        contextRecent = null
+                        // §1.7 (WS-9 fix, P-2): recents removal
+                        // fires the light tick.
+                        haptic.performHapticFeedback(HapticSpec.LIGHT_TICK)
+                        onRemoveRecent(removed)
+                        recentScope.launch {
+                            val result = recentSnackbar.showSnackbar(
+                                message = "Removed ${removed.name}",
+                                actionLabel = "Undo"
+                            )
+                            if (result == SnackbarResult.ActionPerformed) {
+                                onUndoRemoveRecent()
+                            }
+                        }
+                    }) {
+                        Icon(
+                            Icons.Outlined.Delete,
+                            contentDescription = "Remove ${contextRecent!!.name}",
+                            tint = RunWearColors.TextPrimary
+                        )
+                    }
+                    IconButton(onClick = { contextRecent = null }) {
+                        Icon(
+                            Icons.Outlined.Close,
+                            contentDescription = "Cancel",
+                            tint = RunWearColors.TextSecondary
+                        )
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+            }
+
             Text(
                 text = "SET LOCATION",
-                fontFamily = BebasNeueFontFamily,
-                fontSize = 24.sp,
-                letterSpacing = 0.48.sp,
+                style = MaterialTheme.typography.titleLarge,
                 color = RunWearColors.TextPrimary,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
@@ -730,7 +1306,12 @@ fun LocationPickerSheet(
                     query = it
                     if (it.length >= 2) onSearch(it)
                 },
-                placeholder = { Text("Enter city or ZIP code...") },
+                // GEN-5 (RW-28 item 31, A-25/A-27): the settled
+                // placeholder wording — "Search a place" — and an
+                // unfocused border that actually reads on the cream
+                // sheet (the gen-4 BgCardLight border was nearly
+                // invisible, so the field looked borderless).
+                placeholder = { Text("Search a place") },
                 leadingIcon = {
                     Icon(Icons.Outlined.Search, contentDescription = null)
                 },
@@ -738,7 +1319,7 @@ fun LocationPickerSheet(
                     if (isSearching) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(20.dp),
-                            color = RunWearColors.Primary,
+                            color = RunWearColors.PineAccent,
                             strokeWidth = 2.dp
                         )
                     }
@@ -747,8 +1328,8 @@ fun LocationPickerSheet(
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = RunWearColors.Primary,
-                    unfocusedBorderColor = RunWearColors.BgCardLight
+                    focusedBorderColor = RunWearColors.PineAccent,
+                    unfocusedBorderColor = RunWearColors.TextSecondary.copy(alpha = 0.45f)
                 ),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(
@@ -756,61 +1337,21 @@ fun LocationPickerSheet(
                 )
             )
 
-            // Results IMMEDIATELY below search (visible above keyboard)
-            if (searchResults.isNotEmpty()) {
-                Spacer(Modifier.height(12.dp))
-                LazyColumn(
-                    modifier = Modifier.heightIn(max = 200.dp)
-                ) {
-                    items(searchResults) { result ->
-                        Surface(
-                            onClick = {
-                                focusManager.clearFocus()
-                                onSelectLocation(result.latitude, result.longitude, result.displayName)
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            color = Color.Transparent
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 10.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = result.name,
-                                        fontWeight = FontWeight.Medium,
-                                        fontSize = 15.sp,
-                                        color = RunWearColors.TextPrimary
-                                    )
-                                    if (result.detail.isNotEmpty()) {
-                                        Text(
-                                            text = result.detail,
-                                            fontSize = 13.sp,
-                                            color = RunWearColors.TextSecondary
-                                        )
-                                    }
-                                }
-                                Icon(
-                                    Icons.Outlined.ChevronRight,
-                                    contentDescription = null,
-                                    tint = RunWearColors.TextMuted
-                                )
-                            }
-                        }
-                        HorizontalDivider(color = RunWearColors.BgCardLight)
-                    }
-                }
-            } else if (query.length >= 2 && !isSearching) {
+            // GEN-5 (item 31, A-27): the settled hint under the
+            // field, in the quiet voice — shown until typing starts.
+            if (query.isEmpty()) {
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = "No locations found",
-                    fontSize = 14.sp,
-                    color = RunWearColors.TextMuted
+                    text = "Start typing a city or ZIP — results appear as you type.",
+                    fontSize = 13.sp,
+                    color = RunWearColors.TextSecondary
                 )
             }
+
+            // GEN-6 WAVE C (RW-55): search results render BELOW
+            // the Current location row and RECENT LOCATIONS (the
+            // settled frame-25 order) — see the results block after
+            // the recents section below.
 
             // Divider
             Row(
@@ -819,26 +1360,47 @@ fun LocationPickerSheet(
                     .padding(vertical = 16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                HorizontalDivider(modifier = Modifier.weight(1f), color = RunWearColors.BgCardLight)
+                HorizontalDivider(modifier = Modifier.weight(1f), color = RunWearColors.Hairline)
                 Text(
                     text = "or",
                     fontSize = 13.sp,
-                    color = RunWearColors.TextMuted,
+                    color = RunWearColors.TextSecondary,
                     modifier = Modifier.padding(horizontal = 12.dp)
                 )
-                HorizontalDivider(modifier = Modifier.weight(1f), color = RunWearColors.BgCardLight)
+                HorizontalDivider(modifier = Modifier.weight(1f), color = RunWearColors.Hairline)
             }
 
             // Use Current Location Option (GPS)
+            // GEN-3 X-13: the row's state comes from the ACTUAL
+            // permission + whether the current place is the GPS
+            // place — resolved in one seam (LocationSheetState) so
+            // every sheet mode reads the same truth. Pre-fix the
+            // subtitle was keyed on isUsingGPS alone, so selecting
+            // a manual place flipped it to "Requires location
+            // permission" with permission granted and in use.
+            val currentRowStatus = LocationSheetState.currentLocationRowStatus(
+                isUsingGPS = isUsingGPS,
+                hasLocationPermission = hasLocationPermission
+            )
+            val isCurrentGpsPlace =
+                currentRowStatus == LocationSheetState.CurrentLocationRowStatus.USING_GPS
             Surface(
                 onClick = {
-                    focusManager.clearFocus()
-                    onUseCurrentLocation()
+                    // RW-141: a request already in flight is not
+                    // re-fired by repeat taps; its outcome lands
+                    // in this row (or applies the place) on its own.
+                    if (currentLocationRequest != CurrentLocationRequestState.Locating) {
+                        // §1.7 / §1.3 (WS-9 fix, P-2): choosing the
+                        // current location is a place selection too.
+                        haptic.performHapticFeedback(HapticSpec.SELECTION)
+                        focusManager.clearFocus()
+                        onUseCurrentLocation()
+                    }
                 },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
-                color = if (isUsingGPS) Color(0x3300796B) else RunWearColors.BgCardLight,
-                border = if (isUsingGPS) BorderStroke(2.dp, RunWearColors.Primary) else null
+                color = if (isCurrentGpsPlace) RunWearColors.CategoryTop.copy(alpha = 0.2f) else RunWearColors.BgCardLight,
+                border = if (isCurrentGpsPlace) BorderStroke(2.dp, RunWearColors.Primary) else null
             ) {
                 Row(
                     modifier = Modifier
@@ -855,57 +1417,234 @@ fun LocationPickerSheet(
                         Icon(
                             imageVector = Icons.Outlined.MyLocation,
                             contentDescription = null,
-                            tint = Color.White,
+                            tint = com.runwear.app.ui.theme.PhotoInk,
                             modifier = Modifier.size(22.dp)
                         )
                     }
                     Spacer(Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Current location",
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 15.sp,
+                                color = RunWearColors.TextPrimary
+                            )
+                            if (isCurrentGpsPlace) {
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = "CURRENT",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = RunWearColors.PineAccent
+                                )
+                            }
+                        }
+                        // RW-141: while a request is locating, or
+                        // when it failed, the subtitle is the
+                        // request's own account (the failure in the
+                        // theme's error colour) — never the quiet
+                        // permission line over a silent no-op.
+                        val requestSubtitle =
+                            LocationSheetState.currentLocationRequestSubtitle(
+                                currentLocationRequest
+                            )
                         Text(
-                            text = "Use Current Location",
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 15.sp,
-                            color = RunWearColors.TextPrimary
-                        )
-                        Text(
-                            text = if (isUsingGPS) "GPS location enabled" else "Requires location permission",
+                            text = requestSubtitle
+                                ?: LocationSheetState.currentLocationRowSubtitle(currentRowStatus),
                             fontSize = 12.sp,
-                            color = RunWearColors.TextSecondary
+                            color = if (currentLocationRequest is
+                                CurrentLocationRequestState.Failed
+                            ) {
+                                MaterialTheme.colorScheme.error
+                            } else {
+                                RunWearColors.TextSecondary
+                            }
                         )
                     }
-                    if (isUsingGPS) {
+                    if (currentLocationRequest == CurrentLocationRequestState.Locating) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = RunWearColors.PineAccent,
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(Modifier.width(4.dp))
+                    }
+                    if (isCurrentGpsPlace) {
                         Box(
                             modifier = Modifier
-                                .background(Color(0x3300796B), RoundedCornerShape(4.dp))
+                                .background(RunWearColors.CategoryTop.copy(alpha = 0.2f), RoundedCornerShape(4.dp))
                                 .padding(horizontal = 8.dp, vertical = 2.dp)
                         ) {
-                            Text("✓", fontSize = 12.sp, color = RunWearColors.Primary)
+                            // WS-10 (A4 residue): the selection
+                            // check is designed iconography — a
+                            // vector, not a text glyph.
+                            Icon(
+                                imageVector = Icons.Outlined.Check,
+                                contentDescription = null,
+                                tint = RunWearColors.PineAccent,
+                                modifier = Modifier.size(12.dp)
+                            )
                         }
                     }
                 }
             }
 
+            // RW-26 Section E: RECENT LOCATIONS — section ABSENT on
+            // first run, with a quiet hint card where it will live.
+            Spacer(Modifier.height(16.dp))
+            if (recents.isEmpty()) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    color = RunWearColors.BgCard
+                ) {
+                    Text(
+                        // RW-55: the settled first-run hint
+                        // (frame 25), including the no-save
+                        // assurance.
+                        text = "Your recent places will wait here — Pick a place once and it joins a short list — home, the office, trip cities — so jumping back takes one tap. Nothing is saved until you choose a place.",
+                        fontSize = 13.sp,
+                        color = RunWearColors.TextSecondary,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
+            } else {
+                Text(
+                    text = "RECENT LOCATIONS",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = RunWearColors.TextSecondary,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+                recents.forEach { recent ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .combinedClickable(
+                                onClick = {
+                                    // §1.7 / §1.3 (WS-9 fix, P-2):
+                                    // place selected — selection tick.
+                                    haptic.performHapticFeedback(HapticSpec.SELECTION)
+                                    focusManager.clearFocus()
+                                    onSelectLocation(recent.latitude, recent.longitude, recent.name)
+                                },
+                                // §1.7 (WS-9 fix, P-2): the ONE
+                                // specified long-press haptic — the
+                                // recents contextual bar.
+                                onLongClick = {
+                                    haptic.performHapticFeedback(HapticSpec.LONG_PRESS)
+                                    contextRecent = recent
+                                }
+                            )
+                            .padding(vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Outlined.History,
+                            contentDescription = null,
+                            tint = RunWearColors.TextSecondary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            text = recent.name,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = RunWearColors.TextPrimary,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (LocationSheetState.recentIsCurrent(
+                                recentName = recent.name,
+                                currentLocationName = currentLocation,
+                                isUsingGPS = isUsingGPS
+                            )
+                        ) {
+                            Text(
+                                text = "CURRENT",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = RunWearColors.PineAccent
+                            )
+                        }
+                    }
+                    HorizontalDivider(color = RunWearColors.Hairline)
+                }
+            }
+
+            // GEN-6 WAVE C (RW-55 + DA-24): the search-results
+            // block — BELOW Current location and RECENT LOCATIONS.
+            // While a search is in flight the surface says so,
+            // tied to the query (DA-24: the gen-5 sheet sat with
+            // only a spinner for ~5 s on "mia").
+            if (query.length >= 2) {
+                Spacer(Modifier.height(16.dp))
+                when {
+                    isSearching -> Text(
+                        text = "Searching for \u201C$query\u201D\u2026",
+                        fontSize = 14.sp,
+                        color = RunWearColors.TextSecondary
+                    )
+                    searchResults.isNotEmpty() -> LocationSearchResultRows(
+                        results = searchResults,
+                        onSelectResult = { result ->
+                            haptic.performHapticFeedback(HapticSpec.SELECTION)
+                            focusManager.clearFocus()
+                            onSelectLocation(result.latitude, result.longitude, result.displayName)
+                        }
+                    )
+                    else -> Text(
+                        text = "No locations found",
+                        fontSize = 14.sp,
+                        color = RunWearColors.TextSecondary
+                    )
+                }
+            }
+
+            // GEN-5 (cream map): styled snackbar, as on home.
+            SnackbarHost(hostState = recentSnackbar) { data ->
+                androidx.compose.material3.Snackbar(
+                    snackbarData = data,
+                    containerColor = RunWearColors.BgCard,
+                    contentColor = RunWearColors.TextPrimary,
+                    actionColor = RunWearColors.PineAccent
+                )
+            }
+
             // Currently using indicator
-            if (currentLocation.isNotEmpty() && !isUsingGPS) {
+            // GEN-3 X-13: label and place name are ONE line of one
+            // Text, and the pill renders only when the name seam
+            // yields a name — a visible pill always carries its
+            // place name. Pre-fix the name was a second line in
+            // this non-scrollable column; with the IME open it fell
+            // below the sheet's clip and the pill showed its label
+            // with no name (f_105 vs the fully-named f_104).
+            val currentlyUsingName = LocationSheetState.currentlyUsingName(currentLocation)
+            if (currentlyUsingName != null && !isUsingGPS) {
                 Spacer(Modifier.height(12.dp))
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     color = RunWearColors.Primary.copy(alpha = 0.1f)
                 ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text("Currently using:", fontSize = 12.sp, color = RunWearColors.TextSecondary)
-                        Text(
-                            text = currentLocation,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = RunWearColors.Primary,
-                            textAlign = TextAlign.Center
-                        )
-                    }
+                    Text(
+                        text = buildAnnotatedString {
+                            withStyle(
+                                SpanStyle(
+                                    fontSize = 12.sp,
+                                    color = RunWearColors.TextSecondary
+                                )
+                            ) { append("Currently using: ") }
+                            withStyle(
+                                SpanStyle(
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = RunWearColors.PineAccent
+                                )
+                            ) { append(currentlyUsingName) }
+                        },
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().padding(12.dp)
+                    )
                 }
             }
 
@@ -958,7 +1697,7 @@ fun ShopAllSheet(
     weatherCode: Int,
     onDismiss: () -> Unit
 ) {
-    val sheetState = rememberModalBottomSheetState()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val context = LocalContext.current
 
     ModalBottomSheet(
@@ -982,9 +1721,7 @@ fun ShopAllSheet(
             ) {
                 Text(
                     text = "SHOP YOUR OUTFIT",
-                    fontFamily = BebasNeueFontFamily,
-                    fontSize = 24.sp,
-                    letterSpacing = 0.48.sp,
+                    style = MaterialTheme.typography.titleLarge,
                     color = RunWearColors.TextPrimary
                 )
 
@@ -1001,7 +1738,7 @@ fun ShopAllSheet(
                         text = "Shop All →",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color.White,
+                        color = com.runwear.app.ui.theme.PhotoInk,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                     )
                 }
@@ -1025,7 +1762,7 @@ fun ShopAllSheet(
                     .fillMaxWidth()
                     .padding(top = 16.dp)
                     .background(
-                        Color.White.copy(alpha = 0.05f),
+                        RunWearColors.BgCard,
                         RoundedCornerShape(12.dp)
                     )
                     .padding(14.dp)
@@ -1035,10 +1772,10 @@ fun ShopAllSheet(
                         withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
                             append("Affiliate Disclosure: ")
                         }
-                        append("As an Amazon Associate, RunWear earns from qualifying purchases. When you click these links, we may earn a small commission at no extra cost to you.")
+                        append("As an Amazon Associate, RunWear earns from qualifying purchases. When you click these links, we may earn a small commission at no extra cost to you. It never changes the outfit RunWear recommends.")
                     },
                     fontSize = 11.sp,
-                    color = RunWearColors.TextMuted,
+                    color = RunWearColors.TextSecondary,
                     lineHeight = 16.sp
                 )
             }
@@ -1147,19 +1884,18 @@ private fun ShopItemRow(
                     fontSize = 14.sp,
                     color = RunWearColors.TextPrimary
                 )
+                // GEN-6 WAVE C (RW-64): the settled per-row door
+                // is "Shop ›" (frame 44) — the whole row is the
+                // door; "Shop on Amazon" + chevron is retired.
                 Text(
-                    text = "Shop on Amazon",
+                    text = "Shop ›",
                     fontSize = 12.sp,
-                    color = RunWearColors.TextSecondary
+                    fontWeight = FontWeight.SemiBold,
+                    color = RunWearColors.PineAccent
                 )
             }
 
-            Icon(
-                Icons.Outlined.ChevronRight,
-                contentDescription = null,
-                tint = RunWearColors.TextMuted,
-                modifier = Modifier.size(18.dp)
-            )
+            // RW-64: no trailing chevron — "Shop ›" is the door.
         }
     }
 }
@@ -1195,9 +1931,18 @@ private fun getCategoryDisplayName(category: ClothingCategory): String {
 fun WeatherDetailSheet(
     type: String,
     weather: WeatherConditions,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    /** WS-2: the render-time unit projection for every figure in the sheet. */
+    temperatureUnit: TemperatureUnit = TemperatureUnit.FAHRENHEIT,
+    /** RW-63: the context line's place + moment ("Kansas City · Now"). */
+    locationName: String = "",
+    momentLabel: String = "Now",
+    /** RW-63: the Running tip — the home outfit's own tip, unchanged. */
+    runningTip: String? = null,
+    comfortPreference: com.runwear.shared.domain.model.ComfortPreference =
+        com.runwear.shared.domain.model.ComfortPreference.NEUTRAL
 ) {
-    val sheetState = rememberModalBottomSheetState()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -1210,208 +1955,104 @@ fun WeatherDetailSheet(
                 .fillMaxWidth()
                 .padding(24.dp)
         ) {
-            when (type) {
-                "condition" -> WeatherConditionDetail(weather)
-                "wind" -> WindDetail(weather)
-                "humidity" -> HumidityDetail(weather)
-                "precipitation" -> PrecipitationDetail(weather)
-                "uv" -> UVDetail(weather)
-            }
+            // GEN-6 WAVE C (RW-63): THE settled weather sheet —
+            // ONE unified sheet (frames 40/41, design-spec §3.3)
+            // replacing the five per-metric sheets. Every entry
+            // point that opened a per-metric sheet opens this one;
+            // [type] is retained only for call-site compatibility.
+            UnifiedWeatherDetail(
+                weather = weather,
+                unit = temperatureUnit,
+                locationName = locationName,
+                momentLabel = momentLabel,
+                runningTip = runningTip,
+                comfortPreference = comfortPreference
+            )
 
             Spacer(Modifier.height(32.dp))
         }
     }
 }
 
-@Composable
-private fun WeatherConditionDetail(weather: WeatherConditions) {
-    Column {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(text = weather.weatherCode.icon, fontSize = 40.sp)
-            Spacer(Modifier.width(12.dp))
-            Text(
-                text = weather.weatherCode.description,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = RunWearColors.TextPrimary
-            )
-        }
-        Spacer(Modifier.height(16.dp))
-        DetailRow("Cloud Cover", "${weather.cloudCover}%")
-        DetailRow("Temperature", "${weather.temperature.toInt()}°")
-        DetailRow("Feels Like", "${weather.feelsLike.toInt()}°")
-    }
-}
-
-@Composable
-private fun WindDetail(weather: WeatherConditions) {
-    val unit = if (weather.isCelsius) "km/h" else "mph"
-    Column {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                Icons.Outlined.Air,
-                contentDescription = null,
-                modifier = Modifier.size(40.dp),
-                tint = RunWearColors.Primary
-            )
-            Spacer(Modifier.width(12.dp))
-            Text(
-                text = "Wind",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = RunWearColors.TextPrimary
-            )
-        }
-        Spacer(Modifier.height(16.dp))
-        DetailRow("Speed", "${weather.windSpeed.toInt()} $unit")
-        DetailRow("Gusts", "${weather.windGusts.toInt()} $unit")
-        DetailRow("Direction", "${windDirectionLabel(weather.windDirection)} (${weather.windDirection}°)")
-        Spacer(Modifier.height(12.dp))
-        Text(
-            text = "A headwind cools you faster — layer up on the outbound leg. A tailwind means you'll warm up quicker on the return.",
-            fontSize = 14.sp,
-            color = RunWearColors.TextSecondary,
-            lineHeight = 20.sp
-        )
-    }
-}
-
 /**
- * Convert wind direction degrees to 16-point compass label.
+ * RW-63: the unified weather sheet's content — context line, the
+ * six metrics plus precipitation, and the Running tip. All figures
+ * are the home state's numbers, in the home frame (feels-like is
+ * the comfort-adjusted headline figure home shows).
  */
-private fun windDirectionLabel(degrees: Int): String {
-    val directions = listOf(
-        "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
-        "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"
-    )
-    val index = (((degrees % 360) + 11.25) / 22.5).toInt() % 16
-    return directions[index]
-}
+object WeatherSheetCopy {
+    fun contextLine(locationName: String, momentLabel: String): String =
+        if (locationName.isBlank()) momentLabel else "$locationName · $momentLabel"
 
-@Composable
-private fun HumidityDetail(weather: WeatherConditions) {
-    val comfortLevel = when {
-        weather.humidity > 70 -> "Muggy"
-        weather.humidity < 30 -> "Dry"
-        else -> "Comfortable"
-    }
-    Column {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                Icons.Outlined.Thermostat,
-                contentDescription = null,
-                modifier = Modifier.size(40.dp),
-                tint = RunWearColors.Primary
-            )
-            Spacer(Modifier.width(12.dp))
-            Text(
-                text = "Humidity",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = RunWearColors.TextPrimary
-            )
-        }
-        Spacer(Modifier.height(16.dp))
-        DetailRow("Relative Humidity", "${weather.humidity}%")
-        DetailRow("Comfort Level", comfortLevel)
-        Spacer(Modifier.height(12.dp))
-        Text(
-            text = "High humidity makes sweat evaporate slower. Choose breathable, moisture-wicking fabrics.",
-            fontSize = 14.sp,
-            color = RunWearColors.TextSecondary,
-            lineHeight = 20.sp
-        )
+    /** The Running tip when the outfit carries none of its own. */
+    fun fallbackTip(weather: WeatherConditions): String = when {
+        weather.weatherCode.code in 2..3 && weather.feelsLike < 55 ->
+            "Overcast and cool — a light layer you can shed beats one you can't."
+        weather.precipitationProbability > 40 ->
+            "Rain is likely — a light shell you can shed beats one you can't."
+        weather.feelsLike >= 75 ->
+            "Warm out — start lighter than feels right; you'll heat up fast."
+        weather.feelsLike < 35 ->
+            "Cold out — cover ears and hands first; they chill fastest."
+        else ->
+            "A light layer you can shed beats one you can't."
     }
 }
 
 @Composable
-private fun PrecipitationDetail(weather: WeatherConditions) {
+fun UnifiedWeatherDetail(
+    weather: WeatherConditions,
+    unit: TemperatureUnit,
+    locationName: String,
+    momentLabel: String,
+    runningTip: String?,
+    comfortPreference: com.runwear.shared.domain.model.ComfortPreference
+) {
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
-                Icons.Outlined.WaterDrop,
+                imageVector = weather.weatherCode.conditionIcon(),
                 contentDescription = null,
                 modifier = Modifier.size(40.dp),
-                tint = RunWearColors.Primary
+                tint = RunWearColors.PineAccent
             )
             Spacer(Modifier.width(12.dp))
-            Text(
-                text = "Precipitation",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = RunWearColors.TextPrimary
-            )
+            Column {
+                Text(
+                    text = weather.weatherCode.description,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = RunWearColors.TextPrimary
+                )
+                Text(
+                    text = WeatherSheetCopy.contextLine(locationName, momentLabel),
+                    fontSize = 13.sp,
+                    color = RunWearColors.TextSecondary
+                )
+            }
         }
         Spacer(Modifier.height(16.dp))
-        DetailRow("Chance of Rain", "${weather.precipitationProbability}%")
-        // Match web: show "None" when 0, use in/mm by unit (Open-Meteo returns mm)
-        val amountText = when {
-            weather.precipitation <= 0 -> "None"
-            weather.isCelsius -> "${weather.precipitation} mm"
-            else -> "${String.format("%.2f", weather.precipitation / 25.4)} in"
-        }
-        DetailRow("Expected Amount", amountText)
-        Spacer(Modifier.height(12.dp))
-        Text(
-            text = when {
-                weather.precipitationProbability > 70 ->
-                    "High chance of rain — a water-resistant jacket is worth it. Trails will be slick; road running is the safer call."
-                weather.precipitationProbability > 40 ->
-                    "Decent chance of rain. A light rain shell packs small and saves the run if skies open up."
-                else ->
-                    "Low chance of rain, but conditions can shift. A packable shell is cheap insurance."
-            },
-            fontSize = 14.sp,
-            color = RunWearColors.TextSecondary,
-            lineHeight = 20.sp
-        )
-    }
-}
-
-@Composable
-private fun UVDetail(weather: WeatherConditions) {
-    val riskLevel = when {
-        weather.uvIndex >= 11 -> "Extreme"
-        weather.uvIndex >= 8 -> "Very High"
-        weather.uvIndex >= 6 -> "High"
-        weather.uvIndex >= 3 -> "Moderate"
-        else -> "Low"
-    }
-    val protection = when {
-        weather.uvIndex >= 6 -> "Sunscreen, sunglasses, hat"
-        weather.uvIndex >= 3 -> "Sunglasses recommended"
-        else -> "No protection needed"
-    }
-    Column {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                Icons.Outlined.WbSunny,
-                contentDescription = null,
-                modifier = Modifier.size(40.dp),
-                tint = RunWearColors.Primary
-            )
-            Spacer(Modifier.width(12.dp))
-            Text(
-                text = "UV Index",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = RunWearColors.TextPrimary
-            )
-        }
-        Spacer(Modifier.height(16.dp))
+        val adjustedFeelsLike = weather.feelsLike + comfortPreference.tempAdjustment
+        DetailRow("Feels like", unit.formatTemperature(adjustedFeelsLike))
+        DetailRow("Actual", unit.formatTemperature(weather.temperature))
+        DetailRow("Condition", weather.weatherCode.description)
+        DetailRow("Wind", unit.formatWind(weather.windSpeed))
+        DetailRow("Humidity", "${weather.humidity}%")
         DetailRow("UV Index", "${weather.uvIndex.toInt()}")
-        DetailRow("Risk Level", riskLevel)
-        DetailRow("Protection", protection)
-        DetailRow("Peak Hours", "10am – 4pm")
-        Spacer(Modifier.height(12.dp))
+        DetailRow("Precipitation", "${weather.precipitationProbability}% chance")
+        Spacer(Modifier.height(16.dp))
         Text(
-            text = if (weather.uvIndex >= 6)
-                "High UV! Wear sunscreen, sunglasses, and a hat. Avoid peak hours (10am-4pm) or run early."
-            else
-                "Moderate UV exposure. Sunglasses recommended for comfort.",
+            text = "Running tip",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = RunWearColors.PineAccent
+        )
+        Text(
+            text = runningTip ?: WeatherSheetCopy.fallbackTip(weather),
             fontSize = 14.sp,
             color = RunWearColors.TextSecondary,
-            lineHeight = 20.sp
+            lineHeight = 20.sp,
+            modifier = Modifier.padding(top = 4.dp)
         )
     }
 }
@@ -1455,7 +2096,7 @@ private fun ModalDragHandle() {
                 .width(40.dp)
                 .height(4.dp)
                 .background(
-                    Color.White.copy(alpha = 0.3f),
+                    RunWearColors.TextSecondary.copy(alpha = 0.4f),
                     RoundedCornerShape(2.dp)
                 )
         )

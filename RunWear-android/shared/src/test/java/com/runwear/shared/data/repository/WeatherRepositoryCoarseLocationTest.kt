@@ -36,7 +36,8 @@ class WeatherRepositoryCoarseLocationTest {
             temperatureUnit: String,
             windSpeedUnit: String,
             timezone: String,
-            forecastDays: Int
+            forecastDays: Int,
+            daily: String
         ): OpenMeteoResponse {
             weatherLat = latitude
             weatherLon = longitude

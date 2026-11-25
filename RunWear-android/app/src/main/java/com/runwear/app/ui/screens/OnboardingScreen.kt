@@ -1,5 +1,13 @@
 package com.runwear.app.ui.screens
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -13,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -22,10 +31,18 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Cloud
+import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import kotlin.math.roundToInt
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -37,6 +54,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -44,35 +62,37 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.runwear.app.ui.theme.BebasNeueFontFamily
+import com.runwear.app.ui.components.HapticSpec
 import com.runwear.app.ui.theme.RunWearColors
 import com.runwear.shared.domain.model.ComfortPreference
 import com.runwear.shared.domain.model.GenderPreference
 import com.runwear.shared.domain.model.TemperatureUnit
 
 /**
- * Onboarding / welcome flow - two steps matching web PWA:
- * 1. Preferences (temperature unit, fit preference, body temperature comfort)
- * 2. Location (use current location or set manually)
+ * Onboarding — the design's sequence (frames 28–31, notes §§8G/9),
+ * rebuilt by WS-10 (A1, T-2/R-2, A2):
  *
- * Presentation (1.2.0 redesign): the main screen's design language
- * (HeroMainScreen) brought to first run —
- * - full-bleed dark backdrop: a deep teal-tinted vertical gradient with a
- *   soft radial brand glow behind the header, echoing the hero's scrims
- *   (first run cannot depend on the network hero pool, so the backdrop is
- *   the hero's own no-image treatment rather than a photo);
- * - each question lives in a frosted-glass card (white 7% fill, white 12%
- *   hairline border, 24dp radius) like the hero's glass pills, with the
- *   SettingsSheet label hierarchy inside (title, muted sublabel, control);
- * - segmented controls are glass tracks (white 8% fill) whose selected
- *   segment is the solid Primary teal, as on the main screen;
- * - wordmark and titles stay Bebas Neue, sized up toward the hero's scale;
- * - actions stay pinned at the bottom over a fade-to-background scrim:
- *   56dp primary, glass secondary.
+ *   PROMISE (frame 28) → PREFERENCES (frame 29) → LOCATION
+ *   (frames 30/31) → [host: first recommendation] → fork (32) →
+ *   consent (33) → capture → first look (34).
  *
- * Behavior is unchanged from the previous design: same questions, same
- * options, same defaults, same toggle semantics, same persisted values,
- * and all copy matches the web PWA verbatim.
+ * The steps are the pure [OnboardingSequence] model's in-screen
+ * steps; copy is [OnboardingCopy] verbatim. A1: the free-looks
+ * promise appears ONLY on the promise step — it is not in the
+ * header, not on the setup form. A2: the promise step's headline
+ * is Sol's pick, "Run, weather or not.", character for character.
+ *
+ * Motion (Part 1 §1.4): steps advance with the M3 shared-axis
+ * horizontal slide + fade (300 ms, emphasized easing), Back the
+ * exact reverse; preference selections fire the selection haptic
+ * once per tap (§1.7). The system permission prompt itself is the
+ * OS's own, unskinned.
+ *
+ * Presentation (WS-8, RC-8 — D-24): every surface is built from the
+ * design token table in BOTH appearances — theme Background ground,
+ * question cards on the Surface token, segmented controls whose
+ * selected segment is the solid Primary pine; no hardcoded
+ * white-at-alpha text anywhere in this file.
  */
 @Composable
 fun OnboardingScreen(
@@ -84,348 +104,639 @@ fun OnboardingScreen(
     var temperatureUnit by remember { mutableStateOf(TemperatureUnit.FAHRENHEIT) }
     var genderPreference by remember { mutableStateOf(GenderPreference.UNISEX) } // Neither selected
     var comfortPreference by remember { mutableStateOf(ComfortPreference.NEUTRAL) }
-    // Two-step flow matching web PWA: preferences first, then location
-    var showLocationStep by remember { mutableStateOf(false) }
+    // The current step — the sequence's in-screen steps only; the
+    // fork/consent/capture/first-look steps are hosted downstream.
+    var step by remember { mutableStateOf(OnboardingStep.PROMISE) }
 
-    Box(modifier = modifier.fillMaxSize()) {
-        // Full-bleed backdrop: deep teal dusk at the top fading into the
-        // app background, with a soft brand glow behind the header — the
-        // hero screen's scrim treatment, no photo required.
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFF0B2E29),
-                            RunWearColors.Background,
-                            RunWearColors.Background
-                        ),
-                        startY = 0f,
-                        endY = 1400f
-                    )
-                )
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(420.dp)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            RunWearColors.Primary.copy(alpha = 0.30f),
-                            Color.Transparent
-                        )
-                    )
-                )
-        )
+    // System Back steps back through the sequence (§1.4: Back is
+    // the exact reverse) — at the promise step it is the root and
+    // Back keeps its system meaning.
+    BackHandler(enabled = step != OnboardingStep.PROMISE) {
+        OnboardingSequence.inScreenPrevious(step)?.let { step = it }
+    }
 
-        // Centered max-width column on large screens (main screen MEDIUM pattern)
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(RunWearColors.Background)
+    ) {
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.TopCenter
         ) {
-            Column(
+            AnimatedContent(
+                targetState = step,
+                transitionSpec = {
+                    val forward = targetState.ordinal > initialState.ordinal
+                    val easing = OnboardingMotion.EmphasizedEasing
+                    val duration = OnboardingMotion.STEP_TRANSITION_MS
+                    (slideInHorizontally(
+                        animationSpec = tween(duration, easing = easing)
+                    ) { width -> if (forward) width else -width } +
+                        fadeIn(animationSpec = tween(duration, easing = easing)))
+                        .togetherWith(
+                            slideOutHorizontally(
+                                animationSpec = tween(duration, easing = easing)
+                            ) { width -> if (forward) -width else width } +
+                                fadeOut(animationSpec = tween(duration, easing = easing))
+                        )
+                },
+                label = "onboardingStep",
                 modifier = Modifier
                     .widthIn(max = 600.dp)
                     .fillMaxHeight()
-            ) {
-                // Scrollable content: header + current step's questions
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Spacer(Modifier.height(48.dp))
-
-                    // Logo: "Run**Wear**" (Wear in accent color), Bebas Neue display font
-                    Text(
-                        text = buildAnnotatedString {
-                            append("Run")
-                            withStyle(SpanStyle(color = RunWearColors.Primary)) {
-                                append("Wear")
-                            }
+            ) { currentStep ->
+                when (currentStep) {
+                    OnboardingStep.PROMISE -> PromiseStep(
+                        onGetStarted = { step = OnboardingStep.PREFERENCES }
+                    )
+                    OnboardingStep.PREFERENCES -> PreferencesStep(
+                        temperatureUnit = temperatureUnit,
+                        genderPreference = genderPreference,
+                        comfortPreference = comfortPreference,
+                        onTemperatureUnitChange = { temperatureUnit = it },
+                        onGenderPreferenceChange = { genderPreference = it },
+                        onComfortPreferenceChange = { comfortPreference = it },
+                        onBack = { step = OnboardingStep.PROMISE },
+                        onContinue = { step = OnboardingStep.LOCATION }
+                    )
+                    OnboardingStep.LOCATION -> LocationStep(
+                        onBack = { step = OnboardingStep.PREFERENCES },
+                        onUseMyLocation = {
+                            onRequestLocationPermission()
+                            onComplete(temperatureUnit, genderPreference, comfortPreference)
                         },
-                        fontFamily = BebasNeueFontFamily,
-                        fontSize = 52.sp,
-                        letterSpacing = 1.5.sp,
-                        color = RunWearColors.TextPrimary
+                        onSetCityInstead = {
+                            onComplete(temperatureUnit, genderPreference, comfortPreference)
+                        }
                     )
-
-                    Spacer(Modifier.height(22.dp))
-
-                    // Title: "Welcome! 👋" (matches web PWA verbatim)
-                    Text(
-                        text = "Welcome! 👋",
-                        fontFamily = BebasNeueFontFamily,
-                        fontSize = 30.sp,
-                        letterSpacing = 0.5.sp,
-                        color = RunWearColors.TextPrimary
-                    )
-
-                    Spacer(Modifier.height(8.dp))
-
-                    // Subtitle (matches web PWA verbatim)
-                    Text(
-                        text = "Let's prepare your perfect run. You can always change these later.",
-                        fontSize = 14.sp,
-                        color = Color.White.copy(alpha = 0.65f),
-                        textAlign = TextAlign.Center,
-                        lineHeight = 20.sp,
-                        modifier = Modifier.padding(horizontal = 8.dp)
-                    )
-
-                    Spacer(Modifier.height(18.dp))
-
-                    // Step indicator: the flow has exactly two steps; the
-                    // dots only mirror showLocationStep, nothing new.
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        StepDot(active = !showLocationStep)
-                        StepDot(active = showLocationStep)
-                    }
-
-                    Spacer(Modifier.height(30.dp))
-
-                    if (!showLocationStep) {
-                        // ========================================
-                        // STEP 1: Preferences (web PWA copy verbatim)
-                        // ========================================
-                        GlassPreferenceSection(
-                            title = "Temperature",
-                            sublabel = "How do you measure the weather?"
-                        ) {
-                            GlassSegmentedControl(
-                                options = listOf("°F", "°C"),
-                                selectedIndex = if (temperatureUnit == TemperatureUnit.FAHRENHEIT) 0 else 1,
-                                onSelect = { index ->
-                                    temperatureUnit = if (index == 0) TemperatureUnit.FAHRENHEIT else TemperatureUnit.CELSIUS
-                                }
-                            )
-                        }
-
-                        Spacer(Modifier.height(16.dp))
-
-                        GlassPreferenceSection(
-                            title = "Fit Preference",
-                            sublabel = "We'll tailor product recommendations"
-                        ) {
-                            GlassSegmentedControl(
-                                options = listOf("Male", "Female"),
-                                selectedIndex = when (genderPreference) {
-                                    GenderPreference.MALE -> 0
-                                    GenderPreference.FEMALE -> 1
-                                    GenderPreference.UNISEX -> -1 // Neither selected
-                                },
-                                onSelect = { index ->
-                                    val tapped = if (index == 0) GenderPreference.MALE else GenderPreference.FEMALE
-                                    // Toggle behavior (same as Settings GenderToggle):
-                                    // tapping the selected option deselects it
-                                    genderPreference = if (genderPreference == tapped) {
-                                        GenderPreference.UNISEX
-                                    } else {
-                                        tapped
-                                    }
-                                }
-                            )
-                        }
-
-                        Spacer(Modifier.height(16.dp))
-
-                        GlassPreferenceSection(
-                            title = "Do you get cold easily or overheat quickly?",
-                            sublabel = "We'll adjust outfit recommendations"
-                        ) {
-                            GlassSegmentedControl(
-                                options = listOf("🥶 Get cold", "Neither", "Overheat 🥵"),
-                                selectedIndex = when (comfortPreference) {
-                                    ComfortPreference.RUNS_VERY_COLD,
-                                    ComfortPreference.RUNS_COLD -> 0
-                                    ComfortPreference.NEUTRAL -> 1
-                                    ComfortPreference.RUNS_WARM,
-                                    ComfortPreference.RUNS_VERY_WARM -> 2
-                                },
-                                onSelect = { index ->
-                                    comfortPreference = when (index) {
-                                        0 -> ComfortPreference.RUNS_COLD
-                                        2 -> ComfortPreference.RUNS_WARM
-                                        else -> ComfortPreference.NEUTRAL
-                                    }
-                                }
-                            )
-                        }
-                    } else {
-                        // ========================================
-                        // STEP 2: Location (web PWA second step)
-                        // ========================================
-                        Box(
-                            modifier = Modifier
-                                .size(76.dp)
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.08f))
-                                .border(1.dp, Color.White.copy(alpha = 0.14f), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.LocationOn,
-                                contentDescription = null,
-                                tint = RunWearColors.PrimaryLight,
-                                modifier = Modifier.size(36.dp)
-                            )
-                        }
-
-                        Spacer(Modifier.height(20.dp))
-
-                        Text(
-                            text = "Set Your Location",
-                            fontFamily = BebasNeueFontFamily,
-                            fontSize = 26.sp,
-                            letterSpacing = 0.5.sp,
-                            color = RunWearColors.TextPrimary
-                        )
-
-                        Spacer(Modifier.height(8.dp))
-
-                        Text(
-                            text = "We need your location to get accurate weather for your run",
-                            fontSize = 14.sp,
-                            color = Color.White.copy(alpha = 0.65f),
-                            textAlign = TextAlign.Center,
-                            lineHeight = 20.sp,
-                            modifier = Modifier.padding(horizontal = 8.dp)
-                        )
-                    }
-
-                    Spacer(Modifier.height(24.dp))
-                }
-
-                // Pinned actions over a fade-to-background scrim, so the
-                // scroll content never fights the buttons (hero treatment).
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    RunWearColors.Background.copy(alpha = 0.92f),
-                                    RunWearColors.Background
-                                )
-                            )
-                        )
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 24.dp)
-                            .padding(top = 16.dp, bottom = 20.dp)
-                    ) {
-                        if (!showLocationStep) {
-                            // "Let's Go! 🏃" CTA (matches web PWA verbatim)
-                            Button(
-                                onClick = { showLocationStep = true },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(56.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = RunWearColors.Primary
-                                ),
-                                shape = RoundedCornerShape(18.dp)
-                            ) {
-                                Text(
-                                    "Let's Go! 🏃",
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 16.sp
-                                )
-                            }
-                        } else {
-                            Button(
-                                onClick = {
-                                    onRequestLocationPermission()
-                                    onComplete(temperatureUnit, genderPreference, comfortPreference)
-                                },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(56.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = RunWearColors.Primary
-                                ),
-                                shape = RoundedCornerShape(18.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.LocationOn,
-                                    contentDescription = null,
-                                    modifier = Modifier.padding(end = 8.dp)
-                                )
-                                Text(
-                                    "Use Current Location",
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 16.sp
-                                )
-                            }
-
-                            Spacer(Modifier.height(12.dp))
-
-                            Button(
-                                onClick = { onComplete(temperatureUnit, genderPreference, comfortPreference) },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(56.dp),
-                                shape = RoundedCornerShape(18.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color.White.copy(alpha = 0.07f),
-                                    contentColor = RunWearColors.TextPrimary
-                                ),
-                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f))
-                            ) {
-                                Text(
-                                    "Set Location Manually",
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 16.sp
-                                )
-                            }
-                        }
-                    }
+                    // Hosted downstream of this screen (fork, consent,
+                    // capture, first look) — never presented here.
+                    else -> Unit
                 }
             }
         }
     }
 }
 
-/** One step-indicator dot: a teal pill for the current step, a faint dot otherwise. */
+/**
+ * Frame 28 — the standalone promise screen (T-2 ruling: adopted in
+ * the Android sequence). Script logo, the headline (A2), one
+ * promise per row, nothing to decide yet. The free-looks promise
+ * (A1) lives on THIS screen only. No price appears (design §9).
+ */
 @Composable
-private fun StepDot(active: Boolean) {
-    Box(
-        modifier = Modifier
-            .width(if (active) 20.dp else 7.dp)
-            .height(7.dp)
-            .clip(RoundedCornerShape(4.dp))
-            .background(
-                if (active) RunWearColors.Primary else Color.White.copy(alpha = 0.25f)
+private fun PromiseStep(onGetStarted: () -> Unit) {
+    StepScaffold(
+        actions = {
+            Button(
+                onClick = onGetStarted,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = RunWearColors.Primary
+                ),
+                shape = RoundedCornerShape(18.dp)
+            ) {
+                Text(
+                    OnboardingCopy.PROMISE_CTA,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 16.sp
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text = OnboardingCopy.PROMISE_FOOTER,
+                fontSize = 13.sp,
+                color = RunWearColors.TextSecondary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
             )
-    )
+        }
+    ) {
+        // RW-104 (Sol, Nov 6, 2026): the iOS welcome screen's
+        // composition, adopted as the standard — the content is
+        // vertically centred between the weight spacers, the
+        // header block (logo + headline) is centred, and the
+        // points sit below it. (The gen-6 Android form top-loaded
+        // a 30sp display headline over full-width text rows with
+        // no icons.)
+        Spacer(Modifier.weight(1f))
+
+        // The RunWear script logo (genuine Great Vibes) — the brand
+        // signature, as on home. 64sp, matching iOS.
+        Text(
+            text = "RunWear",
+            fontFamily = com.runwear.app.ui.theme.GreatVibesFontFamily,
+            fontSize = 64.sp,
+            color = RunWearColors.TextPrimary
+        )
+
+        Spacer(Modifier.height(10.dp))
+
+        // A2: the welcome headline — Sol's pick, character for
+        // character — in the iOS register: 15sp regular, secondary.
+        Text(
+            text = OnboardingCopy.HEADLINE,
+            fontSize = 15.sp,
+            color = RunWearColors.TextSecondary,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 8.dp)
+        )
+
+        Spacer(Modifier.height(52.dp))
+
+        // One promise per row (frame 28) — GEN-3 ROUND 2: the
+        // name-led composition (feature name in pine bold, then
+        // the plain phrase in regular weight), each row over its
+        // icon seat as on iOS (cloud / person / stacked layers).
+        OnboardingCopy.WELCOME_POINTS.forEachIndexed { index, point ->
+            if (index > 0) Spacer(Modifier.height(24.dp))
+            PromiseRow(
+                point = point,
+                icon = when (index) {
+                    0 -> Icons.Outlined.Cloud
+                    1 -> Icons.Outlined.Person
+                    else -> Icons.Outlined.Layers
+                }
+            )
+        }
+
+        Spacer(Modifier.weight(1f))
+    }
 }
 
 /**
- * Preference question block in a frosted-glass card — the hero's glass
- * treatment (white 7% fill, white 12% hairline, 24dp radius) carrying the
- * SettingsSheet hierarchy: 16sp SemiBold label, 13sp muted sublabel 2dp
- * below, control 14dp below that.
+ * One frame-28 promise row (RW-104 form, matching iOS): a 20sp
+ * icon in deep pine seated in a 28dp column at the row's top,
+ * then the name-led headline as ONE composed line — the feature
+ * name bold in deep pine, " — ", then the plain phrase in
+ * regular ink — with the body line beneath in secondary.
  */
 @Composable
-private fun GlassPreferenceSection(
+private fun PromiseRow(
+    point: OnboardingCopy.WelcomePoint,
+    icon: androidx.compose.ui.graphics.vector.ImageVector
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top
+    ) {
+        Box(
+            modifier = Modifier.width(28.dp),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = RunWearColors.PineAccent,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = buildAnnotatedString {
+                    // The settled headline line ("Name — phrase")
+                    // with the iOS hierarchy (RW-104): the NAME
+                    // carries the pine + bold; the separator and
+                    // the phrase stay regular ink.
+                    withStyle(
+                        SpanStyle(
+                            color = RunWearColors.PineAccent,
+                            fontWeight = FontWeight.Bold
+                        )
+                    ) {
+                        append(point.name)
+                    }
+                    append(point.headlineLine.drop(point.name.length))
+                },
+                fontSize = 17.sp,
+                lineHeight = 23.sp,
+                color = RunWearColors.TextPrimary,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Text(
+                text = point.phrase,
+                fontSize = 13.5.sp,
+                lineHeight = 19.sp,
+                color = RunWearColors.TextSecondary,
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+            )
+        }
+    }
+}
+
+/**
+ * Frame 29 — setup, step 1 of 2 (Android expression): the three
+ * coded decisions as segmented controls on theme tokens. NO
+ * free-looks promise, no Make It Me vocabulary — the feature has
+ * not been introduced yet (A1).
+ *
+ * internal rather than private so the RW-81 render harness can
+ * compose this production step directly: the step machine's
+ * AnimatedContent transition does not complete under Robolectric
+ * in CI, so the harness cannot reach this step by driving the
+ * full screen there (CI runs 42235360057 / 42241604548 /
+ * 42245713753 — the screen stayed on the promise step after the
+ * advance was invoked). Visibility only; no behaviour change.
+ */
+@Composable
+internal fun PreferencesStep(
+    temperatureUnit: TemperatureUnit,
+    genderPreference: GenderPreference,
+    comfortPreference: ComfortPreference,
+    onTemperatureUnitChange: (TemperatureUnit) -> Unit,
+    onGenderPreferenceChange: (GenderPreference) -> Unit,
+    onComfortPreferenceChange: (ComfortPreference) -> Unit,
+    onBack: () -> Unit,
+    onContinue: () -> Unit
+) {
+    StepScaffold(
+        actions = {
+            Button(
+                onClick = onContinue,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = RunWearColors.Primary
+                ),
+                shape = RoundedCornerShape(18.dp)
+            ) {
+                Text(
+                    OnboardingCopy.SETUP_CTA,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 16.sp
+                )
+            }
+        }
+    ) {
+        Spacer(Modifier.height(16.dp))
+        StepHeader(
+            label = OnboardingCopy.SETUP_STEP_LABEL,
+            title = OnboardingCopy.SETUP_TITLE,
+            sub = OnboardingCopy.SETUP_SUB,
+            onBack = onBack
+        )
+        // GEN-5 (RW-28 item 28): tightened so the Body temperature
+        // card — the step's last card — arrives FULLY visible above
+        // the pinned Continue, not cut off by it (A-2).
+        Spacer(Modifier.height(16.dp))
+
+        PreferenceSection(
+            title = OnboardingCopy.TEMP_TITLE,
+            sublabel = OnboardingCopy.TEMP_SUB
+        ) {
+            // Sol's onboarding ruling (Nov 4): full words, not symbols.
+            TokenSegmentedControl(
+                options = listOf(
+                    OnboardingCopy.TEMP_OPTION_FAHRENHEIT,
+                    OnboardingCopy.TEMP_OPTION_CELSIUS
+                ),
+                selectedIndex = if (temperatureUnit == TemperatureUnit.FAHRENHEIT) 0 else 1,
+                onSelect = { index ->
+                    onTemperatureUnitChange(
+                        if (index == 0) TemperatureUnit.FAHRENHEIT else TemperatureUnit.CELSIUS
+                    )
+                }
+            )
+        }
+
+        Spacer(Modifier.height(28.dp))
+
+        PreferenceSection(
+            title = OnboardingCopy.FIT_TITLE,
+            sublabel = OnboardingCopy.FIT_SUB
+        ) {
+            // RW-81 (Sol's ruling, Nov 6, 2026; supersedes the
+            // Nov 4 three-option ruling): exactly TWO options.
+            // Neutral is not a third option — it is the state where
+            // neither button is selected (selectedIndex -1, the
+            // fresh-install UNISEX state), reached by tapping the
+            // selected button again (fitPreferenceAfterTap). The
+            // pinned Continue below never requires a fit selection.
+            TokenSegmentedControl(
+                options = listOf(
+                    OnboardingCopy.FIT_OPTION_MENS,
+                    OnboardingCopy.FIT_OPTION_WOMENS
+                ),
+                selectedIndex = when (genderPreference) {
+                    GenderPreference.MALE -> 0
+                    GenderPreference.FEMALE -> 1
+                    GenderPreference.UNISEX -> -1
+                },
+                onSelect = { index ->
+                    val tapped = if (index == 0) {
+                        GenderPreference.MALE
+                    } else {
+                        GenderPreference.FEMALE
+                    }
+                    onGenderPreferenceChange(
+                        fitPreferenceAfterTap(genderPreference, tapped)
+                    )
+                }
+            )
+        }
+
+        Spacer(Modifier.height(28.dp))
+
+        PreferenceSection(
+            title = OnboardingCopy.BODY_TITLE,
+            sublabel = OnboardingCopy.BODY_SUB
+        ) {
+            // Sol's onboarding ruling (Nov 4): the 5-stop slider with
+            // named ends, replacing the 3-option segmented control
+            // that collapsed the two end stops away.
+            Column {
+                // GEN-5 (C-1): the slider carries iOS's shared
+                // ComfortLevelControl behaviour — a selection
+                // haptic each time the STOP changes, and the tint
+                // shifting blue → pine → orange across the stops
+                // (comfortStopTint, the same policy as Settings).
+                val sliderHaptic = LocalHapticFeedback.current
+                var lastStopIndex by remember {
+                    mutableStateOf(ComfortStops.indexOf(comfortPreference))
+                }
+                Slider(
+                    value = ComfortStops.indexOf(comfortPreference).toFloat(),
+                    onValueChange = { value ->
+                        val stopIndex = value.roundToInt()
+                        if (stopIndex != lastStopIndex) {
+                            lastStopIndex = stopIndex
+                            sliderHaptic.performHapticFeedback(HapticSpec.SELECTION)
+                        }
+                        onComfortPreferenceChange(ComfortStops.at(stopIndex))
+                    },
+                    valueRange = 0f..(ComfortStops.stops.size - 1).toFloat(),
+                    steps = ComfortStops.stops.size - 2,
+                    colors = SliderDefaults.colors(
+                        thumbColor = comfortStopTint(comfortPreference),
+                        activeTrackColor = comfortStopTint(comfortPreference)
+                    )
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        OnboardingCopy.BODY_SLIDER_MIN_LABEL,
+                        fontSize = 12.sp,
+                        color = RunWearColors.TextSecondary
+                    )
+                    Text(
+                        OnboardingCopy.BODY_SLIDER_MAX_LABEL,
+                        fontSize = 12.sp,
+                        color = RunWearColors.TextSecondary
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+/**
+ * Frames 30/31 — the location step, step 2 of 2: the coded honest
+ * privacy copy lives IN the step itself (the same PermissionCopy
+ * line the permission screen carries — one text, both surfaces).
+ * "Use My Location" fires the system prompt; "Set a City Instead"
+ * is a full door, not a fallback.
+ */
+@Composable
+private fun LocationStep(
+    onBack: () -> Unit,
+    onUseMyLocation: () -> Unit,
+    onSetCityInstead: () -> Unit
+) {
+    StepScaffold(
+        actions = {
+            Button(
+                onClick = onUseMyLocation,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = RunWearColors.Primary
+                ),
+                shape = RoundedCornerShape(18.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.LocationOn,
+                    contentDescription = null,
+                    modifier = Modifier.padding(end = 8.dp)
+                )
+                Text(
+                    OnboardingCopy.LOCATION_CTA_PRIMARY,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 16.sp
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            Button(
+                onClick = onSetCityInstead,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = RoundedCornerShape(18.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = RunWearColors.BgCard,
+                    contentColor = RunWearColors.TextPrimary
+                ),
+                border = BorderStroke(1.dp, RunWearColors.TextSecondary.copy(alpha = 0.3f))
+            ) {
+                Text(
+                    OnboardingCopy.LOCATION_CTA_SECONDARY,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 16.sp
+                )
+            }
+        }
+    ) {
+        Spacer(Modifier.height(16.dp))
+        StepHeader(
+            label = OnboardingCopy.LOCATION_STEP_LABEL,
+            title = OnboardingCopy.LOCATION_TITLE,
+            sub = null,
+            onBack = onBack
+        )
+        Spacer(Modifier.height(24.dp))
+
+        Box(
+            modifier = Modifier
+                .size(76.dp)
+                .clip(CircleShape)
+                .background(RunWearColors.BgCard)
+                .border(1.dp, RunWearColors.TextSecondary.copy(alpha = 0.3f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.LocationOn,
+                contentDescription = null,
+                // RW-104: deep pine, the iOS register (was the
+                // light PineAccent mint).
+                tint = RunWearColors.Primary,
+                modifier = Modifier.size(36.dp)
+            )
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        Text(
+            text = OnboardingCopy.LOCATION_BODY,
+            fontSize = 14.sp,
+            color = RunWearColors.TextSecondary,
+            textAlign = TextAlign.Center,
+            lineHeight = 20.sp,
+            modifier = Modifier.padding(horizontal = 8.dp)
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        Text(
+            text = PermissionCopy.LOCATION_PRIVACY_LINE,
+            fontSize = 12.sp,
+            color = RunWearColors.TextSecondary,
+            textAlign = TextAlign.Center,
+            lineHeight = 18.sp,
+            modifier = Modifier.padding(horizontal = 8.dp)
+        )
+
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+/**
+ * The shared step layout: a scrollable content column (horizontally
+ * centered children) over a pinned action bar on a fade-to-background
+ * scrim, so scroll content never fights the buttons.
+ *
+ * RW-104 (Nov 6, 2026): the content is measured against the
+ * viewport — the inner column is at least viewport-tall, so a
+ * step may centre its content with weight spacers (the iOS
+ * welcome screen's composition) while taller steps still scroll
+ * exactly as before.
+ */
+@Composable
+private fun StepScaffold(
+    actions: @Composable () -> Unit,
+    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        androidx.compose.foundation.layout.BoxWithConstraints(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+        ) {
+            val viewportHeight = maxHeight
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Column(
+                    modifier = Modifier.heightIn(min = viewportHeight),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    content()
+                }
+            }
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            RunWearColors.Background.copy(alpha = 0.92f),
+                            RunWearColors.Background
+                        )
+                    )
+                )
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .padding(top = 16.dp, bottom = 20.dp)
+            ) {
+                actions()
+            }
+        }
+    }
+}
+
+/** A step's header row: Back chevron + step label, title, sublabel. */
+@Composable
+private fun StepHeader(
+    label: String,
+    title: String,
+    sub: String?,
+    onBack: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onBack) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                contentDescription = "Back",
+                tint = RunWearColors.TextSecondary
+            )
+        }
+        Text(
+            text = label,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = RunWearColors.TextSecondary
+        )
+    }
+    Spacer(Modifier.height(8.dp))
+    Text(
+        text = title,
+        fontSize = 26.sp,
+        // RW-104: Bold, matching the iOS step titles' register.
+        fontWeight = FontWeight.Bold,
+        color = RunWearColors.TextPrimary,
+        modifier = Modifier.fillMaxWidth()
+    )
+    sub?.let {
+        Text(
+            text = it,
+            fontSize = 14.sp,
+            lineHeight = 20.sp,
+            color = RunWearColors.TextSecondary,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 6.dp)
+        )
+    }
+}
+
+/**
+ * Preference question block — the SettingsSheet label hierarchy:
+ * 16sp SemiBold label in TextPrimary, 13sp sublabel in
+ * TextSecondary 2dp below, control 14dp below that.
+ * RW-104 (Nov 6, 2026): the block is BARE — label and control sit
+ * directly on the page background, as on iOS's form — the gen-6
+ * Surface card + border around every question is retired.
+ */
+@Composable
+private fun PreferenceSection(
     title: String,
     sublabel: String? = null,
     content: @Composable () -> Unit
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-            .background(Color.White.copy(alpha = 0.07f))
-            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(24.dp))
-            .padding(horizontal = 20.dp, vertical = 18.dp)
+        modifier = Modifier.fillMaxWidth()
     ) {
         Text(
             text = title,
@@ -437,7 +748,7 @@ private fun GlassPreferenceSection(
             Text(
                 text = it,
                 fontSize = 13.sp,
-                color = Color.White.copy(alpha = 0.55f),
+                color = RunWearColors.TextSecondary,
                 modifier = Modifier.padding(top = 2.dp)
             )
         }
@@ -448,25 +759,31 @@ private fun GlassPreferenceSection(
 }
 
 /**
- * The one segmented control used by every onboarding question, in glass:
- * a white 8% track with a hairline border; equal-width segments; the
- * selected segment is the solid Primary teal with white SemiBold text
- * (the main screen's selected-chip treatment), unselected segments are
- * transparent with white 75% text. Selection semantics are the caller's,
- * unchanged.
+ * The one segmented control used by every onboarding question, on
+ * tokens: a Background-token track with a secondary-ink hairline;
+ * equal-width segments; the selected segment is the solid Primary
+ * pine with white SemiBold text, unselected segments are transparent
+ * with TextSecondary text (the Settings GenderToggle treatment).
+ * Selection semantics are the caller's, unchanged. A selection fires
+ * the §1.7 selection haptic — once per tap.
  */
 @Composable
-private fun GlassSegmentedControl(
+private fun TokenSegmentedControl(
     options: List<String>,
     selectedIndex: Int,
     onSelect: (Int) -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(Color.White.copy(alpha = 0.08f))
-            .border(1.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(16.dp))
+            // The track is the page Background token (the RW-81
+            // fit control's settled sample); the control reads as
+            // its own surface through the border + the selected
+            // segment's pine fill, on the bare RW-104 sections.
+            .background(RunWearColors.Background)
+            .border(1.dp, RunWearColors.TextSecondary.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
             .padding(4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
@@ -477,7 +794,10 @@ private fun GlassSegmentedControl(
                     .weight(1f)
                     .clip(RoundedCornerShape(12.dp))
                     .background(if (isSelected) RunWearColors.Primary else Color.Transparent)
-                    .clickable { onSelect(index) }
+                    .clickable {
+                        haptic.performHapticFeedback(HapticSpec.SELECTION)
+                        onSelect(index)
+                    }
                     .padding(horizontal = 4.dp, vertical = 14.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -485,7 +805,7 @@ private fun GlassSegmentedControl(
                     text = label,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (isSelected) Color.White else Color.White.copy(alpha = 0.75f),
+                    color = if (isSelected) com.runwear.app.ui.theme.PhotoInk else RunWearColors.TextSecondary,
                     textAlign = TextAlign.Center,
                     maxLines = 1
                 )

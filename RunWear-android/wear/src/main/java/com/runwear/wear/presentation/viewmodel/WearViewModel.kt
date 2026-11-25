@@ -100,7 +100,7 @@ class WearViewModel @Inject constructor(
                     fetchWeather()
                 },
                 onFailure = { e ->
-                    _uiState.update { it.copy(isLoading = false, error = e.message ?: "Location error") }
+                    _uiState.update { it.copy(isLoading = false, error = "Location unavailable — set it in the phone app.") }
                 }
             )
         }
@@ -114,12 +114,13 @@ class WearViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true, error = null) }
 
             val dt = _uiState.value.selectedDateTime
-            val unit = _uiState.value.temperatureUnit
 
+            // WS-2: canonical fetch (no unit); the unit in state is
+            // the render-time projection only.
             val result = if (isNow(dt)) {
-                weatherRepository.getCurrentWeather(lat, lon, unit)
+                weatherRepository.getCurrentWeather(lat, lon)
             } else {
-                weatherRepository.getWeatherForDateTime(lat, lon, dt.toKotlinLocalDateTime(), unit)
+                weatherRepository.getWeatherForDateTime(lat, lon, dt.toKotlinLocalDateTime())
             }
 
             result.fold(
@@ -136,12 +137,13 @@ class WearViewModel @Inject constructor(
                     val heroResult = heroImageRepository.getHeroImage(
                         weather = weather,
                         outfit = outfit,
-                        gender = GenderPreference.UNISEX
+                        gender = GenderPreference.UNISEX,
+                        comfort = _uiState.value.comfortPreference
                     )
                     _uiState.update { it.copy(heroImageUrl = heroResult.imageUrl) }
                 },
                 onFailure = { e ->
-                    _uiState.update { it.copy(isLoading = false, error = e.message ?: "Weather error") }
+                    _uiState.update { it.copy(isLoading = false, error = "Weather unavailable — tap Retry.") }
                 }
             )
         }

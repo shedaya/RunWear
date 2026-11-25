@@ -699,7 +699,7 @@ final class LookStatusTests: XCTestCase {
     }
 
     func testFailedLineAndRetryAreTheDeck() {
-        XCTAssertEqual(MakeItMeCopy.lookFailed, "We couldn't make this look yet — tap to try again.")
+        XCTAssertEqual(MakeItMeCopy.lookFailed, "Your look couldn't be made from these photos — tap to try again.")
         XCTAssertEqual(MakeItMeCopy.lookRetry, "Try again")
     }
 }

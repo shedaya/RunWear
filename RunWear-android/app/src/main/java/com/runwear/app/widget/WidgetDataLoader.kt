@@ -137,13 +137,15 @@ object WidgetDataLoader {
 
         // One retry on the weather fetch, so a transient network failure
         // does not blank the widget until the next refresh cycle.
+        // WS-2: the fetch is canonical (°F) — the preference the
+        // loader already read is used only to project at render.
         var weatherResult = weatherRepository.getCurrentWeather(
-            coords.latitude, coords.longitude, prefs.temperatureUnit
+            coords.latitude, coords.longitude
         )
         if (weatherResult.isFailure) {
             delay(1000)
             weatherResult = weatherRepository.getCurrentWeather(
-                coords.latitude, coords.longitude, prefs.temperatureUnit
+                coords.latitude, coords.longitude
             )
         }
         val weather: WeatherConditions = weatherResult.getOrElse { e ->
@@ -170,7 +172,7 @@ object WidgetDataLoader {
             weatherRepository = weatherRepository,
             latitude = coords.latitude,
             longitude = coords.longitude,
-            unit = prefs.temperatureUnit,
+            displayUnit = prefs.temperatureUnit,
             current = weather,
             currentOutfit = outfit,
             comfort = prefs.comfortPreference,

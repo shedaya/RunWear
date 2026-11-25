@@ -16,6 +16,7 @@ import androidx.compose.material.icons.outlined.Thermostat
 import androidx.compose.material.icons.outlined.WaterDrop
 import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -27,13 +28,18 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.runwear.app.ui.theme.RunWearColors
+import com.runwear.shared.domain.model.TemperatureUnit
 import com.runwear.shared.domain.model.WeatherConditions
 
 /**
  * PWA v2.9 Weather Pills Row
  *
  * Weather pills displayed in hero section (all tappable for detail popups):
- * 1. Condition - weather emoji only
+ * 1. Condition - condition vector icon + the condition's word
+ *    (WS-10/A4: the design's strip treatment, frames 1–5; the
+ *    pre-WS-10 pill rendered the WeatherCode emoji string, which
+ *    the approved design does not have)
  * 2. Wind - wind icon + speed (e.g., "12 mph")
  * 3. Humidity - thermostat icon + percentage (NOT water drop per PWA v2.7)
  * 4. Precipitation - water drop icon + probability (ONLY shown if > 0%)
@@ -52,9 +58,24 @@ import com.runwear.shared.domain.model.WeatherConditions
 fun WeatherConditionsRow(
     weather: WeatherConditions?,
     modifier: Modifier = Modifier,
-    onPillClick: (String) -> Unit = {}
+    onPillClick: (String) -> Unit = {},
+    /**
+     * RW-25: on the home sheet the pills render FLAT (tonal surface
+     * fill, ink text) instead of the photo-side white-glass treatment.
+     * Behavior — which pills appear, their tap targets — is unchanged.
+     */
+    onSheet: Boolean = false,
+    /** WS-2: the render-time unit projection for the wind pill. */
+    temperatureUnit: TemperatureUnit = TemperatureUnit.FAHRENHEIT
 ) {
     if (weather == null) return
+
+    val pillBackground = if (onSheet) {
+        MaterialTheme.colorScheme.surfaceVariant
+    } else {
+        Color.White.copy(alpha = 0.1f)
+    }
+    val pillInk = if (onSheet) RunWearColors.TextPrimary else com.runwear.app.ui.theme.PhotoInk
 
     // FlowRow, not Row: in a narrow hero (foldable rail pane, landscape
     // phone) a fixed Row measures pills in order and gives the LAST one
@@ -67,24 +88,32 @@ fun WeatherConditionsRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // Condition pill (emoji only)
-        WeatherPillEmoji(
-            emoji = weather.weatherCode.icon,
-            onClick = { onPillClick("condition") }
+        // Condition pill — the designed strip treatment: the
+        // condition's vector icon + its word, like every other pill.
+        WeatherPill(
+            icon = weather.weatherCode.conditionIcon(),
+            text = weather.weatherCode.description,
+            onClick = { onPillClick("condition") },
+            background = pillBackground,
+            ink = pillInk
         )
 
         // Wind pill
         WeatherPill(
             icon = Icons.Outlined.Air,
-            text = "${weather.windSpeed.toInt()} ${if (weather.isCelsius) "km/h" else "mph"}",
-            onClick = { onPillClick("wind") }
+            text = HeroSheetFormat.windText(weather, temperatureUnit),
+            onClick = { onPillClick("wind") },
+            background = pillBackground,
+            ink = pillInk
         )
 
         // Humidity pill - Thermostat icon per PWA v2.7
         WeatherPill(
             icon = Icons.Outlined.Thermostat,
             text = "${weather.humidity}%",
-            onClick = { onPillClick("humidity") }
+            onClick = { onPillClick("humidity") },
+            background = pillBackground,
+            ink = pillInk
         )
 
         // Precipitation pill (only shown if > 0%) - WaterDrop icon
@@ -92,7 +121,9 @@ fun WeatherConditionsRow(
             WeatherPill(
                 icon = Icons.Outlined.WaterDrop,
                 text = "${weather.precipitationProbability}%",
-                onClick = { onPillClick("precipitation") }
+                onClick = { onPillClick("precipitation") },
+                background = pillBackground,
+                ink = pillInk
             )
         }
 
@@ -101,7 +132,9 @@ fun WeatherConditionsRow(
             WeatherPill(
                 icon = Icons.Outlined.WbSunny,
                 text = "UV ${weather.uvIndex.toInt()}",
-                onClick = { onPillClick("uv") }
+                onClick = { onPillClick("uv") },
+                background = pillBackground,
+                ink = pillInk
             )
         }
     }
@@ -114,33 +147,17 @@ fun WeatherConditionsRow(
 fun WeatherPillsRow(
     weather: WeatherConditions?,
     modifier: Modifier = Modifier,
-    onPillClick: (String) -> Unit = {}
+    onPillClick: (String) -> Unit = {},
+    onSheet: Boolean = false,
+    temperatureUnit: TemperatureUnit = TemperatureUnit.FAHRENHEIT
 ) {
-    WeatherConditionsRow(weather = weather, modifier = modifier, onPillClick = onPillClick)
-}
-
-/**
- * Weather pill with emoji only (for condition).
- */
-@Composable
-private fun WeatherPillEmoji(
-    emoji: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(100.dp))
-            .background(Color.White.copy(alpha = 0.1f))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = emoji,
-            style = TextStyle(fontSize = 16.sp)
-        )
-    }
+    WeatherConditionsRow(
+        weather = weather,
+        modifier = modifier,
+        onPillClick = onPillClick,
+        onSheet = onSheet,
+        temperatureUnit = temperatureUnit
+    )
 }
 
 /**
@@ -152,12 +169,14 @@ private fun WeatherPill(
     icon: ImageVector,
     text: String,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    background: Color = Color.White.copy(alpha = 0.1f), // 10% white per PWA
+    ink: Color = com.runwear.app.ui.theme.PhotoInk
 ) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(100.dp))
-            .background(Color.White.copy(alpha = 0.1f)) // 10% white per PWA
+            .background(background)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
@@ -168,7 +187,7 @@ private fun WeatherPill(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = Color.White.copy(alpha = 0.8f), // 0.8 opacity per PWA
+                tint = ink.copy(alpha = 0.8f), // 0.8 opacity per PWA
                 modifier = Modifier.size(14.dp)        // 14dp per PWA
             )
             Text(
@@ -176,7 +195,7 @@ private fun WeatherPill(
                 style = TextStyle(
                     fontSize = 13.sp,                  // 13px per PWA
                     fontWeight = FontWeight.Medium,
-                    color = Color.White
+                    color = ink
                 ),
                 // Belt-and-braces with the FlowRow above: a pill label
                 // never wraps — worst case in a pathologically narrow

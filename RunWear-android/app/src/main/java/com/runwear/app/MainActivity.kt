@@ -10,6 +10,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -33,6 +34,7 @@ import com.runwear.app.ui.screens.OnboardingScreen
 import com.runwear.app.ui.screens.PermissionScreen
 import com.runwear.app.ui.screens.RatingMomentDialog
 import com.runwear.app.ui.theme.RunWearTheme
+import com.runwear.app.ui.theme.resolveDarkTheme
 import com.runwear.app.ui.viewmodel.MainViewModel
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -52,6 +54,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // GEN-3 (WS-C): a fresh-task creation starts a new
+        // Wear I've Run session (see WearIveRunSession's operational
+        // definition). Configuration-change recreation carries a
+        // non-null savedInstanceState and keeps the session.
+        if (savedInstanceState == null) {
+            com.runwear.app.weariverun.WearIveRunSession.beginNewSession()
+        }
 
         // Safe-boot diagnostic (1.1.3): first line after super.onCreate,
         // before setContent — entry into the Activity half of startup.
@@ -80,8 +90,15 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(Unit) {
                 StartupTrace.mark(traceContext, "composition-start")
             }
-            RunWearTheme {
-                val uiState by viewModel.uiState.collectAsState()
+            // RW-25: the appearance preference resolves BEFORE the
+            // theme composes — SYSTEM follows the device, LIGHT/DARK
+            // pin. uiState is collected here (outside RunWearTheme)
+            // so the resolved flag can be passed in.
+            val uiState by viewModel.uiState.collectAsState()
+            val systemInDarkTheme = isSystemInDarkTheme()
+            RunWearTheme(
+                darkTheme = resolveDarkTheme(uiState.appearancePreference, systemInDarkTheme)
+            ) {
                 val makeItMeState by makeItMeViewModel.uiState.collectAsState()
                 val locationSearchState by viewModel.locationSearch.collectAsState()
                 val analyticsOptIn by viewModel.analyticsOptIn.collectAsState()
@@ -93,6 +110,10 @@ class MainActivity : ComponentActivity() {
                 // answer (spec §2.5), so this never re-asks.
                 var onboardingJustCompleted by remember { mutableStateOf(false) }
                 var showForkUpload by remember { mutableStateOf(false) }
+                // Frame 34: the first-look moment, shown ONCE at
+                // onboarding's end (fork success path only).
+                var showFirstLookMoment by remember { mutableStateOf(false) }
+                var showFirstLookPaywall by remember { mutableStateOf(false) }
 
                 // Feedback system (spec §1): the screen opens from Settings
                 // (no pre-selected category) or from the outfit list
@@ -176,22 +197,40 @@ class MainActivity : ComponentActivity() {
                                     onToggleUnit = viewModel::toggleUnit,
                                     onSetComfortPreference = viewModel::setComfortPreference,
                                     onSetGenderPreference = viewModel::setGenderPreference,
+                                    appearancePreference = uiState.appearancePreference,
+                                    onSetAppearancePreference = viewModel::setAppearancePreference,
                                     onDateSelected = viewModel::selectDate,
                                     onTimeSelected = viewModel::selectHour,
+                                    onPickerCommit = viewModel::applyPickerCommit,
                                     onResetToNow = viewModel::resetToNow,
                                     onLocationSearch = viewModel::searchLocation,
                                     onLocationSelect = viewModel::selectManualLocation,
                                     isUsingGPS = uiState.locationSource == "gps",
+                                    // GEN-3 X-13: the ACTUAL grant state, queried
+                                    // from the permission system — NOT
+                                    // uiState.hasLocationPermission, which manual
+                                    // selection also sets as a bypass.
+                                    hasLocationPermission = viewModel.hasLocationPermission(),
                                     onUseCurrentLocation = {
-                                        // Request GPS permission or retry if already granted
-                                        if (viewModel.hasLocationPermission()) {
-                                            viewModel.retryGPS()
-                                        } else {
+                                        // RW-141: register the explicit
+                                        // request with the ViewModel
+                                        // (its outcome survives the
+                                        // sheet), then run the system
+                                        // permission prompt if the
+                                        // grant is missing — the grant
+                                        // (or denial) completes the
+                                        // pending request in
+                                        // onPermissionResult.
+                                        viewModel.useCurrentLocation()
+                                        if (!viewModel.hasLocationPermission()) {
                                             requestLocationPermission()
                                         }
                                     },
+                                    onCurrentLocationRequestHandled =
+                                        viewModel::acknowledgeCurrentLocationRequest,
                                     analyticsOptIn = analyticsOptIn,
                                     onAnalyticsOptInChange = viewModel::setAnalyticsOptIn,
+                                    onRateRunWear = { launchInAppReview() },
                                     onOpenFeedback = { category ->
                                         feedbackPreselect = category
                                         feedbackEntryPoint =
@@ -200,6 +239,7 @@ class MainActivity : ComponentActivity() {
                                     },
                                     onItemTapped = viewModel::onAffiliateItemTapped,
                                     onFlagHero = viewModel::flagCurrentHero,
+                                    onFlagPersonalHero = viewModel::flagCurrentPersonalHero,
                                     onCycleHero = viewModel::cycleHeroImage,
                                     makeItMeViewModel = makeItMeViewModel,
                                     makeItMeState = makeItMeState,
@@ -207,10 +247,28 @@ class MainActivity : ComponentActivity() {
                                         viewModel::currentPersonalCombination,
                                     onPersonalLayerChanged =
                                         viewModel::refreshHeroAfterPersonalChange,
+                                    // GEN-3 A-HERO (WS-B, X-1): a first
+                                    // look finished in the Settings-hosted
+                                    // flow raises the same frame-34
+                                    // moment the onboarding path shows.
+                                    onFirstLookRequested =
+                                        { showFirstLookMoment = true },
                                     onDismissMakeItMeUpsell =
                                         viewModel::dismissMakeItMeUpsell,
                                     onRetryPersonalLook =
-                                        viewModel::retryPersonalLook
+                                        viewModel::retryPersonalLook,
+                                    // RW-79: dismissing the Home paywall
+                                    // back to Home re-reads the personal
+                                    // look state.
+                                    onPersonalLookRecheck =
+                                        viewModel::recheckPersonalLookState,
+                                    // WS-1 (D-03): the Scaffold inset
+                                    // reaches the main screen too —
+                                    // HeroMainScreen consumes it ONCE
+                                    // in its scroll container (see its
+                                    // parameter doc); it is no longer
+                                    // dropped for this destination.
+                                    scaffoldContentPadding = innerPadding
                                 )
                             }
                         }
@@ -258,20 +316,51 @@ class MainActivity : ComponentActivity() {
 
                     // RW-14 onboarding fork: the final onboarding step,
                     // after the first real recommendation (spec §2.1).
+                    // Make It Me OFF in this build
+                    // (MakeItMeAvailability): the fork never comes
+                    // due, so neither the fork screen nor its upload
+                    // flow can appear after onboarding.
                     val forkDue = onboardingJustCompleted &&
                         uiState.outfit != null &&
-                        !makeItMeState.forkDecided
-                    if (forkDue && !showForkUpload) {
+                        !makeItMeState.forkDecided &&
+                        com.runwear.app.makeitme.MakeItMeAvailability.ENABLED
+                    if (com.runwear.app.makeitme.ForkHostPolicy.showForkScreen(forkDue, showForkUpload)) {
                         com.runwear.app.makeitme.MakeItMeForkScreen(
-                            heroImageUrl = uiState.heroImageUrl,
+                            // GEN-3 A-HERO (WS-B): the fork band is fed
+                            // by the scene's one photo resolution — the
+                            // bundled fallback included — so it never
+                            // renders empty while a photo is servable.
+                            heroImageUrl = uiState.effectiveHeroUrl,
                             onUseMyPhotos = { showForkUpload = true },
                             onUseStandardPhotos = {
+                                makeItMeViewModel.decideForkAsStock()
+                                onboardingJustCompleted = false
+                            },
+                            // WS-6 (fork Back): Back at the flow's
+                            // root exits the flow the same way the
+                            // upload flow's root exit does — as the
+                            // settled stock end-state — and NEVER
+                            // falls through to finish the activity.
+                            onBack = {
                                 makeItMeViewModel.decideForkAsStock()
                                 onboardingJustCompleted = false
                             }
                         )
                     }
-                    if (forkDue && showForkUpload) {
+                    // GEN-6 WAVE A (DA-03): the upload flow is
+                    // hosted whenever it is OPEN — NOT gated on
+                    // forkDue. Gen-5's `forkDue && showForkUpload`
+                    // unmounted the flow mid-submit: submitting
+                    // flips forkDecided (PhotoSubmissionDecided),
+                    // forkDue went false, the composition died, the
+                    // SAVED beat was cancelled, onFinished never
+                    // fired — and the first-look moment below was
+                    // never raised. See ForkHostPolicy.
+                    if (com.runwear.app.makeitme.ForkHostPolicy.showUploadFlow(
+                            showForkUpload,
+                            com.runwear.app.makeitme.MakeItMeAvailability.ENABLED
+                        )
+                    ) {
                         com.runwear.app.makeitme.MakeItMeUploadFlow(
                             viewModel = makeItMeViewModel,
                             gender = uiState.genderPreference.name,
@@ -281,6 +370,7 @@ class MainActivity : ComponentActivity() {
                                 showForkUpload = false
                                 onboardingJustCompleted = false
                                 viewModel.refreshHeroAfterPersonalChange()
+                                showFirstLookMoment = true
                             },
                             onExitAsStock = {
                                 showForkUpload = false
@@ -290,10 +380,97 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
+                    // Frame 34 first-look moment (once; never a modal again).
+                    if (showFirstLookMoment) {
+                        com.runwear.app.makeitme.FirstLookMoment(
+                            // GEN-3 A-HERO (WS-B, X-1/X-2): the moment
+                            // is state-driven — its photo is the scene's
+                            // one resolution (the personal photo when
+                            // it is the one displayed; the fallback
+                            // while it is being made), and its claims
+                            // resolve from the look status for THIS
+                            // cell: finished copy only when the
+                            // generated photo is actually displayed.
+                            state = com.runwear.app.makeitme.FirstLookPresentation.resolve(
+                                lookStatus = uiState.personalLookStatus,
+                                personalPhotoDisplayed = uiState.heroIsPersonal &&
+                                    uiState.personalHeroImageUrl != null &&
+                                    uiState.heroImageUrl == uiState.personalHeroImageUrl
+                            ),
+                            photoUrl = uiState.effectiveHeroUrl,
+                            simplePlace = uiState.simplePlace?.city,
+                            weatherLine = uiState.weather?.let { weather ->
+                                val items = uiState.outfit?.allItems?.size ?: 0
+                                "${uiState.temperatureUnit.formatTemperature(weather.feelsLike)} " +
+                                    "feels like · ${weather.weatherCode.description}" +
+                                    // WT-3 (same copy class as the
+                                    // collection card): singular.
+                                    if (items == 1) " · 1 item" else if (items > 1) " · $items items" else ""
+                            },
+                            // RW-79: leaving the first-look sheet for
+                            // Home re-reads the look state — the sheet
+                            // is a one-shot presentation, and a look
+                            // that resolved behind it must land on
+                            // Home within seconds.
+                            onSeeOutfit = {
+                                showFirstLookMoment = false
+                                viewModel.recheckPersonalLookState()
+                            },
+                            onSeePremium = {
+                                showFirstLookMoment = false
+                                showFirstLookPaywall = true
+                            },
+                            // GEN-5 (RW-29 FA-6): the count line
+                            // composes from the shared meter.
+                            freeLooksUsed = makeItMeState.freeGenerationsUsed,
+                            // GEN-6 WAVE A (DA-12 + DA-03): the tier
+                            // for the policy-resolved MAKING pill, and
+                            // the FAILED phase's same-cell retry.
+                            mode = makeItMeState.mode,
+                            onRetry = { viewModel.retryPersonalLook() }
+                        )
+                    }
+                    if (showFirstLookPaywall) {
+                        com.runwear.app.makeitme.MakeItMePaywallSheet(
+                            viewModel = makeItMeViewModel,
+                            // RW-79: leaving this paywall — by
+                            // dismissal or by purchase — returns to
+                            // Home, which re-reads the look state.
+                            onDismiss = {
+                                showFirstLookPaywall = false
+                                viewModel.recheckPersonalLookState()
+                            },
+                            onPurchased = {
+                                showFirstLookPaywall = false
+                                viewModel.recheckPersonalLookState()
+                            }
+                        )
+                    }
+
                     // Manual Location Picker (shown from PermissionScreen)
                     if (showManualLocationPicker) {
+                        // RW-141: same request discipline as the
+                        // Home sheet — this picker closes when the
+                        // Current location request it started
+                        // SUCCEEDS, not at tap time; a failure stays
+                        // in the row.
+                        var manualPickerSawLocating by remember { mutableStateOf(false) }
+                        LaunchedEffect(uiState.currentLocationRequest) {
+                            when (uiState.currentLocationRequest) {
+                                com.runwear.app.ui.screens.CurrentLocationRequestState.Locating ->
+                                    manualPickerSawLocating = true
+                                com.runwear.app.ui.screens.CurrentLocationRequestState.Succeeded -> {
+                                    if (manualPickerSawLocating) {
+                                        showManualLocationPicker = false
+                                    }
+                                    viewModel.acknowledgeCurrentLocationRequest()
+                                }
+                                else -> Unit
+                            }
+                        }
                         LocationPickerSheet(
                             currentLocation = uiState.locationName,
+                            currentLocationRequest = uiState.currentLocationRequest,
                             onSearch = viewModel::searchLocation,
                             onSelectLocation = { lat, lon, name ->
                                 viewModel.selectManualLocation(lat, lon, name)
@@ -302,8 +479,11 @@ class MainActivity : ComponentActivity() {
                             onDismiss = { showManualLocationPicker = false },
                             searchResults = locationSearchState.results,
                             isUsingGPS = uiState.locationSource == "gps",
+                            // GEN-3 X-13: actual grant state (see the
+                            // HeroMainScreen call above).
+                            hasLocationPermission = viewModel.hasLocationPermission(),
                             onUseCurrentLocation = {
-                                showManualLocationPicker = false
+                                viewModel.useCurrentLocation()
                                 requestLocationPermission()
                             }
                         )
@@ -352,6 +532,11 @@ class MainActivity : ComponentActivity() {
         // locations are never overwritten; the check is debounced and
         // distance-gated inside the ViewModel.
         viewModel.onForegrounded()
+        // GEN-5 (RW-29 EX-15): foregrounding also re-reads the
+        // Make It Me profile + bank coverage, so a bank that
+        // completed while the app was away retires its band on
+        // return instead of waiting for an unrelated refresh.
+        makeItMeViewModel.refresh()
     }
 
     /**

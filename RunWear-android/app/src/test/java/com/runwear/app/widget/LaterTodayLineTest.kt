@@ -37,7 +37,6 @@ class LaterTodayLineTest {
         cloudCover = 30,
         uvIndex = 2.0,
         weatherCode = WeatherCode.PARTLY_CLOUDY,
-        isCelsius = false
     )
 
     private val now = LocalDateTime.of(2026, 10, 22, 15, 0) // 3 PM
@@ -112,10 +111,10 @@ class LaterTodayLineTest {
             precipitationProbability = rain,
             weatherCode = WeatherCode.PARTLY_CLOUDY,
             uvIndex = 2.0,
-            isCelsius = false
         )
         val line = LaterTodayLine.stableLine(
-            listOf(hour(1, 48.0, 10), hour(3, 41.0, 55), hour(6, 44.0, 20))
+            listOf(hour(1, 48.0, 10), hour(3, 41.0, 55), hour(6, 44.0, 20)),
+            com.runwear.shared.domain.model.TemperatureUnit.FAHRENHEIT
         )
         assertEquals("Later today: feels like 41–48°F · rain up to 55%", line)
     }
@@ -131,9 +130,8 @@ class LaterTodayLineTest {
             precipitationProbability = 5,
             weatherCode = WeatherCode.CLEAR_SKY,
             uvIndex = 3.0,
-            isCelsius = false
         )
-        assertEquals("Later today: feels like 50°F", LaterTodayLine.stableLine(listOf(hour(50.0))))
-        assertNull(LaterTodayLine.stableLine(emptyList()))
+        assertEquals("Later today: feels like 50°F", LaterTodayLine.stableLine(listOf(hour(50.0)), com.runwear.shared.domain.model.TemperatureUnit.FAHRENHEIT))
+        assertNull(LaterTodayLine.stableLine(emptyList(), com.runwear.shared.domain.model.TemperatureUnit.FAHRENHEIT))
     }
 }

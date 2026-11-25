@@ -41,12 +41,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.runwear.app.feedback.FeedbackBundleFactory
 import com.runwear.app.feedback.FeedbackCategory
-import com.runwear.app.ui.theme.BebasNeueFontFamily
 import com.runwear.app.ui.theme.RunWearColors
 
 /**
@@ -70,6 +70,12 @@ fun FeedbackScreen(
     var sending by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<Boolean?>(null) } // true = sent, false = saved for retry
 
+    // WS-5 (F-2 class): this screen is hosted as a boolean overlay
+    // from MainActivity, so without a handler system Back fell
+    // through to the activity and closed the app. Back now returns
+    // to the surface that opened it, like its on-screen Back arrow.
+    androidx.activity.compose.BackHandler(enabled = !sending) { onDismiss() }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -90,7 +96,7 @@ fun FeedbackScreen(
             }
             Text(
                 text = "SEND FEEDBACK",
-                fontFamily = BebasNeueFontFamily,
+                fontFamily = FontFamily.Default,
                 fontSize = 24.sp,
                 letterSpacing = 0.48.sp,
                 color = RunWearColors.TextPrimary
@@ -161,7 +167,7 @@ fun FeedbackScreen(
                             text = entry.label,
                             fontSize = 13.sp,
                             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                            color = if (isSelected) Color.White else RunWearColors.TextPrimary
+                            color = if (isSelected) com.runwear.app.ui.theme.PhotoInk else RunWearColors.TextPrimary
                         )
                     }
                 }
@@ -190,9 +196,9 @@ fun FeedbackScreen(
                 colors = feedbackFieldColors()
             )
             Text(
-                text = "Email if you want a reply. Otherwise this goes in anonymously.",
+                text = "Only used to reply to your feedback",
                 fontSize = 12.sp,
-                color = RunWearColors.TextMuted,
+                color = RunWearColors.TextSecondary,
                 modifier = Modifier.padding(top = 6.dp)
             )
 
@@ -214,13 +220,13 @@ fun FeedbackScreen(
                     text = "What we're sending with this",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
-                    color = RunWearColors.Primary,
+                    color = RunWearColors.PineAccent,
                     modifier = Modifier.weight(1f)
                 )
                 Icon(
                     imageVector = if (bundleExpanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
                     contentDescription = if (bundleExpanded) "Hide the summary" else "Show the summary",
-                    tint = RunWearColors.Primary
+                    tint = RunWearColors.PineAccent
                 )
             }
             AnimatedVisibility(visible = bundleExpanded) {
@@ -237,7 +243,7 @@ fun FeedbackScreen(
                             Text(
                                 text = label,
                                 fontSize = 12.sp,
-                                color = RunWearColors.TextMuted,
+                                color = RunWearColors.TextSecondary,
                                 modifier = Modifier.weight(0.4f)
                             )
                             Text(
@@ -271,7 +277,7 @@ fun FeedbackScreen(
             ) {
                 if (sending) {
                     CircularProgressIndicator(
-                        color = Color.White,
+                        color = com.runwear.app.ui.theme.PhotoInk,
                         modifier = Modifier.size(20.dp)
                     )
                 } else {
@@ -282,7 +288,7 @@ fun FeedbackScreen(
                 Text(
                     text = "Pick a category and write a sentence or two, and the button turns on.",
                     fontSize = 12.sp,
-                    color = RunWearColors.TextMuted,
+                    color = RunWearColors.TextSecondary,
                     modifier = Modifier.padding(top = 8.dp)
                 )
             }
@@ -294,17 +300,17 @@ fun FeedbackScreen(
 
 @Composable
 private fun feedbackFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedBorderColor = RunWearColors.Primary,
+    focusedBorderColor = RunWearColors.PineAccent,
     unfocusedBorderColor = RunWearColors.BgCardLight,
     focusedTextColor = RunWearColors.TextPrimary,
     unfocusedTextColor = RunWearColors.TextPrimary,
-    cursorColor = RunWearColors.Primary,
+    cursorColor = RunWearColors.PineAccent,
     focusedContainerColor = RunWearColors.Surface,
     unfocusedContainerColor = RunWearColors.Surface,
-    focusedLabelColor = RunWearColors.Primary,
-    unfocusedLabelColor = RunWearColors.TextMuted,
-    focusedPlaceholderColor = RunWearColors.TextMuted,
-    unfocusedPlaceholderColor = RunWearColors.TextMuted
+    focusedLabelColor = RunWearColors.PineAccent,
+    unfocusedLabelColor = RunWearColors.TextSecondary,
+    focusedPlaceholderColor = RunWearColors.TextSecondary,
+    unfocusedPlaceholderColor = RunWearColors.TextSecondary
 )
 
 private const val MIN_MESSAGE_CHARS = 10

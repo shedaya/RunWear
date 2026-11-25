@@ -30,11 +30,26 @@ import java.io.File
  * the two are re-derived together.
  *
  * Representative frames (must match the header comment in the TS
- * file): comfort NEUTRAL (adjusted == raw); CLEAR calm (wind gate
- * off); RAIN measured rain with precipitation 1.0mm; UV 2 at
- * DAWN/DUSK, 4 at MIDDAY, 1 in RAIN; hour 8 DAWN / 18 DUSK / 13
- * MIDDAY; adjusted temps FREEZING 12F, COLD 27F, COOL 42F, MILD 57F,
- * WARM 72F, HOT 85F.
+ * file): comfort NEUTRAL (adjusted == raw); calm (wind gate off);
+ * RAIN measured rain with precipitation 1.0mm; CLOUDY and SNOW
+ * take the dry frame (the engine reads measured rain only);
+ * UV 2 at DAWN/DUSK, 4 at MIDDAY, 1 in RAIN, 0 at NIGHT;
+ * hour 8 DAWN / 13 MIDDAY / 18 DUSK / 22 NIGHT; adjusted temps
+ * FREEZING 12F, COLD 27F, COOL 42F, MILD 57F, WARM 72F, HOT 85F.
+ *
+ * RW-69 reconciliation (Nov 5, 2026): this test originally pinned
+ * the pre-RW-16.30 20-cell core matrix. RW-16.30 extended the
+ * launch set to 88 cells (weather x bracket x daypart minus the
+ * unreachable WARM/HOT x SNOW cells) and the deployed
+ * start-personal-fill (v14 — the production function, live-proven
+ * by Gen-6 Wave A) carries the 88-cell block. When the repo copy
+ * was synced to the deployed source (commit 2a593b8), this test
+ * went red on the count alone (expected 20, TS block 88). The
+ * stale side was THIS representative-frame list, not the TS
+ * block: the list below is now generated from the same launch-set
+ * definition the TS header documents. The deployed function is
+ * the reference truth — this test reconciles to it, never the
+ * reverse.
  */
 class FillCanonicalOutfitsTest {
 
@@ -58,16 +73,42 @@ class FillCanonicalOutfitsTest {
         )
         private val BRACKETS = listOf("FREEZING", "COLD", "COOL", "MILD", "WARM", "HOT")
 
-        /** The 20 fill cells with their representative frames. */
+        /**
+         * The 88 launch-set fill cells (RW-16.30) with their
+         * representative frames, generated from the set definition
+         * the TS header documents: CLEAR / CLOUDY / RAIN x all six
+         * brackets x DAWN / MIDDAY / DUSK / NIGHT (72), plus SNOW x
+         * the four reachable brackets x the same dayparts (16) —
+         * WARM/HOT x SNOW are unreachable and omitted. UV: 0 at
+         * NIGHT, 1 in RAIN, 4 at MIDDAY, else 2. Hour: 8 DAWN,
+         * 13 MIDDAY, 18 DUSK, 22 NIGHT. (The pre-RW-16.30 list
+         * pinned only the 20-cell core matrix — see the RW-69 note
+         * in the class doc.)
+         */
         fun expectedCells(): List<Cell> {
             val cells = mutableListOf<Cell>()
-            for (b in BRACKETS) {
-                cells += Cell("CLEAR", b, "DAWN", TEMP.getValue(b), 2.0, 8)
-                cells += Cell("CLEAR", b, "DUSK", TEMP.getValue(b), 2.0, 18)
-                cells += Cell("RAIN", b, "DAWN", TEMP.getValue(b), 1.0, 8)
+            val dayparts = listOf("DAWN", "MIDDAY", "DUSK", "NIGHT")
+            fun add(weather: String, bracket: String, time: String) {
+                val uv = when {
+                    time == "NIGHT" -> 0.0
+                    weather == "RAIN" -> 1.0
+                    time == "MIDDAY" -> 4.0
+                    else -> 2.0
+                }
+                val hour = when (time) {
+                    "DAWN" -> 8
+                    "MIDDAY" -> 13
+                    "DUSK" -> 18
+                    else -> 22 // NIGHT
+                }
+                cells += Cell(weather, bracket, time, TEMP.getValue(bracket), uv, hour)
             }
-            cells += Cell("CLEAR", "WARM", "MIDDAY", TEMP.getValue("WARM"), 4.0, 13)
-            cells += Cell("CLEAR", "HOT", "MIDDAY", TEMP.getValue("HOT"), 4.0, 13)
+            for (w in listOf("CLEAR", "CLOUDY", "RAIN")) {
+                for (b in BRACKETS) for (t in dayparts) add(w, b, t)
+            }
+            for (b in listOf("FREEZING", "COLD", "COOL", "MILD")) {
+                for (t in dayparts) add("SNOW", b, t)
+            }
             return cells
         }
 

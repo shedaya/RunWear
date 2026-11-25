@@ -1,8 +1,5 @@
 package com.runwear.wear.presentation.screens
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateIntAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,7 +10,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
@@ -111,10 +112,26 @@ private fun HeroWearContent(
 ) {
     val pagerState = rememberPagerState(pageCount = { 3 })
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    // RW-76 (GEN-6 VQ fix wave, VQ-6.6): the pager indicator owns a
+    // RESERVED SLOT in the layout — a 20.dp band below the pager —
+    // instead of overlaying the pager's bottom edge. As an overlay
+    // (bottom = 20.dp in the old composition) the dots sat on
+    // whatever content line the hero page happened to place at that
+    // height: the "Actual 60°F" line at font scale 1.3 on both round
+    // faces, the "Thu" day line and the "Swipe for N items →" line
+    // at default scale in the DA-13 states. Inside the layout flow
+    // the pager is clipped to its own bounds above the band, so no
+    // content line of any page, at any scroll position, can ever
+    // reach the dots; the dots still advertise the swipe on every
+    // page, and at the band's centre height the round chord is far
+    // wider than the 28.dp dot row, so the dots themselves stay
+    // inside the display.
+    Column(modifier = Modifier.fillMaxSize()) {
         HorizontalPager(
             state = pagerState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
             beyondViewportPageCount = 0
         ) { page ->
             when (page) {
@@ -123,7 +140,9 @@ private fun HeroWearContent(
                     heroImageUrl = uiState.heroImageUrl,
                     locationName = uiState.locationName,
                     outfitItemCount = uiState.outfit!!.allItems.size,
-                    onToggleUnit = onToggleUnit
+                    onToggleUnit = onToggleUnit,
+                    temperatureUnit = uiState.temperatureUnit,
+                    comfortPreference = uiState.comfortPreference
                 )
                 1 -> OutfitPage(
                     outfit = uiState.outfit!!,
@@ -138,14 +157,20 @@ private fun HeroWearContent(
             }
         }
 
-        // Page indicator at bottom
-        PageIndicator(
-            pageCount = 3,
-            currentPage = pagerState.currentPage,
+        // Page indicator — RW-76: rendered in its reserved layout
+        // band below the pager (see the slot note above), never as
+        // an overlay on page content.
+        Box(
             modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 8.dp)
-        )
+                .fillMaxWidth()
+                .height(20.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            PageIndicator(
+                pageCount = 3,
+                currentPage = pagerState.currentPage
+            )
+        }
     }
 }
 
@@ -159,41 +184,44 @@ internal fun HeroWeatherPage(
     heroImageUrl: String?,
     locationName: String,
     outfitItemCount: Int,
-    onToggleUnit: () -> Unit
+    onToggleUnit: () -> Unit,
+    /** WS-2: render-time projection of the canonical store. */
+    temperatureUnit: com.runwear.shared.domain.model.TemperatureUnit =
+        com.runwear.shared.domain.model.TemperatureUnit.FAHRENHEIT,
+    /** GEN-6 WAVE C (DA-13): the comfort frame for the headline. */
+    comfortPreference: com.runwear.shared.domain.model.ComfortPreference =
+        com.runwear.shared.domain.model.ComfortPreference.NEUTRAL
 ) {
     val tempColor = WeatherColors.forTemperature(weather.feelsLikeInFahrenheit)
     val tintColor = WeatherColors.forTemperatureTint(weather.feelsLikeInFahrenheit)
 
-    // Animated temperature
-    val actualTemp = weather.effectiveTemperature.roundToInt()
-    val startTemp = maxOf(-10, actualTemp - 8)
-    var targetTemp by remember { mutableIntStateOf(startTemp) }
-    val animatedTemp by animateIntAsState(
-        targetValue = targetTemp,
-        animationSpec = tween(600, easing = FastOutSlowInEasing),
-        label = "temp"
-    )
-
-    LaunchedEffect(actualTemp) {
-        targetTemp = startTemp
-        kotlinx.coroutines.delay(100)
-        targetTemp = actualTemp
-    }
+    // GEN-6 WAVE C (DA-13): the hero numeral is a READOUT of the
+    // comfort-adjusted feels-like (WearTempFrame) — it appears at
+    // its final value. The gen-5 build animated the raw figure
+    // through a 600 ms tween counting through intermediate values;
+    // a numeral is a readout, never a counter, so the tween is gone.
+    val headlineTemp = temperatureUnit.convert(
+        com.runwear.wear.presentation.WearTempFrame.headlineF(weather, comfortPreference)
+    ).roundToInt()
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(RunWearColors.Background)
     ) {
-        // Hero image (circular crop for round watches)
+        // Hero image — GEN-5 (RW-29 FA-46): the hero fills the
+        // display's ACTUAL shape (design frame 53) with a
+        // TOP-anchored crop. The gen-4 layer clipped to a circle
+        // of its own and centre-cropped, cutting the runner's
+        // head on the watch just as the phone poster did; the
+        // display's own shape is the only mask here.
         heroImageUrl?.let { url ->
             AsyncImage(
                 model = url,
                 contentDescription = "Runner",
                 contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(CircleShape)
+                alignment = Alignment.TopCenter,
+                modifier = Modifier.fillMaxSize()
             )
         }
 
@@ -224,65 +252,162 @@ internal fun HeroWeatherPage(
                 )
         )
 
-        // Content
+        // Content — Addendum 10 (Wear Play compliance): the column is
+        // inset to the round display's SAFE AREA. On a round face the
+        // chord narrows sharply toward the top and bottom edges, so
+        // the old 12.dp inset let the top labels and the bottom hint
+        // run under the curved edge (Google WATCH SHAPES finding),
+        // and the single-line caps cut text off outright at the
+        // largest font size (Google LARGE FONT finding). The inset
+        // is 26.dp horizontally with deep top/bottom reserves, and
+        // the labels WRAP (no maxLines cap) instead of truncating.
+        // Addendum 10 (LARGE FONT, vertical budget): at the
+        // largest font scale on the smallest round face, the
+        // stacked blocks (labels + temperature card + day/hint)
+        // exceed the display height; as a fixed SpaceBetween
+        // column the overflow was CUT OFF — the feels-like line
+        // and the day/hint block fell outside the circle
+        // (screenshot 1224's missing feels-like value). The
+        // column now scrolls vertically: the initial settle shows
+        // the condition, location, the temperature card WITH its
+        // feels-like line inside the circle, and the day/hint
+        // block is reachable by scroll instead of being clipped.
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(12.dp),
+                .verticalScroll(rememberScrollState())
+                .padding(vertical = 10.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             // Top: Condition label and location (the phone app's condition
-            // treatment is a text label, not an emoji glyph)
+            // treatment is a text label, not an emoji glyph). The
+            // horizontal safe inset lives on the top/bottom blocks:
+            // at the vertical centre the round chord is the full
+            // diameter and the temperature card needs that width.
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(top = 16.dp)
+                modifier = Modifier.padding(
+                    // RW-76: the large face's top reserve is 16.dp
+                    // (was 24.dp) — the 8.dp returns to the card so
+                    // its Actual line stays inside the pager's
+                    // shortened first screenful at font scale 1.3
+                    // now that the indicator band sits below the
+                    // pager. At 16.dp from the top the large face's
+                    // chord is still far wider than the centred
+                    // condition line, so chord safety is unchanged.
+                    top = if (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp <= 200) 6.dp else 16.dp,
+                    start = 26.dp, end = 26.dp
+                )
             ) {
                 Text(
                     text = weather.weatherCode.description,
                     style = MaterialTheme.typography.labelMedium,
-                    color = Color.White.copy(alpha = 0.9f),
-                    maxLines = 1
+                    color = RunWearColors.TextPrimary.copy(alpha = 0.9f),
+                    textAlign = TextAlign.Center
                 )
                 Text(
                     text = locationName,
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color.White.copy(alpha = 0.7f),
-                    maxLines = 1
+                    color = RunWearColors.TextPrimary.copy(alpha = 0.7f),
+                    textAlign = TextAlign.Center
                 )
             }
 
-            // Center: Large temperature with glass backdrop (tappable)
+            // Center: Large temperature with glass backdrop (tappable).
+            // Addendum 10 supplement (reviewer screenshot
+            // IN_APP_EXPERIENCE-1224): this card was WIDER than the
+            // circular display — its sides were cut off by the round
+            // edge. The card is now width-capped to the round safe
+            // area at every size: at most 84% of the display width.
+            // At the card's vertical extent (half-height ~52.dp on
+            // the smallest face) the round chord is ~161.dp wide
+            // against the cap's ~161.dp, so its corners stay inside
+            // the chord; the width also lets the feels-like line
+            // sit on ONE line inside the card.
+            val displayWidthDp = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
             Card(
                 onClick = onToggleUnit,
                 colors = CardDefaults.cardColors(
                     containerColor = Color.Black.copy(alpha = 0.4f)
                 ),
                 shape = RoundedCornerShape(24.dp),
-                modifier = Modifier.padding(vertical = 8.dp)
+                modifier = Modifier
+                    .padding(vertical = 0.dp)
+                    // min: the card is at least 80% of the display
+                    // wide, so the single-line feels-like value
+                    // fits inside it (wrap-content sizing to the
+                    // narrower temperature text clipped the unit
+                    // letter). max: 84% — with the compressed
+                    // vertical budget the card's corners meet a
+                    // chord at least ~166.dp wide on the smallest
+                    // face, against the cap's ~161.dp.
+                    .widthIn(
+                        min = (displayWidthDp * 0.80f).dp,
+                        max = (displayWidthDp * 0.84f).dp
+                    )
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                    // RW-76: no vertical padding inside the card —
+                    // the 4.dp returns to the card's Actual line so
+                    // it stays inside the pager's first screenful at
+                    // font scale 1.3 (see the indicator-slot note).
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 0.dp)
                 ) {
-                    // Temperature with colored accent border/shadow
-                    val unitSymbol = if (weather.isCelsius) "C" else "F"
+                    // Temperature with colored accent border/shadow.
+                    // Addendum 10: on the smallest round faces the
+                    // display step down (48 -> 40 sp) keeps the card
+                    // inside the safe area even at the largest system
+                    // font scale, where the glyphs grow a further 30%.
+                    val unitSymbol = if (temperatureUnit ==
+                        com.runwear.shared.domain.model.TemperatureUnit.CELSIUS) "C" else "F"
+                    val screenWidthDp = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
+                    val fontScale = androidx.compose.ui.platform.LocalDensity.current.fontScale
+                    // Sized against the safe-area-capped card: at
+                    // the largest font scale the step down keeps
+                    // even a three-digit temperature inside the
+                    // card (screenshot 1224's clipped card).
+                    val tempFontSize = when {
+                        screenWidthDp <= 200 && fontScale > 1.15f -> 28.sp
+                        screenWidthDp <= 200 -> 40.sp
+                        fontScale > 1.15f -> 40.sp
+                        else -> 48.sp
+                    }
+                    // DA-13: the numeral's label — it is the
+                    // feels-like, named on the card.
+                    Text(
+                        text = "Feels like",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = RunWearColors.TextPrimary.copy(alpha = 0.8f),
+                        textAlign = TextAlign.Center
+                    )
                     Box(contentAlignment = Alignment.Center) {
-                        // Shadow layer for depth
+                        // Shadow layer for depth. The explicit
+                        // lineHeight keeps the heavy glyphs' ink
+                        // inside the text's layout box at grown
+                        // font scales (they were sliced at the
+                        // default line height).
                         Text(
-                            text = "${animatedTemp}°$unitSymbol",
-                            fontSize = 48.sp,
+                            text = "${headlineTemp}°$unitSymbol",
+                            fontSize = tempFontSize,
+                            lineHeight = (tempFontSize.value * 1.02f).sp,
                             fontWeight = FontWeight.Black,
                             color = tempColor.copy(alpha = 0.4f),
-                            letterSpacing = (-1).sp
+                            letterSpacing = (-1).sp,
+                            maxLines = 1,
+                            softWrap = false
                         )
                         // Main white text
                         Text(
-                            text = "${animatedTemp}°$unitSymbol",
-                            fontSize = 48.sp,
+                            text = "${headlineTemp}°$unitSymbol",
+                            fontSize = tempFontSize,
+                            lineHeight = (tempFontSize.value * 1.02f).sp,
                             fontWeight = FontWeight.Black,
-                            color = Color.White,
-                            letterSpacing = (-1).sp
+                            color = RunWearColors.TextPrimary,
+                            letterSpacing = (-1).sp,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                     // Color indicator bar
@@ -293,19 +418,48 @@ internal fun HeroWeatherPage(
                             .clip(RoundedCornerShape(2.dp))
                             .background(tempColor)
                     )
-                    Spacer(Modifier.height(4.dp))
+                    // RW-76: 2.dp (was 4.dp) — see the card-padding
+                    // note above; the bar-to-Actual gap keeps its
+                    // separation at half the reserve.
+                    Spacer(Modifier.height(2.dp))
+                    // Addendum 10 supplement (screenshot 1224): the
+                    // "Feels like" label rendered but its VALUE never
+                    // appeared inside the circle. Label and value now
+                    // travel together as one line INSIDE the
+                    // safe-area-capped card, so both are always
+                    // inside the display.
+                    // DA-13: the numeral above IS the feels-like;
+                    // the subordinate line carries the ACTUAL.
                     Text(
-                        text = "Feels like",
+                        text = com.runwear.wear.presentation.WearTempFrame.actualLine(weather, temperatureUnit),
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.8f)
+                        color = RunWearColors.TextPrimary.copy(alpha = 0.8f),
+                        textAlign = TextAlign.Center,
+                        // One line, always: the wrap-content card
+                        // grows to this line's full width (bounded
+                        // by the card's safe-area cap), so label
+                        // and value are never split or pushed out
+                        // of the card — the 1224 defect.
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
             }
 
-            // Bottom: Swipe hint with animated arrow
+            // Bottom: day label + swipe hint. Addendum 10: the hint
+            // is ONE wrapping, centred text lifted 26.dp off the
+            // bottom edge (inside the round safe area, clear of the
+            // page indicator) — as a fixed Row it overflowed the
+            // narrowed bottom chord at the largest font size.
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(bottom = 16.dp)
+                // 34.dp bottom reserve: at the scroll end the block
+                // stops short of the round display's bottom chord
+                // instead of running under the curved edge. (RW-76:
+                // the pager dots no longer share this zone at all —
+                // they live in their own layout band below the
+                // pager; this reserve is chord safety only now.)
+                modifier = Modifier.padding(bottom = 34.dp, start = 26.dp, end = 26.dp)
             ) {
                 val isToday = weather.dateTime.toJavaLocalDateTime().toLocalDate() == LocalDate.now()
                 Text(
@@ -313,28 +467,17 @@ internal fun HeroWeatherPage(
                         DateTimeFormatter.ofPattern("EEE")
                     ),
                     style = MaterialTheme.typography.labelMedium,
-                    color = Color.White.copy(alpha = 0.8f)
+                    color = RunWearColors.TextPrimary.copy(alpha = 0.8f),
+                    textAlign = TextAlign.Center
                 )
                 Spacer(Modifier.height(4.dp))
-                // More prominent swipe hint
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Text(
-                        text = "Swipe for $outfitItemCount items",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = RunWearColors.Primary,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Text(
-                        text = "→",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = RunWearColors.Primary,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+                Text(
+                    text = "Swipe for $outfitItemCount items →",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = RunWearColors.Primary,
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Center
+                )
             }
         }
     }
@@ -372,7 +515,11 @@ internal fun OutfitPage(
             .focusable(),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp),
-        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 24.dp),
+        // Addendum 10: 24.dp horizontal / 32.dp vertical content
+        // padding keeps chip rows inside the round safe area
+        // instead of spanning the full chord (WATCH SHAPES; same
+        // defect class as the advice-card screenshot 7999).
+        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 32.dp),
         autoCentering = null
     ) {
         // Title
@@ -391,12 +538,17 @@ internal fun OutfitPage(
             WearOutfitChip(item)
         }
 
-        // Refresh button
+        // Refresh button — Addendum 10: no fixed 32.dp height. At
+        // the largest font size the label outgrew that height and
+        // was cut off vertically; the button now sizes to its
+        // (grown) label with a minimum touch height.
         item {
             Spacer(Modifier.height(4.dp))
             Button(
                 onClick = onRefresh,
-                modifier = Modifier.size(width = 80.dp, height = 32.dp)
+                modifier = Modifier
+                    .heightIn(min = 40.dp)
+                    .padding(horizontal = 8.dp)
             ) {
                 Text("Refresh", style = MaterialTheme.typography.labelSmall)
             }
@@ -438,12 +590,14 @@ private fun WearOutfitChip(item: ClothingItem) {
 
         Spacer(Modifier.width(6.dp))
 
-        // Name
+        // Name — Addendum 10: wraps to two lines instead of the
+        // single-line truncation that cut item names off at the
+        // largest font size.
         Text(
             text = item.displayName,
             style = MaterialTheme.typography.labelMedium,
             color = RunWearColors.TextPrimary,
-            maxLines = 1,
+            maxLines = 2,
             modifier = Modifier.weight(1f)
         )
     }
@@ -481,7 +635,17 @@ internal fun TipsPage(
             .focusable(),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp),
-        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 24.dp),
+        // Addendum 10 supplement (reviewer screenshot
+        // IN_APP_EXPERIENCE-7999, the ADVICE page): the advice card
+        // was wider than the round safe area — top corners and
+        // sides clipped by the circular edge, with a fragment of
+        // the preceding content stranded at the top edge. The
+        // deep insets (32.dp horizontal, 40.dp vertical) put the
+        // first card fully inside the chord at its settled
+        // position: at 40.dp from the top of the smallest round
+        // face the chord is ~156.dp wide against the card's
+        // 128.dp, and nothing of the page settles outside it.
+        contentPadding = PaddingValues(horizontal = 32.dp, vertical = 40.dp),
         autoCentering = null
     ) {
         // Title
@@ -605,20 +769,25 @@ private fun WearLoadingScreen() {
 
 @Composable
 private fun WearErrorScreen(error: String, onRetry: () -> Unit) {
+    // Addendum 10: the error text carried a two-line cap, so any
+    // real message was cut off — completely at the largest font
+    // size. The screen now scrolls inside the round safe area
+    // (28.dp horizontal inset) and the message wraps in full.
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 28.dp, vertical = 12.dp)
         ) {
             Text(
                 text = error,
                 style = MaterialTheme.typography.bodySmall,
                 textAlign = TextAlign.Center,
-                color = RunWearColors.TextSecondary,
-                maxLines = 2
+                color = RunWearColors.TextSecondary
             )
             Spacer(Modifier.height(10.dp))
-            Button(onClick = onRetry) {
+            Button(onClick = onRetry, modifier = Modifier.height(44.dp)) {
                 Text("Retry")
             }
         }
@@ -630,7 +799,9 @@ private fun WearPermissionScreen(onRequest: () -> Unit) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 28.dp, vertical = 12.dp)
         ) {
             Text(
                 text = "Location needed",
@@ -639,7 +810,7 @@ private fun WearPermissionScreen(onRequest: () -> Unit) {
                 color = RunWearColors.TextSecondary
             )
             Spacer(Modifier.height(10.dp))
-            Button(onClick = onRequest) {
+            Button(onClick = onRequest, modifier = Modifier.height(44.dp)) {
                 Text("Grant")
             }
         }

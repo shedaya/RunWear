@@ -51,8 +51,10 @@ android {
         // vc19 is the Wear polish release's slot (shipped as Wear
         // 1.2.5/vc10019 — one shared versionCode space), so the phone
         // line takes vc20 for its half of the 1.2.5 train.
-        versionCode = 24
-        versionName = "1.2.9"
+        // GEN-5 Android release 2026-11-05 (RW-28): 1.2.21 / vc36.
+        // GEN-6: 1.2.22 / vc37. FOLLOWING BUILD 2026-11-06: 1.2.23 / vc38.
+        versionCode = 45
+        versionName = "1.2.30"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -91,6 +93,17 @@ android {
         unitTests {
             // Robolectric render tests load the real manifest/resources.
             isIncludeAndroidResources = true
+            all {
+                // The app render suite outgrew one shared fork:
+                // gate runs 42288802716 and 42292741750 died with
+                // heap exhaustion inside :app:testDebugUnitTest
+                // (widget renders first, then the whole executor),
+                // losing the module's results entirely. Fork per
+                // test class — the wear module's established
+                // precedent for its render harness — so each class
+                // gets a fresh sandbox and heap.
+                it.forkEvery = 1
+            }
         }
     }
 }
@@ -101,6 +114,7 @@ dependencies {
     
     // Core Android
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.exifinterface)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.activity.compose)
@@ -151,6 +165,13 @@ dependencies {
     // backend's REST contract (auth + edge functions + storage).
     implementation(libs.revenuecat.purchases)
     implementation(libs.mlkit.face.detection)
+    // GEN-5 (RW-28 item 16): CameraX for the in-app guided selfie —
+    // the capture is a live in-app preview, never a hand-off to the
+    // stock camera app.
+    implementation(libs.androidx.camera.core)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
     implementation(libs.ktor.client.android)
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)

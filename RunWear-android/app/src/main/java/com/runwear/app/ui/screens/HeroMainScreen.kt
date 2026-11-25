@@ -2,12 +2,21 @@ package com.runwear.app.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -19,6 +28,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -50,8 +60,10 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -62,27 +74,56 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.runwear.app.feedback.StartupTrace
 import com.runwear.app.ui.components.BrandedLoadingScreen
+import com.runwear.app.ui.components.HomeSkeletonScreen
 import com.runwear.app.ui.components.HeroSection
+import com.runwear.app.ui.components.HeroSheetBlock
+import com.runwear.app.ui.components.HeroSheetOverlap
+import com.runwear.app.ui.components.heroPhotoHeight
 import com.runwear.app.ui.components.loadingStatusText
 import com.runwear.app.ui.components.OutfitCard
 import com.runwear.app.ui.components.OutfitListShimmer
 import com.runwear.app.ui.components.TipsSection
-import com.runwear.app.ui.theme.BebasNeueFontFamily
 import com.runwear.app.ui.theme.RunWearColors
+import androidx.compose.runtime.snapshotFlow
+import com.runwear.app.weariverun.WearIveRunBarState
+import com.runwear.app.weariverun.WearIveRunBarStateHolder
+import com.runwear.app.weariverun.WearIveRunElementEvent
+import com.runwear.app.weariverun.WearIveRunElementMachine
+import com.runwear.app.weariverun.WearIveRunCollectionLogic
+import com.runwear.app.weariverun.WearIveRunCollectionScreen
+import com.runwear.app.weariverun.WearIveRunDayEntry
+import com.runwear.app.weariverun.WearIveRunEntry
+import com.runwear.app.weariverun.WearIveRunDock
+import com.runwear.app.weariverun.WearIveRunDockNarration
+import com.runwear.app.weariverun.WearIveRunDockPolicy
+import com.runwear.app.weariverun.WearIveRunFooterSection
+import com.runwear.app.weariverun.WearIveRunNarration
+import com.runwear.app.weariverun.WearIveRunStore
 import com.runwear.app.ui.viewmodel.LocationSearchState
 import com.runwear.app.ui.viewmodel.MainUiState
 import com.runwear.shared.domain.model.ClothingItem
 import com.runwear.shared.domain.model.GenderPreference
 import java.time.LocalDate
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
+import kotlinx.datetime.toJavaLocalDate
 
 /**
  * Hero-image design MainScreen - PWA v2.9 aligned.
@@ -105,21 +146,41 @@ fun HeroMainScreen(
     onToggleUnit: () -> Unit,
     onSetComfortPreference: (com.runwear.shared.domain.model.ComfortPreference) -> Unit,
     onSetGenderPreference: (com.runwear.shared.domain.model.GenderPreference) -> Unit,
+    /** RW-25: appearance preference + setter for the Settings sheet. */
+    appearancePreference: com.runwear.shared.domain.model.AppearancePreference =
+        com.runwear.shared.domain.model.AppearancePreference.SYSTEM,
+    onSetAppearancePreference: (com.runwear.shared.domain.model.AppearancePreference) -> Unit = {},
     onDateSelected: (LocalDate) -> Unit,
     onTimeSelected: (Int) -> Unit,
+    /** RW-131: the picker session's single (date, hour, keepNow)
+     * commit. Null in render proofs, which fall back to the
+     * sequential date-then-hour path. */
+    onPickerCommit: ((LocalDate, Int, Boolean) -> Unit)? = null,
     onResetToNow: () -> Unit,
     onLocationSearch: (String) -> Unit,
     onLocationSelect: (Double, Double, String) -> Unit,
     onUseCurrentLocation: () -> Unit = {},
+    /** RW-141: the sheet reacted to a succeeded Current location request (it closed); let the owner clear the outcome. */
+    onCurrentLocationRequestHandled: () -> Unit = {},
     isUsingGPS: Boolean = false,
+    /** GEN-3 X-13: the ACTUAL location-permission grant state, for the Set Location sheet's Current location row. */
+    hasLocationPermission: Boolean = false,
     analyticsOptIn: Boolean = false,
     onAnalyticsOptInChange: (Boolean) -> Unit = {},
     onOpenFeedback: (com.runwear.app.feedback.FeedbackCategory?) -> Unit = {},
+    /** GEN-6 WAVE C (RW-56): the Settings "Rate RunWear" row's door. */
+    onRateRunWear: () -> Unit = {},
     onFlagHero: (com.runwear.shared.domain.model.HeroFlagReason) -> Unit = {},
+    /**
+     * RW-16.27: flag the PERSONAL hero on screen ("This doesn't look
+     * like me") — routes to the backend's flag_hero action, not the
+     * pool insert.
+     */
+    onFlagPersonalHero: (com.runwear.app.makeitme.PersonalHeroFlagReason) -> Unit = {},
     /** Hero refresh: cycle to the cell's next approved image (no flag). */
     onCycleHero: () -> Unit = {},
     onItemTapped: (ClothingItem) -> Unit = {},
-    // ── RW-14 "Make it me" ─────────────────────────────────────────────
+    // ── RW-14 "Make It Me" ─────────────────────────────────────────────
     makeItMeViewModel: com.runwear.app.makeitme.MakeItMeViewModel? = null,
     makeItMeState: com.runwear.app.makeitme.MakeItMeUiState =
         com.runwear.app.makeitme.MakeItMeUiState(),
@@ -127,8 +188,39 @@ fun HeroMainScreen(
     onPersonalCombinationRequest: () -> Pair<String, List<String>>? = { null },
     /** Re-run hero resolution after a personal-layer change. */
     onPersonalLayerChanged: () -> Unit = {},
+    /**
+     * GEN-3 A-HERO (WS-B, X-1): the hosted upload flow finished a
+     * FIRST look (not a replace) — the host presents the designed
+     * first-look moment, whose making/ready/failed presentation is
+     * driven by the look status, not by the flow's own completion.
+     */
+    onFirstLookRequested: () -> Unit = {},
     onDismissMakeItMeUpsell: () -> Unit = {},
-    onRetryPersonalLook: () -> Unit = {}
+    onRetryPersonalLook: () -> Unit = {},
+    /**
+     * RW-79: the Home paywall was dismissed back to Home — re-read
+     * the personal look state (and re-arm its poll) so a look that
+     * resolved behind the paywall lands within seconds.
+     */
+    onPersonalLookRecheck: () -> Unit = {},
+    /**
+     * WS-1 (D-03): the Scaffold's content padding from MainActivity.
+     * Consumed ONCE, here, by the screen's ONE scroll container: its
+     * bottom padding lands in the container's contentPadding (so the
+     * last rows clear the navigation bar). The TOP inset is
+     * deliberately NOT applied to the root — the photo zone is
+     * full-bleed behind the status bar by design, and its chrome
+     * consumes the top inset itself via statusBarsPadding() at
+     * exactly one point inside the photo zone. Before WS-1 this
+     * screen had no inset parameter at all: the Scaffold inset was
+     * applied per-destination to Onboarding/Permission and simply
+     * dropped here, which is the mechanism that left the (then
+     * mis-placed) sheet's eyebrow clipped under the status bar.
+     */
+    scaffoldContentPadding: PaddingValues = PaddingValues(0.dp),
+    /** WS-1: the root modifier, applied once to the screen's root
+     * container — no destination-internal node re-applies it. */
+    modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
 
@@ -142,6 +234,12 @@ fun HeroMainScreen(
 
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
+    // RW-131: the picker session's working day while the time
+    // sheet is open. A date chosen through the sheet's day door
+    // lands here (session state), NOT in the committed selection;
+    // the sheet's model rebuilds for this day and the sheet stays
+    // open. Cleared whenever the time sheet closes.
+    var pickerWorkingDate by remember { mutableStateOf<LocalDate?>(null) }
     var showSettings by remember { mutableStateOf(false) }
     var showLocationPicker by remember { mutableStateOf(false) }
     var showShopAll by remember { mutableStateOf(false) }
@@ -151,15 +249,349 @@ fun HeroMainScreen(
     // upsell card, or the photos view).
     var showMakeItMeFlow by remember { mutableStateOf(false) }
     var makeItMeFlowReplace by remember { mutableStateOf(false) }
+    // GEN-5 (item 21): which door the flow is entered through —
+    // the Your Photos doors pre-open their named intake door.
+    var makeItMeFlowEntryDoor by remember {
+        mutableStateOf(com.runwear.app.makeitme.MakeItMeEntryDoor.STANDARD)
+    }
     var showMakeItMePhotos by remember { mutableStateOf(false) }
+    // GEN-6 WAVE C (RW-61): the "Your looks" library's host state.
+    var showMakeItMeLibrary by remember { mutableStateOf(false) }
     var showMakeItMePaywall by remember { mutableStateOf(false) }
+
+    // GEN-3 A-HERO (WS-A(2)): THE hero pill — one content value,
+    // resolved once from the look/serve/entitlement state and handed
+    // to every layout's hero (see HeroPillPolicy for the states).
+    val heroPill = com.runwear.app.ui.components.HeroPillPolicy.resolve(
+        lookStatus = uiState.personalLookStatus,
+        serveKind = uiState.heroServeKind,
+        heroIsPersonal = uiState.heroIsPersonal,
+        mode = makeItMeState.mode,
+        freeGenerationsUsed = makeItMeState.freeGenerationsUsed
+    )
+
+    // GEN-3 CONVERGENCE BAND (Sol's settled wording, Nov 4): the
+    // home-sheet band while a subscribed user's bank converges —
+    // resolved once here. RW-101 (Sol, Nov 6, 2026): seated
+    // DIRECTLY UNDER THE HERO in every layout (superseding the
+    // gen-3/gen-5 below-the-outfit seat). Null unless convergence
+    // is genuinely in progress with real counts.
+    val convergenceBand = com.runwear.app.makeitme.ConvergenceBandPolicy.content(
+        mode = makeItMeState.mode,
+        coverage = makeItMeState.bankCoverage,
+        inTrial = makeItMeState.inTrial
+    )
+
+    // GEN-4 DAY CHART: the selected day's model, built from the
+    // hourly forecast already in state (the retired HourGrid's own
+    // series) in the RW-23 comfort-adjusted frame. One model serves
+    // the home glance band and the Choose-a-Time sheet.
+    val dayChartModel = remember(
+        uiState.hourlyForecast, uiState.selectedDateTime, uiState.comfortPreference,
+        uiState.sunTimes, uiState.weather, uiState.isNowSelected, uiState.locationNow
+    ) {
+        // RW-FIXWAVE (Nov 7 ruling): at Now, the chart's current-
+        // hour point is the live current-conditions feels-like —
+        // the same value the hero numeral quotes — never the
+        // hourly forecast row for that hour.
+        val nowWeather = uiState.weather
+        com.runwear.app.ui.components.DayChartBuilder.build(
+            hourly = uiState.hourlyForecast,
+            date = uiState.selectedDateTime.toLocalDate(),
+            comfort = uiState.comfortPreference,
+            sunTimes = uiState.sunTimes,
+            nowDate = if (uiState.isNowSelected) {
+                uiState.locationNow.toLocalDate()
+            } else {
+                null
+            },
+            nowHour = if (uiState.isNowSelected) uiState.locationNow.hour else null,
+            nowFeelsLikeF = if (uiState.isNowSelected && nowWeather != null) {
+                nowWeather.feelsLikeInFahrenheit +
+                    uiState.comfortPreference.tempAdjustment
+            } else {
+                null
+            }
+        )
+    }
+    val dayChartBandContent: @Composable () -> Unit = {
+        com.runwear.app.ui.components.DayChartGlanceBand(
+            model = dayChartModel,
+            selectedHour = uiState.selectedDateTime.hour,
+            locationToday = uiState.locationNow.toLocalDate(),
+            nowHour = uiState.locationNow.hour,
+            temperatureUnit = uiState.temperatureUnit,
+            onChangeClick = { showTimePicker = true },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 8.dp)
+        )
+    }
+
+    // RW-144 (Nov 4, 2026 ruling, carried into the redesign): below
+    // the day-chart glance band sits the COMPLETE detailed weather
+    // block — the same unified detail the weather sheet carries
+    // (RW-63), rendered in place. It describes the hour the chart
+    // marker is on: the marker follows the selection and
+    // uiState.weather IS the selected moment's conditions, so the
+    // block and the marker can never name different hours.
+    val detailedWeatherBlockContent: @Composable () -> Unit = {
+        val w = uiState.weather
+        if (w != null) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(RunWearColors.Hairline)
+                )
+                Spacer(Modifier.height(16.dp))
+                UnifiedWeatherDetail(
+                    weather = w,
+                    unit = uiState.temperatureUnit,
+                    locationName = uiState.simplePlace?.display
+                        ?: uiState.locationName,
+                    momentLabel = com.runwear.app.ui.components.HeroSheetFormat
+                        .momentText(
+                            uiState.selectedDateTime,
+                            uiState.locationNow,
+                            uiState.isNowSelected
+                        ),
+                    runningTip = uiState.outfit?.tips?.firstOrNull(),
+                    comfortPreference = uiState.comfortPreference
+                )
+            }
+        }
+    }
 
     // Hero-flag flow: the sheet, plus the URL already flagged in this
     // view (one flag per photo view — the chip goes inert for it).
     var showHeroFlagSheet by remember { mutableStateOf(false) }
+    // RW-16.27: the personal hero's own sheet (its menu is headed
+    // "This doesn't look like me"); the same chip opens it while a
+    // personal photo is on screen.
+    var showPersonalFlagSheet by remember { mutableStateOf(false) }
     var flaggedHeroUrl by remember { mutableStateOf<String?>(null) }
+    val onAnyFlagClick: () -> Unit = {
+        if (uiState.heroIsPersonal) showPersonalFlagSheet = true else showHeroFlagSheet = true
+    }
     val snackbarHostState = remember { SnackbarHostState() }
     val screenScope = rememberCoroutineScope()
+
+    // RW-26 / WS-3 (RC-3): "Wear I've Run" — the collection is built.
+    // GEN-3 (WS-C): the store persists ONE entry per SESSION (see
+    // WearIveRunSession for the operational definition), keyed by
+    // session and updated in place through every location/weather
+    // change — the saved entry is the session's last settled
+    // version. The holder — the element's ONE state machine
+    // (WearIveRunElementMachine) — derives the element's state from
+    // them. Entries are created automatically when a generation for
+    // TODAY settles (the outfit + weather on screen), never backfilled.
+    val wearIveRunStore = remember { WearIveRunStore(context.applicationContext) }
+    val wearIveRunHolder = remember { WearIveRunBarStateHolder() }
+    val wearIveRunState by wearIveRunHolder.state.collectAsState()
+    val wearCueSequence by wearIveRunHolder.cueSequence.collectAsState()
+    val wearIveRunEntries by wearIveRunStore.entriesFlow.collectAsState(initial = emptyList())
+    var showWearIveRunCollection by remember { mutableStateOf(false) }
+    // RW-133: full-screen hero viewer state — the home hero, or a
+    // collection entry's stored photograph.
+    var showHeroViewer by remember { mutableStateOf(false) }
+    var heroViewerEntry by remember {
+        mutableStateOf<WearIveRunDayEntry?>(null)
+    }
+
+    // GEN-5 (RW-28, B-1): the FIRST emission in this process is
+    // the stored collection restoring — it primes the holder at
+    // rest (no cue, no announcement for entries an earlier process
+    // settled). Later emissions are live landings.
+    //
+    // GEN-6 (DA-09 / RW-42): the holder is driven from the store
+    // flow's OWN emissions, collected here — never from the
+    // collectAsState state above. That state's initial value
+    // (emptyList) reached the gen-5 prime FIRST, so the prime was
+    // spent on an empty list and the store's real first emission —
+    // the restored collection — fell into onEntriesChanged as a
+    // "first presentation", re-firing the creation cue and the
+    // "Added …" announcement for an entry an earlier process had
+    // settled (the duplicate "Added Miami, FL, Now" on relaunch in
+    // Sol's gen-5 recording). A flow collect's first emission IS
+    // the store's first value: it primes; later ones are live.
+    val wearCurrentUiState = androidx.compose.runtime.rememberUpdatedState(uiState)
+    LaunchedEffect(Unit) {
+        var primed = false
+        wearIveRunStore.entriesFlow.collect { entries ->
+            val today = wearCurrentUiState.value.locationNow.toLocalDate()
+            if (!primed) {
+                primed = true
+                wearIveRunHolder.primeRestore(entries, today)
+            } else {
+                wearIveRunHolder.onEntriesChanged(entries, today)
+            }
+        }
+    }
+
+    // Day rollover: the local day at the presented place changing is
+    // a machine driver — the element goes ABSENT until the new day's
+    // first generation lands.
+    val wearToday = uiState.locationNow.toLocalDate()
+    LaunchedEffect(wearToday) {
+        wearIveRunHolder.onDayRollover(wearToday)
+    }
+
+    // Record the day's settled version at generation time. NOTE
+    // (WS-3, abolished drivers): this effect RECORDS the entry; it
+    // does not drive the element. The holder turns a recording into a
+    // cue only when it is a genuinely new settled version (creation,
+    // or a kit change) — a re-recording with the same kit (a weather
+    // refresh, a hero URL landing, a location re-render) updates the
+    // entry's content silently and never moves the element.
+    //
+    // RW-142 (Nov 8, 2026): the effect OFFERS; the WRITE runs on the
+    // composition scope, not the effect's own lifetime. The pre-fix
+    // shape ran the suspend DataStore write as the effect body
+    // itself, so every key change (the churn that follows a commit —
+    // sheet exit, hero resolution, forecast derivation) cancelled
+    // the effect and could strand an admitted write before it
+    // landed; a confirmed pick, unlike Now, is never re-solved, so
+    // nothing re-offered it (owner device finding on vc41: a
+    // confirmed 3 p.m. pick moved the screen to the picked hour's
+    // solve while the entry kept the earlier selection). Launched
+    // on screenScope (cancelled only when the composition leaves),
+    // an admitted write survives every effect relaunch, and
+    // WearIveRunStore.recordSettled performs the edit under
+    // NonCancellable, so it always completes. Offers stay in launch
+    // order on the main dispatcher and DataStore serializes the
+    // edits, so the latest admitted solve is the final content.
+    LaunchedEffect(
+        uiState.outfit, uiState.weather, uiState.locationName,
+        uiState.effectiveHeroUrl, uiState.isNowSelected, uiState.selectedDateTime
+    ) {
+        val outfit = uiState.outfit
+        val weather = uiState.weather
+        // GEN-5 (RW-28, census item 9): a CONFIRMED changed moment
+        // also settles the session's entry — the Wear card
+        // re-solves (feels-like, count, thumbnail) with the rest of
+        // home and the narration names the moment that changed.
+        // uiState only carries CONFIRMED moments (the picker's
+        // draft never reaches this state), so recording here can
+        // never be moved by mere browsing of the picker.
+        // GEN-6 (DA-09 / RW-42): record only the selection's OWN
+        // solve — inside the window between a confirmed selection
+        // and its fetch committing, the weather/outfit in state
+        // still belong to the previous moment, and recording them
+        // under the new moment's label is how the bar came to
+        // announce an update its card did not carry.
+        if (outfit != null && weather != null &&
+            com.runwear.app.weariverun.WearIveRunRecordPolicy.shouldRecord(
+                isNowSelected = uiState.isNowSelected,
+                weatherMoment = weather.dateTime,
+                selectedMoment = uiState.selectedDateTime
+            )
+        ) {
+            // GEN-6 Wave B (RW-31): the day's canonical range for
+            // the share record — the min/max of the hourly
+            // forecast rows FOR the location's current date
+            // (forecast dateTimes are kotlinx, in the location
+            // frame; locationNow is java.time, same frame). Null
+            // when the forecast carries no rows for that date —
+            // never fabricated.
+            // RW-FIXWAVE (Nov 7, 2026; future-days ruling): the
+            // forecast range is the VIEWED day's, not always
+            // today's — a future-day settle records that day's
+            // range, held as that day's plan until the day arrives
+            // and the ordinary session settle takes over.
+            val todaysForecast = uiState.hourlyForecast.filter {
+                it.dateTime.date.toJavaLocalDate() == uiState.selectedDateTime.toLocalDate()
+            }
+            val entry = WearIveRunDayEntry(
+                // GEN-3 (WS-C): stamped with THIS process
+                // session's id and the settle instant — the
+                // session key replaces the entry in place on
+                // every later change within the session.
+                sessionId = com.runwear.app.weariverun.WearIveRunSession.currentId(),
+                settledAtMillis = System.currentTimeMillis(),
+                // RW-FIXWAVE (future-days ruling): the entry is
+                // dated by the VIEWED day. It was previously
+                // stamped with the location's today even for a
+                // confirmed future-day pick, so a tomorrow
+                // settle masqueraded as today's entry (the
+                // Android half of RW-132's mismatch). A place
+                // switch while viewing another day now moves
+                // the session entry to the new place under that
+                // viewed day's date, through the same in-place
+                // session upsert.
+                date = uiState.selectedDateTime.toLocalDate(),
+                // WS-4 (content seam): the entry's place is the
+                // SIMPLE form from the place model, so the
+                // collection, its chapter covers, and the narration
+                // can never carry a raw geocode string. (WS-3:
+                // this recording is content, not a state driver —
+                // see the abolished-drivers note above.)
+                place = uiState.simplePlace?.display
+                    ?: com.runwear.shared.domain.model.SimplePlace
+                        .fromRawDisplayString(uiState.locationName).display,
+                // GEN-5: the entry's moment — null at Now, else
+                // the confirmed moment's simple clock reading
+                // ("9 p.m."), the C-7 time payload.
+                momentLabel = if (uiState.isNowSelected) {
+                    null
+                } else {
+                    com.runwear.app.weariverun.WearMomentLabel.of(
+                        uiState.selectedDateTime
+                    )
+                },
+                // GEN-5 (RW-28 item 11): the entry records the
+                // RW-23 comfort-adjusted feels-like — the same
+                // number the hero numeral shows for this moment
+                // (B-3: the card kept the raw 78° while the
+                // picked hour read 83°).
+                feelsLikeF = weather.feelsLikeInFahrenheit +
+                    uiState.comfortPreference.tempAdjustment,
+                conditionLabel = weather.weatherCode.description,
+                isSnowing = weather.isSnowing,
+                isRaining = weather.isRaining,
+                items = outfit.allItems.map { it.displayName },
+                heroRef = uiState.effectiveHeroUrl,
+                // GEN-6 Wave B (RW-31): the share record's
+                // canonical fields — the day's actual + wind
+                // from the same weather frame, the day range
+                // from the forecast rows above, and the kit's
+                // garment keys in wearing order. faceAnchor
+                // stays null: no generation metadata source
+                // exists yet (the same honest gap as iOS).
+                actualF = weather.temperatureInFahrenheit,
+                windMph = weather.windSpeed,
+                dayLowF = todaysForecast.minOfOrNull { it.temperatureInFahrenheit },
+                dayHighF = todaysForecast.maxOfOrNull { it.temperatureInFahrenheit },
+                itemKeys = outfit.allItems.map { it.key }
+            )
+            // RW-142: the write leaves the effect's lifetime here —
+            // see the note above the effect.
+            screenScope.launch {
+                wearIveRunStore.recordSettled(entry)
+            }
+        }
+    }
+
+    // WS-3: the cue's timer — the pulse and the soft haptic live in
+    // the element itself (WearIveRunMiniBar, keyed on the cue
+    // sequence); this effect owns ONLY the 3.0 s timeout. It is
+    // keyed on (isCue, cueSequence): leaving CUE for any reason
+    // (a touch, trash, a scroll departure, rollover) cancels it, and
+    // a silent content landing mid-cue — which changes neither key —
+    // cannot restart it. A NEW landing bumps the sequence and the
+    // timer restarts (§1.2: stays CUE, timer restarts).
+    val wearIsCue = wearIveRunState is WearIveRunBarState.Cue
+    LaunchedEffect(wearIsCue, wearCueSequence) {
+        if (wearIsCue) {
+            kotlinx.coroutines.delay(WearIveRunElementMachine.CUE_TIMEOUT_MS)
+            wearIveRunHolder.onEvent(WearIveRunElementEvent.CUE_TIMEOUT)
+        }
+    }
 
     val listState = rememberLazyListState()
     // Grid state for the MEDIUM/EXPANDED outfit grids (hoisted beside
@@ -174,36 +606,11 @@ fun HeroMainScreen(
         }
     }
 
-    // Share function - matches web PWA shareOutfit verbatim
-    fun shareOutfit() {
-        val weather = uiState.weather ?: return
-        val outfit = uiState.outfit ?: return
-        val unit = if (weather.isCelsius) "°C" else "°F"
-        val tempBracket = getTempBracket(weather.effectiveTemperature, weather.isCelsius)
+    // WS-6 (D-15): there is NO home-level share. The design moved
+    // sharing inside the collection, card by card (Morning Poster /
+    // Kit Card, rasterized — see ShareArtifacts); the home text
+    // share that lived here is removed with its emoji payload.
 
-        val itemsList = outfit.allItems.joinToString("\n") { "• ${it.displayName}" }
-        val shareText = """
-🏃 RunWear Recommendation
-
-📍 ${uiState.locationName}
-🌡️ Feels like ${weather.effectiveTemperature.toInt()}$unit ($tempBracket)
-${weather.weatherCode.icon} ${weather.weatherCode.description}
-
-What to wear:
-$itemsList
-
-${if (outfit.tips.isNotEmpty()) "💡 Tip: ${outfit.tips.first()}" else ""}
-
-Get your personalized running outfit at runwear.ai
-        """.trimIndent()
-
-        val sendIntent = Intent().apply {
-            action = Intent.ACTION_SEND
-            putExtra(Intent.EXTRA_TEXT, shareText)
-            type = "text/plain"
-        }
-        context.startActivity(Intent.createChooser(sendIntent, "Share your outfit"))
-    }
 
     // Adaptive layout breakpoints (Material3 WindowSizeClass-aligned),
     // fluid at every width per the PWA's fully-responsive standard:
@@ -212,12 +619,612 @@ Get your personalized running outfit at runwear.ai
     //   stacked layout, outfit cards flowing into a grid as width allows
     // EXPANDED: tablet landscape / desktop (> 840dp) — two-pane rail
     BoxWithConstraints(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .background(RunWearColors.Background)
     ) {
         val spec = fluidLayoutSpec(maxWidth)
         val layout = spec.layout
+
+    // RW-135 (Direction A-prime, APPROVED consolidated spec Nov 7,
+    // 2026): the Wear I've Run presence is a floating MINI dock
+    // (overlay, below) plus the expanded FOOTER section emitted as
+    // the lists' last item. Both surfaces present the RECORDED
+    // entry only (spec section 1.2): the shown line is
+    // WearIveRunDockNarration over the holder's current recorded
+    // entry, and it refreshes only at scroll rest (the spec
+    // section 4.3 deferral — a settle that lands mid-scroll
+    // cross-fades once the scroll rests, never concurrent with a
+    // scroll-handoff; that refresh point is also the update
+    // bounce's landing, section 4.3).
+    val wearPresentState = wearIveRunState
+    val wirPresent = wearPresentState != WearIveRunBarState.Absent
+    val wirDayEntry by wearIveRunHolder.currentEntryFlow.collectAsState()
+    var wirShownLine by remember { mutableStateOf<WearIveRunNarration?>(null) }
+    // Reduce Motion (spec section 5) = animator duration scale 0.
+    val wirReduceMotion = remember {
+        Settings.Global.getFloat(
+            context.contentResolver,
+            Settings.Global.ANIMATOR_DURATION_SCALE,
+            1f
+        ) == 0f
+    }
+    val wirDensity = LocalDensity.current
+    val wirAnyScrolling = listState.isScrollInProgress || gridState.isScrollInProgress
+
+    // -- Exit choreography state (spec sections 4.7/4.8) ------------
+    // A frozen snapshot of the entry + line the surfaces exit
+    // with. While an exit runs, the surfaces render the snapshot;
+    // the DATA removal (holder TRASH + store removeByIdentity)
+    // fires only when the longest running exit completes.
+    data class WirExitSnapshot(
+        val line: WearIveRunNarration,
+        val barEntry: WearIveRunEntry,
+        val dayEntry: WearIveRunDayEntry,
+        val entryLine: String,
+        val fromTrash: Boolean
+    )
+    var wirExit by remember { mutableStateOf<WirExitSnapshot?>(null) }
+    var wirExitFromTrashDone by remember { mutableStateOf(false) }
+    // The last live snapshot, kept so a session end (holder ->
+    // Absent without a user trash) can exit with it (section 4.8).
+    var wirLastSnapshot by remember { mutableStateOf<WirExitSnapshot?>(null) }
+    // The dock's exit progress (fade + 26dp sink over 300ms exit
+    // easing — section 4.7), driven here because the dock overlay
+    // lives in this host.
+    val wirDockExit = remember { Animatable(0f) }
+
+    // Exit completion (spec section 4.7): the data removal fires
+    // when the longest running exit completes — never before.
+    // Idempotent: the first caller wins; later calls (the other
+    // surface finishing, the host's own timer) see wirExit
+    // already cleared and do nothing.
+    val wirFinishExit: (WirExitSnapshot) -> Unit = { exit ->
+        if (wirExit != null) {
+            wirExit = null
+            if (exit.fromTrash) {
+                wirExitFromTrashDone = true
+                wearIveRunHolder.onEvent(WearIveRunElementEvent.TRASH)
+                val entry = exit.dayEntry
+                screenScope.launch {
+                    wearIveRunStore.removeByIdentity(entry)
+                }
+            }
+            screenScope.launch { wirDockExit.snapTo(0f) }
+        }
+    }
+
+    // The surfaces render while the record is present OR while
+    // an exit is running off its frozen snapshot (a session end
+    // takes the holder Absent before the exit plays — spec
+    // section 4.8).
+    val wirSurfacesPresent = wirPresent || wirExit != null
+
+    // The handoff (spec section 3): a PURE function of the
+    // footer's position in the ACTIVE host. a = how far (dp) the
+    // footer's top edge is above the viewport's bottom edge,
+    // from layoutInfo (LazyList: viewportEndOffset - footerItem
+    // .offset, px -> dp; the footer is the last item; when it is
+    // not among visibleItemsInfo, a <= 0 -> fade 0; same via the
+    // LazyGrid layoutInfo for the grid hosts).
+    // RW-140: the fade STATE is kept as a State (not only a
+    // delegated Float) because the dock's graphicsLayer reads it
+    // in the DRAW phase (see the dock overlay below) — that is
+    // what guarantees every intermediate fade value is drawn in
+    // the frame the list moves, instead of waiting on a
+    // recomposition that a fling can coalesce away (the vc41
+    // defect: the dissolve existed as a function but its
+    // intermediate values never reached the display).
+    val wirFooterFadeState = remember(listState, gridState, layout) {
+        derivedStateOf {
+            when (layout) {
+                AdaptiveLayout.COMPACT -> {
+                    val info = listState.layoutInfo
+                    val footer = info.visibleItemsInfo.firstOrNull {
+                        info.totalItemsCount > 0 &&
+                            it.index == info.totalItemsCount - 1
+                    }
+                    WearIveRunDockPolicy.fadeFromLayoutPx(
+                        info.viewportEndOffset,
+                        footer?.offset,
+                        wirDensity.density
+                    )
+                }
+                else -> {
+                    val info = gridState.layoutInfo
+                    val footer = info.visibleItemsInfo.firstOrNull {
+                        info.totalItemsCount > 0 &&
+                            it.index == info.totalItemsCount - 1
+                    }
+                    WearIveRunDockPolicy.fadeFromLayoutPx(
+                        info.viewportEndOffset,
+                        footer?.offset?.y,
+                        wirDensity.density
+                    )
+                }
+            }
+        }
+    }
+    val wirFooterFade by wirFooterFadeState
+    // Whether the footer item is among the active host's visible
+    // items (its content is composed and on screen) — the delete
+    // choreography branches on this (spec section 4.7).
+    val wirFooterComposed by remember(listState, gridState, layout) {
+        derivedStateOf {
+            when (layout) {
+                AdaptiveLayout.COMPACT -> {
+                    val info = listState.layoutInfo
+                    info.totalItemsCount > 0 && info.visibleItemsInfo.any {
+                        it.index == info.totalItemsCount - 1
+                    }
+                }
+                else -> {
+                    val info = gridState.layoutInfo
+                    info.totalItemsCount > 0 && info.visibleItemsInfo.any {
+                        it.index == info.totalItemsCount - 1
+                    }
+                }
+            }
+        }
+    }
+
+    // Creation / update cue bookkeeping. A CREATION is an
+    // Absent -> Present flip with the cue armed (the holder's Cue
+    // state): the dock rises (or, handed off, the footer grows)
+    // and the creation pulse plays on the visible surface. A
+    // cold-start presence (restore prime -> Mini, no cue) gets
+    // NO entrance and NO pulse. An UPDATE is a shown-line change
+    // to a different record line for the SAME entry at scroll
+    // rest: it fires the update bounce (section 4.3) on the
+    // visible surface, and never doubles with the creation cue.
+    var wirWasPresent by remember { mutableStateOf(false) }
+    var wirCreationKey by remember { mutableIntStateOf(0) }
+    var wirFooterGrowKey by remember { mutableIntStateOf(0) }
+    var wirDockBounceKey by remember { mutableIntStateOf(0) }
+    var wirFooterBounceKey by remember { mutableIntStateOf(0) }
+    var wirPrevShownEntry by remember {
+        mutableStateOf<WearIveRunDayEntry?>(null)
+    }
+
+    LaunchedEffect(wirDayEntry, wirAnyScrolling) {
+        if (!wirAnyScrolling) {
+            val newEntry = wirDayEntry
+            val newLine = newEntry?.let {
+                WearIveRunDockNarration.line(
+                    it, uiState.locationNow.toLocalDate()
+                )
+            }
+            val oldLine = wirShownLine
+            val oldEntry = wirPrevShownEntry
+            wirShownLine = newLine
+            wirPrevShownEntry = newEntry
+            if (newLine != null && oldLine != null && newEntry != null &&
+                oldEntry != null && newLine.text != oldLine.text &&
+                wirExit == null &&
+                WearIveRunCollectionLogic.sameIdentity(oldEntry, newEntry)
+            ) {
+                // The settle's landing (spec section 4.3): the
+                // update bounce fires on the surface the user can
+                // see — the dock while it is not handed off, the
+                // footer's header zone once it is — so only that
+                // surface's key increments. The first line of a
+                // creation never reaches here (oldLine is null):
+                // the creation cue owns that moment alone, and
+                // the two never double.
+                if (wirFooterFade >= 1f) {
+                    wirFooterBounceKey += 1
+                } else {
+                    wirDockBounceKey += 1
+                }
+            }
+        }
+    }
+
+    // Absent -> Present / Present -> Absent flips: creation
+    // arming, snapshot keeping, session-end exit (section 4.8).
+    LaunchedEffect(wirPresent) {
+        if (wirPresent && !wirWasPresent) {
+            // A flip up. Armed as a creation only when the holder
+            // is in its Cue presentation with a fresh sequence —
+            // a restore (Mini at first composition) is a
+            // cold-start presence and gets no entrance.
+            if (wearIveRunState is WearIveRunBarState.Cue &&
+                wearCueSequence > 0
+            ) {
+                wirCreationKey = wearCueSequence
+                // Footer grow (section 4.1): only when the footer
+                // is in or near the viewport (the handoff has
+                // begun); far off-screen it inserts silently.
+                if (wirFooterFade > 0f || wirFooterComposed) {
+                    wirFooterGrowKey = wearCueSequence
+                }
+            }
+        }
+        if (!wirPresent && wirWasPresent) {
+            // A flip down NOT driven by our trash exit (that path
+            // sets wirExitFromTrashDone as it completes): this is
+            // a session end (section 4.8) — the record has already
+            // passed to the collection in the holder/store, so
+            // only the exit choreography runs here, minus the
+            // haptic, off the last live snapshot.
+            if (wirExit == null && !wirExitFromTrashDone) {
+                wirLastSnapshot?.let { snap ->
+                    wirExit = snap.copy(fromTrash = false)
+                }
+            }
+            wirExitFromTrashDone = false
+        }
+        wirWasPresent = wirPresent
+    }
+
+    // Keep the last live snapshot current while present.
+    LaunchedEffect(wirShownLine, wirDayEntry, wearPresentState) {
+        val line = wirShownLine
+        val dayEntry = wirDayEntry
+        val presentState = wearPresentState as? WearIveRunBarState.Present
+        if (line != null && dayEntry != null && presentState != null) {
+            wirLastSnapshot = WirExitSnapshot(
+                line = line,
+                barEntry = presentState.entry,
+                dayEntry = dayEntry,
+                entryLine = WearIveRunDockNarration.entryLine(
+                    dayEntry,
+                    uiState.locationNow.toLocalDate(),
+                    uiState.temperatureUnit
+                ),
+                fromTrash = false
+            )
+        }
+    }
+
+    // The dock's exit animation + the exit completion for the
+    // paths where the footer cannot report it (footer off-screen
+    // at trash: dock exit only, 300ms — section 4.7; session end
+    // with the footer off-screen likewise). When the footer IS
+    // composed, its fold is the longest exit and IT reports
+    // completion via onExitFinished; this effect then only drives
+    // the dock's own fade/sink.
+    LaunchedEffect(wirExit) {
+        val exit = wirExit ?: return@LaunchedEffect
+        wirDockExit.snapTo(0f)
+        if (wirReduceMotion) {
+            wirDockExit.animateTo(1f, tween(durationMillis = 200))
+        } else {
+            wirDockExit.animateTo(
+                1f,
+                tween(
+                    durationMillis = WearIveRunDockPolicy.DELETE_DOCK_EXIT_MS,
+                    easing = WearIveRunDockPolicy.EXIT_EASING
+                )
+            )
+        }
+        if (!wirFooterComposed) {
+            wirFinishExit(exit)
+        }
+    }
+
+    // The glides (spec section 4.4): duration from distance under
+    // the glide easing; the handoff runs off the glide's own
+    // scroll position (it is position-derived — there is no
+    // separate dock animation). A user touch cancels the glide
+    // (Compose scroll mutual exclusion). Reduce Motion: instant
+    // jumps (section 5).
+    val wirGlideToFooter: () -> Unit = {
+        screenScope.launch {
+            when (layout) {
+                AdaptiveLayout.COMPACT -> {
+                    val info = listState.layoutInfo
+                    val total = info.totalItemsCount
+                    if (total > 0) {
+                        if (wirReduceMotion) {
+                            listState.scrollToItem(total - 1)
+                            val f = listState.layoutInfo.visibleItemsInfo
+                                .firstOrNull { it.index == total - 1 }
+                            if (f != null) {
+                                listState.scrollBy(
+                                    ((f.offset + f.size) -
+                                        listState.layoutInfo.viewportEndOffset)
+                                        .toFloat()
+                                )
+                            }
+                        } else {
+                            val footer = info.visibleItemsInfo.firstOrNull {
+                                it.index == total - 1
+                            }
+                            val distancePx = if (footer != null) {
+                                (footer.offset + footer.size) -
+                                    info.viewportEndOffset
+                            } else {
+                                val visible = info.visibleItemsInfo
+                                val last = visible.lastOrNull()
+                                if (last == null) {
+                                    0
+                                } else {
+                                    val pitch = if (visible.size >= 2) {
+                                        (last.offset - visible.first().offset)
+                                            .toFloat() /
+                                            (last.index - visible.first().index)
+                                    } else {
+                                        last.size.toFloat()
+                                    }
+                                    ((last.offset + last.size -
+                                        info.viewportEndOffset) +
+                                        (total - 1 - last.index) * pitch)
+                                        .roundToInt()
+                                }
+                            }
+                            val duration = WearIveRunDockPolicy.glideDurationMs(
+                                distancePx / wirDensity.density
+                            )
+                            listState.animateScrollBy(
+                                distancePx.toFloat(),
+                                tween(
+                                    durationMillis = duration,
+                                    easing = WearIveRunDockPolicy.GLIDE_EASING
+                                )
+                            )
+                            // Land exactly at the end if the
+                            // estimate was short.
+                            val f2 = listState.layoutInfo.visibleItemsInfo
+                                .firstOrNull { it.index == total - 1 }
+                            if (f2 != null) {
+                                val delta = (f2.offset + f2.size) -
+                                    listState.layoutInfo.viewportEndOffset
+                                if (kotlin.math.abs(delta) > 1) {
+                                    listState.animateScrollBy(
+                                        delta.toFloat(),
+                                        tween(
+                                            durationMillis = 150,
+                                            easing = WearIveRunDockPolicy.GLIDE_EASING
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                else -> {
+                    val info = gridState.layoutInfo
+                    val total = info.totalItemsCount
+                    if (total > 0) {
+                        if (wirReduceMotion) {
+                            gridState.scrollToItem(total - 1)
+                            val f = gridState.layoutInfo.visibleItemsInfo
+                                .firstOrNull { it.index == total - 1 }
+                            if (f != null) {
+                                gridState.scrollBy(
+                                    ((f.offset.y + f.size.height) -
+                                        gridState.layoutInfo.viewportEndOffset)
+                                        .toFloat()
+                                )
+                            }
+                        } else {
+                            val footer = info.visibleItemsInfo.firstOrNull {
+                                it.index == total - 1
+                            }
+                            val distancePx = if (footer != null) {
+                                (footer.offset.y + footer.size.height) -
+                                    info.viewportEndOffset
+                            } else {
+                                val visible = info.visibleItemsInfo
+                                val last = visible.lastOrNull()
+                                if (last == null) {
+                                    0
+                                } else {
+                                    val columns = visible
+                                        .map { it.offset.x }
+                                        .distinct().size.coerceAtLeast(1)
+                                    val avgHeight = visible
+                                        .map { it.size.height }
+                                        .average().toFloat()
+                                    ((last.offset.y + last.size.height -
+                                        info.viewportEndOffset) +
+                                        ((total - 1 - last.index + columns - 1) /
+                                            columns) *
+                                            (avgHeight + 10f * wirDensity.density))
+                                        .roundToInt()
+                                }
+                            }
+                            val duration = WearIveRunDockPolicy.glideDurationMs(
+                                distancePx / wirDensity.density
+                            )
+                            gridState.animateScrollBy(
+                                distancePx.toFloat(),
+                                tween(
+                                    durationMillis = duration,
+                                    easing = WearIveRunDockPolicy.GLIDE_EASING
+                                )
+                            )
+                            val f2 = gridState.layoutInfo.visibleItemsInfo
+                                .firstOrNull { it.index == total - 1 }
+                            if (f2 != null) {
+                                val delta = (f2.offset.y + f2.size.height) -
+                                    gridState.layoutInfo.viewportEndOffset
+                                if (kotlin.math.abs(delta) > 1) {
+                                    gridState.animateScrollBy(
+                                        delta.toFloat(),
+                                        tween(
+                                            durationMillis = 150,
+                                            easing = WearIveRunDockPolicy.GLIDE_EASING
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // The footer's chevron (spec section 4.4): the inverse glide
+    // up, landing with the footer's top edge 24dp BELOW the
+    // viewport's bottom edge — delta = footerItem.offset -
+    // (viewportHeight + 24dp) in px, same duration rule from
+    // |delta|. The chevron exists only on the footer, so the
+    // footer item is composed when this runs.
+    val wirGlideFromFooter: () -> Unit = {
+        screenScope.launch {
+            val extraPx = (24 * wirDensity.density).roundToInt()
+            when (layout) {
+                AdaptiveLayout.COMPACT -> {
+                    val info = listState.layoutInfo
+                    val total = info.totalItemsCount
+                    val footer = info.visibleItemsInfo.firstOrNull {
+                        total > 0 && it.index == total - 1
+                    }
+                    if (footer != null) {
+                        val viewportHeight =
+                            info.viewportEndOffset - info.viewportStartOffset
+                        val delta = footer.offset - (viewportHeight + extraPx)
+                        if (wirReduceMotion) {
+                            listState.scrollBy(delta.toFloat())
+                        } else {
+                            listState.animateScrollBy(
+                                delta.toFloat(),
+                                tween(
+                                    durationMillis =
+                                        WearIveRunDockPolicy.glideDurationMs(
+                                            delta / wirDensity.density
+                                        ),
+                                    easing = WearIveRunDockPolicy.GLIDE_EASING
+                                )
+                            )
+                        }
+                    }
+                }
+                else -> {
+                    val info = gridState.layoutInfo
+                    val total = info.totalItemsCount
+                    val footer = info.visibleItemsInfo.firstOrNull {
+                        total > 0 && it.index == total - 1
+                    }
+                    if (footer != null) {
+                        val viewportHeight =
+                            info.viewportEndOffset - info.viewportStartOffset
+                        val delta = footer.offset.y - (viewportHeight + extraPx)
+                        if (wirReduceMotion) {
+                            gridState.scrollBy(delta.toFloat())
+                        } else {
+                            gridState.animateScrollBy(
+                                delta.toFloat(),
+                                tween(
+                                    durationMillis =
+                                        WearIveRunDockPolicy.glideDurationMs(
+                                            delta / wirDensity.density
+                                        ),
+                                    easing = WearIveRunDockPolicy.GLIDE_EASING
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // One tap, NO confirmation (the settled delete rule). The
+    // exit choreography runs FIRST off a frozen snapshot (spec
+    // section 4.7); the data removal — holder TRASH + the store
+    // delete by identity — fires when the longest running exit
+    // completes (wirFinishExit). The collection copy is a
+    // separate surface (RW-122) and is untouched by this delete.
+    val wirTrash: () -> Unit = {
+        if (wirExit == null) {
+            wirLastSnapshot?.let { snap ->
+                wirExit = snap.copy(fromTrash = true)
+            }
+        }
+    }
+    // The creation key arms the pulse on exactly one surface at
+    // a time (dock below fade 1, footer at fade 1); clear it once
+    // the cue window has passed so a later scroll into the other
+    // surface cannot replay the pulse.
+    LaunchedEffect(wirCreationKey) {
+        if (wirCreationKey > 0) {
+            kotlinx.coroutines.delay(2_000)
+            wirCreationKey = 0
+        }
+    }
+
+    // The shared footer render: live record while present, the
+    // frozen snapshot while an exit runs (spec section 4.7).
+    val wirFooterRender: @Composable (Int) -> Unit = { gap ->
+        val exit = wirExit
+        val line = exit?.line ?: wirShownLine
+        val dayEntry = exit?.dayEntry ?: wirDayEntry
+        val barEntry = exit?.barEntry ?:
+            (wearPresentState as? WearIveRunBarState.Present)?.entry
+        if (line != null && dayEntry != null && barEntry != null) {
+            WearIveRunFooterSection(
+                narration = line,
+                entry = barEntry,
+                entryLine = exit?.entryLine ?: WearIveRunDockNarration.entryLine(
+                    dayEntry,
+                    uiState.locationNow.toLocalDate(),
+                    uiState.temperatureUnit
+                ),
+                onCollapse = wirGlideFromFooter,
+                onDelete = wirTrash,
+                onOpenCollection = { showWearIveRunCollection = true },
+                sheetGapDp = gap,
+                growInKey = if (exit == null) wirFooterGrowKey else 0,
+                cueKey = wirCreationKey,
+                cueArmed = exit == null && wirCreationKey > 0 &&
+                    wirFooterFade >= 1f,
+                bounceKey = wirFooterBounceKey,
+                exiting = exit != null,
+                reduceMotion = wirReduceMotion,
+                onExitFinished = {
+                    wirExit?.let { wirFinishExit(it) }
+                }
+            )
+        }
+    }
+
+    // The footer's content (spec section 2.2): header + the
+    // record's line + the full entry row + the collection
+    // doorway. FULL-BLEED — no call-site inset in either host
+    // (the section's own background spans edge to edge; its
+    // content keeps the 16dp inset internally). The grid hosts'
+    // content padding insets their items, so the grid lambda
+    // breaks the footer out of that padding by the pane's
+    // pagePadding (see wirFooterContentGrid).
+    val wirFooterContent: @Composable () -> Unit = {
+        wirFooterRender(WearIveRunDockPolicy.FOOTER_SHEET_GAP_DP)
+    }
+    val wirFooterContentGrid: @Composable () -> Unit = {
+        // The grid's 10dp vertical spacing sits between the
+        // preceding item and the footer item, so the section's
+        // own sheet gap is 34 - 10 = 24dp (spec section 2.2).
+        // Full-bleed (spec section 2.2): the grid hosts inset
+        // their items by the pane's pagePadding via content
+        // padding, so the footer breaks out of it — measured
+        // wider by twice the padding and placed at its negative.
+        Box(
+            modifier = Modifier.layout { measurable, constraints ->
+                val padPx = (spec.pagePadding.value * 2 * wirDensity.density)
+                    .roundToInt()
+                val placeable = measurable.measure(
+                    constraints.copy(
+                        minWidth = (constraints.minWidth + padPx)
+                            .coerceAtLeast(0),
+                        maxWidth = if (constraints.maxWidth ==
+                            Constraints.Infinity
+                        ) {
+                            Constraints.Infinity
+                        } else {
+                            constraints.maxWidth + padPx
+                        }
+                    )
+                )
+                layout(placeable.width, placeable.height) {
+                    placeable.place(-padPx / 2, 0)
+                }
+            }
+        ) {
+            wirFooterRender(24)
+        }
+    }
+
 
         when {
             // Content wins over the loading flag: once anything is on screen
@@ -241,22 +1248,77 @@ Get your personalized running outfit at runwear.ai
                     }
                 }
 
+                // RW-135: the content branch is a Box — the scroll
+                // area fills it and the MINI dock overlays its bottom
+                // (the ruled floating form); the expanded form is the
+                // footer section inside the scroll content itself.
+                Box(modifier = Modifier.fillMaxSize()) {
                 PullToRefreshBox(
                     isRefreshing = uiState.isLoading,
                     onRefresh = onRefresh,
                     state = pullToRefreshState,
-                    modifier = Modifier.fillMaxSize()
+                    // RW-147: while the dock is present, the scroll
+                    // area's layout ends at the dock band's top
+                    // edge — list content can never rest (or be
+                    // scrolled) underneath the dock, in any layout,
+                    // at any scroll position. The dock floats over
+                    // the page ground below the list instead. The
+                    // RW-135 handoff is untouched: its fade derives
+                    // from the lists' own layoutInfo, whose viewport
+                    // is now this bounded one, so the dissolve runs
+                    // exactly as specified as the footer rises
+                    // through the clear zone.
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(
+                            if (wirSurfacesPresent) {
+                                Modifier.padding(
+                                    bottom = (
+                                        DockClearancePolicy.dockBandDp() +
+                                            scaffoldContentPadding
+                                                .calculateBottomPadding().value
+                                        ).dp
+                                )
+                            } else {
+                                Modifier
+                            }
+                        )
                 ) {
                     when (layout) {
                         AdaptiveLayout.COMPACT -> {
                             LazyColumn(
                                 state = listState,
-                                modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(bottom = 60.dp)
+                                // RW-25: the scroll's ground IS the sheet
+                                // surface — the sheet reads continuous
+                                // from its overlap of the photo to the
+                                // footer.
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(RunWearColors.Surface),
+                                contentPadding = PaddingValues(
+                                    // RW-135 spec section 2.2: when
+                                    // the footer is present it is the
+                                    // page's foot — no sheet renders
+                                    // below it at max scroll, so the
+                                    // trailing bottom padding is 0
+                                    // (the footer's own 32dp bottom
+                                    // padding carries the clearance).
+                                    // RW-147: the dock clearance is
+                                    // carried by the scroll area's
+                                    // layout boundary (see the
+                                    // PullToRefreshBox below), not
+                                    // by trailing padding.
+                                    bottom = if (wirSurfacesPresent) 0.dp
+                                        else 60.dp + scaffoldContentPadding.calculateBottomPadding()
+                                )
                             ) {
                                 item {
-                                    Column {
-                                        HeroSectionContent(
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(RunWearColors.Surface)
+                                    ) {
+                                        HeroStackedUnit(
                                             uiState = uiState,
                                             contentVisible = contentVisible,
                                             scrollOffset = scrollOffset.value,
@@ -265,19 +1327,19 @@ Get your personalized running outfit at runwear.ai
                                             onNowClick = onResetToNow,
                                             onLocationClick = { showLocationPicker = true },
                                             onSettingsClick = { showSettings = true },
-                                            onShareClick = { shareOutfit() },
-                                            onTempClick = onToggleUnit,
                                             onWeatherPillClick = { type -> weatherDetailType = type },
-                                            onFlagClick = { showHeroFlagSheet = true },
+                                            onFlagClick = onAnyFlagClick,
                                             heroFlagEnabled = flaggedHeroUrl != uiState.heroImageUrl,
                                             onCycleHero = onCycleHero,
+                                            heroPill = heroPill,
+                                            onHeroPillAction = { showMakeItMePaywall = true },
+                                            onHeroPhotoClick = {
+                                                if (uiState.effectiveHeroUrl != null) {
+                                                    showHeroViewer = true
+                                                }
+                                            },
                                             modifier = Modifier.fillMaxWidth()
                                         )
-                                        if (uiState.personalLookStatus ==
-                                            com.runwear.app.makeitme.PersonalLookStatus.Making
-                                        ) {
-                                            com.runwear.app.makeitme.MakeItMeProgressLine()
-                                        }
                                         if (uiState.personalLookStatus is
                                             com.runwear.app.makeitme.PersonalLookStatus.Failed
                                         ) {
@@ -285,6 +1347,22 @@ Get your personalized running outfit at runwear.ai
                                                 onRetry = onRetryPersonalLook
                                             )
                                         }
+                                    }
+                                }
+                                // RW-101 (Sol's direction, Nov 6,
+                                // 2026): the "Making your looks" band
+                                // sits DIRECTLY UNDER THE HERO — a
+                                // Premium subscriber sees what is
+                                // happening the moment the screen
+                                // opens. This supersedes the GEN-5
+                                // Addendum-4 seat (below the outfit
+                                // area) in every layout.
+                                if (convergenceBand != null) {
+                                    item {
+                                        com.runwear.app.makeitme.ConvergenceBand(
+                                            content = convergenceBand,
+                                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                                        )
                                     }
                                 }
                                 outfitListItems(
@@ -305,10 +1383,38 @@ Get your personalized running outfit at runwear.ai
                                         com.runwear.app.makeitme.MakeItMeUpsellCard(
                                             onSubscribeClick = { showMakeItMePaywall = true },
                                             onDismiss = onDismissMakeItMeUpsell,
+                                            freeGenerationsUsed = makeItMeState.freeGenerationsUsed,
                                             modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
                                         )
                                     }
                                 }
+                                // GEN-4: the day-chart glance band.
+                                if (!dayChartModel.isEmpty) {
+                                item { dayChartBandContent() }
+                                }
+                                // RW-144: the complete detailed
+                                // weather block below the glance band.
+                                item { detailedWeatherBlockContent() }
+                                // GEN-5 (C-3): Pro Tip + feedback,
+                                // below the chart.
+                                homeTrailingListItems(
+                                    uiState = uiState,
+                                    onFeedbackClick = { onOpenFeedback(com.runwear.app.feedback.FeedbackCategory.RECOMMENDATION_OFF) },
+                                    wirFooterPresent = wirSurfacesPresent,
+                                    // RW-140: the LIST host takes the
+                                    // plain footer content — this
+                                    // LazyColumn has NO horizontal
+                                    // content padding to break out
+                                    // of. (vc41 passed the GRID
+                                    // variant here; its breakout
+                                    // layout shifted the whole
+                                    // section left by pagePadding
+                                    // and cropped every footer
+                                    // element at the left edge on
+                                    // Sol's phone — his Nov 8, 2026
+                                    // recording.)
+                                    wirFooterContent = wirFooterContent
+                                )
                             }
                         }
                         AdaptiveLayout.MEDIUM -> {
@@ -319,18 +1425,28 @@ Get your personalized running outfit at runwear.ai
                             LazyVerticalGrid(
                                 columns = GridCells.Adaptive(minSize = OUTFIT_GRID_MIN_CELL),
                                 state = gridState,
-                                modifier = Modifier.fillMaxSize(),
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(RunWearColors.Surface),
                                 contentPadding = PaddingValues(
                                     start = spec.pagePadding,
                                     end = spec.pagePadding,
-                                    bottom = 60.dp
+                                    // RW-135 spec section 2.2: as
+                                    // the list host — no sheet below
+                                    // the footer when it is present.
+                                    bottom = if (wirSurfacesPresent) 0.dp
+                                        else 60.dp + scaffoldContentPadding.calculateBottomPadding()
                                 ),
                                 horizontalArrangement = Arrangement.spacedBy(spec.gridGap),
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 item(span = { GridItemSpan(maxLineSpan) }) {
-                                    Column {
-                                        HeroSectionContent(
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(RunWearColors.Surface)
+                                    ) {
+                                        HeroStackedUnit(
                                             uiState = uiState,
                                             contentVisible = contentVisible,
                                             scrollOffset = gridScrollOffset.value,
@@ -339,19 +1455,19 @@ Get your personalized running outfit at runwear.ai
                                             onNowClick = onResetToNow,
                                             onLocationClick = { showLocationPicker = true },
                                             onSettingsClick = { showSettings = true },
-                                            onShareClick = { shareOutfit() },
-                                            onTempClick = onToggleUnit,
                                             onWeatherPillClick = { type -> weatherDetailType = type },
-                                            onFlagClick = { showHeroFlagSheet = true },
+                                            onFlagClick = onAnyFlagClick,
                                             heroFlagEnabled = flaggedHeroUrl != uiState.heroImageUrl,
                                             onCycleHero = onCycleHero,
+                                            heroPill = heroPill,
+                                            onHeroPillAction = { showMakeItMePaywall = true },
+                                            onHeroPhotoClick = {
+                                                if (uiState.effectiveHeroUrl != null) {
+                                                    showHeroViewer = true
+                                                }
+                                            },
                                             modifier = Modifier.fillMaxWidth()
                                         )
-                                        if (uiState.personalLookStatus ==
-                                            com.runwear.app.makeitme.PersonalLookStatus.Making
-                                        ) {
-                                            com.runwear.app.makeitme.MakeItMeProgressLine()
-                                        }
                                         if (uiState.personalLookStatus is
                                             com.runwear.app.makeitme.PersonalLookStatus.Failed
                                         ) {
@@ -359,6 +1475,16 @@ Get your personalized running outfit at runwear.ai
                                                 onRetry = onRetryPersonalLook
                                             )
                                         }
+                                    }
+                                }
+                                // RW-101 (Sol, Nov 6, 2026): the
+                                // band directly under the hero.
+                                if (convergenceBand != null) {
+                                    item(span = { GridItemSpan(maxLineSpan) }) {
+                                        com.runwear.app.makeitme.ConvergenceBand(
+                                            content = convergenceBand,
+                                            modifier = Modifier.padding(vertical = 8.dp)
+                                        )
                                     }
                                 }
                                 outfitGridItems(
@@ -377,10 +1503,26 @@ Get your personalized running outfit at runwear.ai
                                         com.runwear.app.makeitme.MakeItMeUpsellCard(
                                             onSubscribeClick = { showMakeItMePaywall = true },
                                             onDismiss = onDismissMakeItMeUpsell,
+                                            freeGenerationsUsed = makeItMeState.freeGenerationsUsed,
                                             modifier = Modifier.padding(vertical = 8.dp)
                                         )
                                     }
                                 }
+                                // GEN-4: the day-chart glance band.
+                                if (!dayChartModel.isEmpty) {
+                                item(span = { GridItemSpan(maxLineSpan) }) { dayChartBandContent() }
+                                }
+                                // RW-144: the complete detailed
+                                // weather block below the glance band.
+                                item(span = { GridItemSpan(maxLineSpan) }) { detailedWeatherBlockContent() }
+                                // GEN-5 (C-3): Pro Tip + feedback,
+                                // below the chart.
+                                homeTrailingGridItems(
+                                    uiState = uiState,
+                                    onFeedbackClick = { onOpenFeedback(com.runwear.app.feedback.FeedbackCategory.RECOMMENDATION_OFF) },
+                                    wirFooterPresent = wirSurfacesPresent,
+                                    wirFooterContent = wirFooterContentGrid
+                                )
                             }
                         }
                         AdaptiveLayout.EXPANDED -> {
@@ -401,32 +1543,42 @@ Get your personalized running outfit at runwear.ai
                                         uiState = uiState,
                                         contentVisible = contentVisible,
                                         scrollOffset = 0f,
+                                        onLocationClick = { showLocationPicker = true },
+                                        onSettingsClick = { showSettings = true },
+                                        onFlagClick = onAnyFlagClick,
+                                        heroFlagEnabled = flaggedHeroUrl != uiState.heroImageUrl,
+                                        onCycleHero = onCycleHero,
+                                        heroPill = heroPill,
+                                        onHeroPillAction = { showMakeItMePaywall = true },
+                                        onHeroPhotoClick = {
+                                            if (uiState.effectiveHeroUrl != null) {
+                                                showHeroViewer = true
+                                            }
+                                        },
                                         onDateClick = { showDatePicker = true },
                                         onTimeClick = { showTimePicker = true },
                                         onNowClick = onResetToNow,
-                                        onLocationClick = { showLocationPicker = true },
-                                        onSettingsClick = { showSettings = true },
-                                        onShareClick = { shareOutfit() },
-                                        onTempClick = onToggleUnit,
+                                        // HERO REDESIGN: the weather
+                                        // line seats on the hero
+                                        // pane's foot (in HeroSection).
                                         onWeatherPillClick = { type -> weatherDetailType = type },
-                                        onFlagClick = { showHeroFlagSheet = true },
-                                        heroFlagEnabled = flaggedHeroUrl != uiState.heroImageUrl,
-                                        onCycleHero = onCycleHero,
-                                        modifier = Modifier.fillMaxSize()
+                                        modifier = Modifier.fillMaxSize(),
+                                        fillHeight = true,
+                                        pillAtHeroFoot = true
                                     )
-                                    if (uiState.personalLookStatus ==
-                                        com.runwear.app.makeitme.PersonalLookStatus.Making
-                                    ) {
-                                        com.runwear.app.makeitme.MakeItMeProgressLine(
-                                            modifier = Modifier.align(Alignment.BottomCenter)
-                                        )
-                                    }
                                     if (uiState.personalLookStatus is
                                         com.runwear.app.makeitme.PersonalLookStatus.Failed
                                     ) {
                                         com.runwear.app.makeitme.MakeItMeFailedLine(
                                             onRetry = onRetryPersonalLook,
-                                            modifier = Modifier.align(Alignment.BottomCenter)
+                                            // HERO REDESIGN: the pane's
+                                            // foot now carries the
+                                            // straddle pill + weather
+                                            // line stack — the failed
+                                            // line seats above it.
+                                            modifier = Modifier
+                                                .align(Alignment.BottomCenter)
+                                                .padding(bottom = 132.dp)
                                         )
                                     }
                                 }
@@ -436,15 +1588,37 @@ Get your personalized running outfit at runwear.ai
                                     state = gridState,
                                     modifier = Modifier
                                         .weight(1f)
-                                        .fillMaxHeight(),
+                                        .fillMaxHeight()
+                                        .background(RunWearColors.Surface),
                                     contentPadding = PaddingValues(
                                         start = spec.pagePadding,
                                         end = spec.pagePadding,
-                                        bottom = 60.dp
+                                        // RW-135 spec section 2.2:
+                                        // no sheet below the footer
+                                        // when it is present.
+                                        bottom = if (wirSurfacesPresent) 0.dp
+                                        else 60.dp + scaffoldContentPadding.calculateBottomPadding()
                                     ),
                                     horizontalArrangement = Arrangement.spacedBy(spec.gridGap),
                                     verticalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
+                                    // HERO REDESIGN (Nov 9, 2026):
+                                    // the right pane no longer opens
+                                    // with the sheet block — the
+                                    // weather line moved onto the
+                                    // hero pane's foot.
+                                    // RW-101 (Sol, Nov 6, 2026):
+                                    // the band tops the right pane,
+                                    // directly under the hero unit
+                                    // (the sheet block above it).
+                                    if (convergenceBand != null) {
+                                        item(span = { GridItemSpan(maxLineSpan) }) {
+                                            com.runwear.app.makeitme.ConvergenceBand(
+                                                content = convergenceBand,
+                                                modifier = Modifier.padding(vertical = 8.dp)
+                                            )
+                                        }
+                                    }
                                     outfitGridItems(
                                         uiState = uiState,
                                         contentVisible = contentVisible,
@@ -461,60 +1635,334 @@ Get your personalized running outfit at runwear.ai
                                             com.runwear.app.makeitme.MakeItMeUpsellCard(
                                                 onSubscribeClick = { showMakeItMePaywall = true },
                                                 onDismiss = onDismissMakeItMeUpsell,
+                                            freeGenerationsUsed = makeItMeState.freeGenerationsUsed,
                                                 modifier = Modifier.padding(vertical = 8.dp)
                                             )
                                         }
                                     }
+                                    // GEN-4: the day-chart glance band.
+                                    if (!dayChartModel.isEmpty) {
+                                    item(span = { GridItemSpan(maxLineSpan) }) { dayChartBandContent() }
+                                    // RW-144: the complete detailed weather block below the glance band.
+                                    item(span = { GridItemSpan(maxLineSpan) }) { detailedWeatherBlockContent() }
+                                    }
+                                    // GEN-5 (C-3): Pro Tip + feedback,
+                                    // below the chart.
+                                    homeTrailingGridItems(
+                                        uiState = uiState,
+                                        onFeedbackClick = { onOpenFeedback(com.runwear.app.feedback.FeedbackCategory.RECOMMENDATION_OFF) },
+                                        wirFooterPresent = wirSurfacesPresent,
+                                        wirFooterContent = wirFooterContentGrid
+                                    )
                                 }
                             }
                         }
                     }
+                }
+                // RW-135: the MINI dock overlay — inset 12,
+                // lifted 14 above the bottom safe edge (over the
+                // bottom navigation), radius 16, translucent card,
+                // soft shadow. Driven CONTINUOUSLY by the handoff
+                // fade (spec section 3): graphicsLayer alpha /
+                // translationY / scale are pure functions of the
+                // footer's scroll position, evaluated in the draw
+                // phase (RW-140) — no binary visibility,
+                // no AnimatedVisibility. Hit-testing is off at
+                // fade >= 0.5; at fade >= 1 the dock leaves the
+                // semantics tree. Reduce Motion (spec section 5):
+                // the handoff steps at the window's midpoint with
+                // a single 160ms crossfade, no sink/scale. During
+                // an exit (sections 4.7/4.8) the snapshot's line
+                // renders and the dock's own exit (fade + 26dp
+                // sink, 300ms exit) multiplies in.
+                if (wirSurfacesPresent) {
+                    val exitSnap = wirExit
+                    val line = exitSnap?.line ?: wirShownLine
+                    if (line != null) {
+                        val fade = wirFooterFade
+                        val steppedOpacity = animateFloatAsState(
+                            targetValue = if (fade < 0.5f) 1f else 0f,
+                            animationSpec = tween(160),
+                            label = "wirDockHandoffStep"
+                        )
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                // RW-147: in the EXPANDED two-pane
+                                // layout the dock belongs to the
+                                // scrolling right pane only. The
+                                // full-width form floated it over
+                                // the hero pane's foot as well —
+                                // the straddle pill and the hero's
+                                // Actual line sat under the band at
+                                // rest, and the hero pane never
+                                // scrolls, so they could never be
+                                // scrolled clear (owner device
+                                // pass, Nov 9, 2026).
+                                .then(
+                                    if (layout == AdaptiveLayout.EXPANDED) {
+                                        Modifier.padding(
+                                            start = spec.heroPaneWidth ?: 400.dp
+                                        )
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                                .then(
+                                    if (fade >= 1f && exitSnap == null) {
+                                        Modifier.clearAndSetSemantics {}
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                                .graphicsLayer {
+                                    // RW-140: the handoff transform
+                                    // is evaluated HERE, in the draw
+                                    // phase, reading the fade state
+                                    // directly — every scroll frame
+                                    // draws its own alpha / sink /
+                                    // scale in the same frame the
+                                    // list moves. (In vc41 these were
+                                    // composition locals captured by
+                                    // this block; a coalesced
+                                    // recomposition during a fling
+                                    // dropped the dissolve's
+                                    // intermediate values wholesale,
+                                    // and the dock and footer read as
+                                    // two distinct elements — Sol's
+                                    // Nov 8, 2026 device finding.)
+                                    val drawFade = wirFooterFadeState.value
+                                    val exitP = wirDockExit.value
+                                    val handoffAlpha = if (wirReduceMotion) {
+                                        steppedOpacity.value
+                                    } else {
+                                        WearIveRunDockPolicy
+                                            .dockOpacity(drawFade)
+                                    }
+                                    alpha = handoffAlpha * (1f - exitP)
+                                    translationY =
+                                        ((if (wirReduceMotion) 0f
+                                        else WearIveRunDockPolicy
+                                            .dockSinkDp(drawFade)) +
+                                            WearIveRunDockPolicy
+                                                .DELETE_DOCK_SINK_DP * exitP) *
+                                            wirDensity.density
+                                    val s = (if (wirReduceMotion) 1f
+                                    else WearIveRunDockPolicy
+                                        .dockScale(drawFade))
+                                    scaleX = s
+                                    scaleY = s
+                                }
+                        ) {
+                            WearIveRunDock(
+                                narration = line,
+                                cueKey = wirCreationKey,
+                                cueArmed = exitSnap == null &&
+                                    wirCreationKey > 0 && fade < 1f,
+                                onExpand = wirGlideToFooter,
+                                onDelete = wirTrash,
+                                entranceKey = wirCreationKey,
+                                bounceKey = wirDockBounceKey,
+                                hitTestable = exitSnap == null &&
+                                    WearIveRunDockPolicy.dockHitTestable(fade),
+                                reduceMotion = wirReduceMotion,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(
+                                        horizontal =
+                                            WearIveRunDockPolicy.DOCK_INSET_DP.dp
+                                    )
+                                    .navigationBarsPadding()
+                                    .padding(
+                                        bottom =
+                                            WearIveRunDockPolicy.DOCK_BOTTOM_DP.dp
+                                    )
+                            )
+                        }
+                    }
+                }
                 }
             }
             // No content yet: the branded loading state while the first
             // load runs (the low-contrast shimmer read as a black screen),
             // the error screen only when a load actually failed with
             // nothing to show.
-            uiState.isLoading -> BrandedLoadingScreen(
+            uiState.isLoading -> HomeSkeletonScreen(
                 statusText = loadingStatusText(uiState.hasLocationPermission, uiState.locationName)
             )
             uiState.error != null -> HeroErrorScreen(uiState.error, onRefresh)
-            else -> BrandedLoadingScreen(
+            else -> HomeSkeletonScreen(
                 statusText = loadingStatusText(uiState.hasLocationPermission, uiState.locationName)
             )
         }
 
         // Hero-flag confirmation ("Thanks — we'll review this photo").
+        // GEN-5 (RW-29 cream map): snackbars render in the app's
+        // own tokens — the default takes the inverseSurface role
+        // and read as a foreign dark bar on the cream sheet.
         SnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 24.dp)
-        )
+                // RW-147: while the dock is present the snackbar
+                // rests above the dock's band, not beneath it.
+                .padding(
+                    bottom = if (wirSurfacesPresent) {
+                        (DockClearancePolicy.dockBandDp() + 8f).dp
+                    } else {
+                        24.dp
+                    }
+                )
+        ) { data ->
+            androidx.compose.material3.Snackbar(
+                snackbarData = data,
+                containerColor = RunWearColors.BgCard,
+                contentColor = RunWearColors.TextPrimary,
+                actionColor = RunWearColors.PineAccent
+            )
+        }
+
+        // (WS-3: the Wear I've Run element no longer lives here — it
+        // docks in the content branch's Column above, in the layout
+        // flow. The collection screen remains hosted at this level;
+        // it is a Dialog window of its own, WS-5's concern.)
+
+        if (showWearIveRunCollection) {
+            WearIveRunCollectionScreen(
+                entries = wearIveRunEntries,
+                today = uiState.locationNow.toLocalDate(),
+                onDismiss = { showWearIveRunCollection = false },
+                gender = uiState.genderPreference,
+                temperatureUnit = uiState.temperatureUnit,
+                // RW-122: collection deletes land at the store by
+                // identity / by place group.
+                onDeleteEntry = { entry ->
+                    screenScope.launch { wearIveRunStore.removeByIdentity(entry) }
+                },
+                onDeletePlace = { place ->
+                    screenScope.launch { wearIveRunStore.removePlace(place) }
+                },
+                // RW-133: an entry's stored photograph, full-screen.
+                onViewPhoto = { entry -> heroViewerEntry = entry }
+            )
+        }
+    }
+
+    // RW-133: the full-screen hero viewer — the home hero's
+    // stored photograph, fitted as-is, one quiet caption line.
+    if (showHeroViewer) {
+        val heroRef = uiState.effectiveHeroUrl
+        if (heroRef != null) {
+            com.runwear.app.ui.components.HeroViewer(
+                imageRef = heroRef,
+                captionItems = uiState.outfit?.allItems?.map { it.displayName }
+                    ?: emptyList(),
+                onDismiss = { showHeroViewer = false }
+            )
+        }
+    }
+    // RW-133: a collection entry's stored photograph.
+    heroViewerEntry?.let { entry ->
+        val ref = entry.heroRef
+        if (ref != null) {
+            com.runwear.app.ui.components.HeroViewer(
+                imageRef = ref,
+                captionItems = entry.items,
+                onDismiss = { heroViewerEntry = null }
+            )
+        }
     }
 
     // Date Picker
     if (showDatePicker) {
         DatePickerSheet(
-            selectedDate = uiState.selectedDateTime.toLocalDate(),
+            selectedDate = pickerWorkingDate
+                ?: uiState.selectedDateTime.toLocalDate(),
             today = uiState.locationNow.toLocalDate(),
             onSelectDate = {
-                onDateSelected(it)
-                showDatePicker = false
+                if (showTimePicker) {
+                    // RW-131: hosted INSIDE the picker session —
+                    // the date changes the working day in place
+                    // and ONLY the date sheet closes. The time
+                    // sheet stays open on the new day; nothing is
+                    // committed and home does not re-solve. (This
+                    // supersedes RW-53's close-everything wiring
+                    // for the in-picker path only.)
+                    pickerWorkingDate = it
+                    showDatePicker = false
+                } else {
+                    // Standalone Choose-a-Day (RW-53, unchanged):
+                    // a confirmed date change re-solves home.
+                    onDateSelected(it)
+                    showDatePicker = false
+                }
             },
             onDismiss = { showDatePicker = false }
         )
     }
 
-    // Time Picker
+    // Time Picker — GEN-4: the chart sheet. Confirm commits the
+    // drafted (date, hour) as ONE selection (RW-131); confirming
+    // the untouched NOW hour keeps the NOW state
+    // (TimePickerDraftPolicy's pinned interpretation) and commits
+    // nothing. Cancel simply dismisses — the draft was
+    // sheet-local, so the pre-open selection stands.
     if (showTimePicker) {
+        // RW-131: the sheet's model follows the WORKING day while
+        // the session is open (the glance band keeps the
+        // committed day's model — DayChartBuilder is a pure
+        // function of (hourly, date), so the committed-day model
+        // is bit-identical when fed the committed date).
+        val pickerModel = remember(
+            uiState.hourlyForecast, pickerWorkingDate,
+            uiState.selectedDateTime, uiState.comfortPreference,
+            uiState.sunTimes, uiState.weather, uiState.isNowSelected,
+            uiState.locationNow
+        ) {
+            val workingDate = pickerWorkingDate
+                ?: uiState.selectedDateTime.toLocalDate()
+            if (workingDate == uiState.selectedDateTime.toLocalDate()) {
+                dayChartModel
+            } else {
+                com.runwear.app.ui.components.DayChartBuilder.build(
+                    hourly = uiState.hourlyForecast,
+                    date = workingDate,
+                    comfort = uiState.comfortPreference,
+                    sunTimes = uiState.sunTimes
+                )
+            }
+        }
         TimePickerSheet(
+            model = pickerModel,
             selectedHour = uiState.selectedDateTime.hour,
-            onSelectTime = { hour ->
-                onTimeSelected(hour)
+            locationNow = uiState.locationNow,
+            isNowSelected = uiState.isNowSelected,
+            temperatureUnit = uiState.temperatureUnit,
+            locationName = uiState.locationName,
+            onConfirm = { confirm ->
+                if (!confirm.keepNow) {
+                    val commitDate = confirm.date
+                        ?: pickerWorkingDate
+                        ?: uiState.selectedDateTime.toLocalDate()
+                    if (onPickerCommit != null) {
+                        onPickerCommit(commitDate, confirm.hour, false)
+                    } else {
+                        // Render-proof fallback: sequential path.
+                        if (commitDate != uiState.selectedDateTime.toLocalDate()) {
+                            onDateSelected(commitDate)
+                        }
+                        onTimeSelected(confirm.hour)
+                    }
+                }
+                pickerWorkingDate = null
                 showTimePicker = false
             },
-            onDismiss = { showTimePicker = false }
+            onDismiss = {
+                pickerWorkingDate = null
+                showTimePicker = false
+            },
+            // RW-53: the time sheet's day door opens Choose-a-Day.
+            onDayClick = { showDatePicker = true }
         )
     }
 
@@ -527,11 +1975,17 @@ Get your personalized running outfit at runwear.ai
             onToggleUnit = onToggleUnit,
             onSetComfortPreference = onSetComfortPreference,
             onSetGenderPreference = onSetGenderPreference,
+            appearancePreference = appearancePreference,
+            onSetAppearancePreference = onSetAppearancePreference,
             analyticsOptIn = analyticsOptIn,
             onAnalyticsOptInChange = onAnalyticsOptInChange,
             onSendFeedback = {
                 showSettings = false
                 onOpenFeedback(null)
+            },
+            onRateRunWear = {
+                showSettings = false
+                onRateRunWear()
             },
             makeItMeViewModel = makeItMeViewModel,
             makeItMeState = makeItMeState,
@@ -543,6 +1997,10 @@ Get your personalized running outfit at runwear.ai
             onMakeItMePhotosClick = {
                 showSettings = false
                 showMakeItMePhotos = true
+            },
+            onMakeItMeLooksClick = {
+                showSettings = false
+                showMakeItMeLibrary = true
             },
             onMakeItMeSubscribeClick = {
                 showSettings = false
@@ -563,7 +2021,14 @@ Get your personalized running outfit at runwear.ai
     }
 
     // ── RW-14 overlays ──────────────────────────────────────────────────
-    if (showMakeItMeFlow && makeItMeViewModel != null) {
+    // Make It Me OFF in this build (MakeItMeAvailability): the
+    // upload flow, photos view, and paywall sheet below never
+    // open — their setters are unreachable (the Settings section
+    // does not render and the upsell card never shows), and the
+    // availability conjunct keeps that true at the render site.
+    if (showMakeItMeFlow && makeItMeViewModel != null &&
+        com.runwear.app.makeitme.MakeItMeAvailability.ENABLED
+    ) {
         com.runwear.app.makeitme.MakeItMeUploadFlow(
             viewModel = makeItMeViewModel,
             gender = uiState.genderPreference.name,
@@ -571,30 +2036,94 @@ Get your personalized running outfit at runwear.ai
             todaysCell = onPersonalCombinationRequest(),
             onFinished = {
                 showMakeItMeFlow = false
+                makeItMeFlowEntryDoor = com.runwear.app.makeitme.MakeItMeEntryDoor.STANDARD
+                if (!makeItMeFlowReplace) onFirstLookRequested()
                 onPersonalLayerChanged()
             },
             // From Settings, closing without finishing changes nothing —
             // personalization stays off (State A remains the truth).
-            onExitAsStock = { showMakeItMeFlow = false }
+            onExitAsStock = {
+                showMakeItMeFlow = false
+                makeItMeFlowEntryDoor = com.runwear.app.makeitme.MakeItMeEntryDoor.STANDARD
+            },
+            entryDoor = makeItMeFlowEntryDoor
         )
     }
 
-    if (showMakeItMePhotos && makeItMeViewModel != null) {
-        com.runwear.app.makeitme.MakeItMePhotosScreen(
-            viewModel = makeItMeViewModel,
-            onDismiss = { showMakeItMePhotos = false },
-            onReplaceClick = {
-                showMakeItMePhotos = false
-                makeItMeFlowReplace = true
-                showMakeItMeFlow = true
-            }
-        )
+    // RW-61: the looks library — a full-screen Dialog of its own,
+    // hosted exactly like Your Photos.
+    if (showMakeItMeLibrary && makeItMeViewModel != null &&
+        com.runwear.app.makeitme.MakeItMeAvailability.ENABLED
+    ) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showMakeItMeLibrary = false },
+            properties = androidx.compose.ui.window.DialogProperties(
+                usePlatformDefaultWidth = false
+            )
+        ) {
+            com.runwear.app.makeitme.LooksLibraryScreen(
+                viewModel = makeItMeViewModel,
+                onDismiss = { showMakeItMeLibrary = false }
+            )
+        }
     }
 
-    if (showMakeItMePaywall && makeItMeViewModel != null) {
+    if (showMakeItMePhotos && makeItMeViewModel != null &&
+        com.runwear.app.makeitme.MakeItMeAvailability.ENABLED
+    ) {
+        // WS-5 (F-2): Your Photos is a real presentation structure —
+        // a full-screen Dialog window of its own, not a boolean
+        // overlay drawn over home. System Back / the predictive-back
+        // gesture lands on the Dialog's onDismissRequest and returns
+        // to home (the surface that opened it); before this, no
+        // BackHandler existed anywhere and Back fell through to the
+        // activity, closing the app.
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showMakeItMePhotos = false },
+            properties = androidx.compose.ui.window.DialogProperties(
+                usePlatformDefaultWidth = false
+            )
+        ) {
+            com.runwear.app.makeitme.MakeItMePhotosScreen(
+                viewModel = makeItMeViewModel,
+                onDismiss = { showMakeItMePhotos = false },
+                onReplaceClick = {
+                    showMakeItMePhotos = false
+                    makeItMeFlowReplace = true
+                    showMakeItMeFlow = true
+                },
+                // GEN-5 (item 21): the two separate doors enter the
+                // replace flow through their own entries.
+                onRetakeSelfieClick = {
+                    showMakeItMePhotos = false
+                    makeItMeFlowReplace = true
+                    makeItMeFlowEntryDoor =
+                        com.runwear.app.makeitme.MakeItMeEntryDoor.GUIDED_SELFIE
+                    showMakeItMeFlow = true
+                },
+                onChooseDifferentPhotoClick = {
+                    showMakeItMePhotos = false
+                    makeItMeFlowReplace = true
+                    makeItMeFlowEntryDoor =
+                        com.runwear.app.makeitme.MakeItMeEntryDoor.LIBRARY
+                    showMakeItMeFlow = true
+                }
+            )
+        }
+    }
+
+    if (showMakeItMePaywall && makeItMeViewModel != null &&
+        com.runwear.app.makeitme.MakeItMeAvailability.ENABLED
+    ) {
         com.runwear.app.makeitme.MakeItMePaywallSheet(
             viewModel = makeItMeViewModel,
-            onDismiss = { showMakeItMePaywall = false },
+            onDismiss = {
+                showMakeItMePaywall = false
+                // RW-79: returning to Home from the paywall re-reads
+                // the look state (the purchase path below already
+                // re-resolves the hero wholesale).
+                onPersonalLookRecheck()
+            },
             onPurchased = {
                 showMakeItMePaywall = false
                 onPersonalLayerChanged()
@@ -603,11 +2132,64 @@ Get your personalized running outfit at runwear.ai
     }
 
     // Location Picker
+    // RW-26 Section E: recents (actually-selected places only).
+    val recentLocationsStore = remember { RecentLocationsStore(context.applicationContext) }
+    val recentLocations by recentLocationsStore.recentsFlow.collectAsState(initial = emptyList())
+    var lastRemovedRecent by remember { mutableStateOf<Pair<RecentLocation, Int>?>(null) }
+
     if (showLocationPicker) {
+        // RW-141: the sheet closes on a Current location request's
+        // SUCCESS — not blindly at tap time. A request this sheet
+        // session watched start (Locating) closes the sheet when
+        // it succeeds, and the outcome is acknowledged so the next
+        // open starts quiet. A success that landed while the sheet
+        // was dismissed is acknowledged WITHOUT closing (the place
+        // already applied in the ViewModel); a failure never
+        // closes the sheet — the row carries its message.
+        var pickerSawLocating by remember { mutableStateOf(false) }
+        LaunchedEffect(uiState.currentLocationRequest) {
+            when (uiState.currentLocationRequest) {
+                CurrentLocationRequestState.Locating -> pickerSawLocating = true
+                CurrentLocationRequestState.Succeeded -> {
+                    if (pickerSawLocating) {
+                        showLocationPicker = false
+                    }
+                    onCurrentLocationRequestHandled()
+                }
+                else -> Unit
+            }
+        }
         LocationPickerSheet(
             currentLocation = uiState.locationName,
+            currentLocationRequest = uiState.currentLocationRequest,
             onSearch = onLocationSearch,
+            recents = recentLocations,
+            onRemoveRecent = { recent ->
+                val index = recentLocations.indexOf(recent)
+                lastRemovedRecent = recent to index
+                screenScope.launch {
+                    recentLocationsStore.setAll(
+                        RecentLocationsLogic.remove(recentLocations, recent.name)
+                    )
+                }
+            },
+            onUndoRemoveRecent = {
+                val removed = lastRemovedRecent
+                if (removed != null) {
+                    screenScope.launch {
+                        recentLocationsStore.setAll(
+                            RecentLocationsLogic.restore(
+                                recentLocations, removed.first, removed.second
+                            )
+                        )
+                    }
+                    lastRemovedRecent = null
+                }
+            },
             onSelectLocation = { lat, lon, name ->
+                screenScope.launch {
+                    recentLocationsStore.record(RecentLocation(name, lat, lon))
+                }
                 onLocationSelect(lat, lon, name)
                 showLocationPicker = false
             },
@@ -615,9 +2197,12 @@ Get your personalized running outfit at runwear.ai
             searchResults = locationSearchState.results,
             isSearching = locationSearchState.isSearching,
             isUsingGPS = isUsingGPS,
+            hasLocationPermission = hasLocationPermission,
             onUseCurrentLocation = {
+                // RW-141: forward the tap only. The request lives
+                // in the ViewModel; the effect above closes this
+                // sheet when (and only when) it succeeds.
                 onUseCurrentLocation()
-                showLocationPicker = false
             }
         )
     }
@@ -638,7 +2223,20 @@ Get your personalized running outfit at runwear.ai
             WeatherDetailSheet(
                 type = type,
                 weather = weather,
-                onDismiss = { weatherDetailType = null }
+                onDismiss = { weatherDetailType = null },
+                temperatureUnit = uiState.temperatureUnit,
+                // RW-63: the unified sheet's context line + tip
+                // carry the home state's own values.
+                locationName = uiState.locationName,
+                momentLabel = if (uiState.isNowSelected) {
+                    "Now"
+                } else {
+                    com.runwear.app.ui.components.DayChartFormat.hourLabel(
+                        uiState.selectedDateTime.hour
+                    )
+                },
+                runningTip = uiState.outfit?.tips?.firstOrNull(),
+                comfortPreference = uiState.comfortPreference
             )
         }
     }
@@ -660,6 +2258,27 @@ Get your personalized running outfit at runwear.ai
             onDismiss = { showHeroFlagSheet = false }
         )
     }
+
+    // Personal Hero Flag Sheet — the personal menu, headed "This
+    // doesn't look like me" (spec §4, RW-16.27). Picking a reason
+    // files the flag_hero action; when it lands, the ViewModel
+    // re-resolves the hero and the pool photo serves while the
+    // regeneration the flag queued is pending.
+    if (showPersonalFlagSheet &&
+        com.runwear.app.makeitme.MakeItMeAvailability.ENABLED
+    ) {
+        PersonalHeroFlagSheet(
+            onSelectReason = { reason ->
+                showPersonalFlagSheet = false
+                flaggedHeroUrl = uiState.heroImageUrl
+                onFlagPersonalHero(reason)
+                screenScope.launch {
+                    snackbarHostState.showSnackbar("Thanks — we'll make a new version of this look")
+                }
+            },
+            onDismiss = { showPersonalFlagSheet = false }
+        )
+    }
 }
 
 // ============================================================================
@@ -672,6 +2291,14 @@ Get your personalized running outfit at runwear.ai
  * tablets, and desktop windows — recomposes automatically on posture changes.
  */
 internal enum class AdaptiveLayout { COMPACT, MEDIUM, EXPANDED }
+
+/**
+ * WS-3: the home list's end-of-scroll proximity zone, from
+ * [WearIveRunElementMachine]'s thresholds — NEAR (within 8 dp of the
+ * end), BEYOND (more than 48 dp from it, or the final item not yet
+ * visible), BETWEEN (the hysteresis dead zone between them). Only
+ * NEAR→BEYOND and →NEAR edges dispatch machine events.
+ */
 
 /** Minimum outfit-card cell width — the PWA grid's minmax(290px, 1fr). */
 internal val OUTFIT_GRID_MIN_CELL: Dp = 290.dp
@@ -723,10 +2350,167 @@ internal fun outfitGridColumns(contentWidth: Dp, gap: Dp): Int {
 }
 
 /**
- * Hero section with entrance animation (shared across all adaptive layouts).
+ * Hero PHOTO zone with entrance animation (shared across all adaptive
+ * layouts). RW-144: the photo zone now also carries the date/time
+ * chip and the feels-like block (HeroSection's own overlays); the
+ * Make It Me pill is seated by the CALLER — straddling the
+ * hero/sheet boundary in the stacked layouts ([HeroStackedUnit]),
+ * or at the hero pane's foot in the EXPANDED split
+ * ([pillAtHeroFoot]).
  */
 @Composable
 private fun HeroSectionContent(
+    uiState: MainUiState,
+    contentVisible: Boolean,
+    scrollOffset: Float,
+    onLocationClick: () -> Unit,
+    onSettingsClick: () -> Unit,
+    onFlagClick: () -> Unit,
+    heroFlagEnabled: Boolean,
+    onCycleHero: () -> Unit = {},
+    /** GEN-3 A-HERO (WS-A(2)): the hero pill's content + its action. */
+    heroPill: com.runwear.app.ui.components.HeroPillContent? = null,
+    onHeroPillAction: () -> Unit = {},
+    /** RW-133: tapping the photo opens the full-screen viewer. */
+    onHeroPhotoClick: () -> Unit = {},
+    /** RW-144: the chip's doors (date picker / hourly chart / Now). */
+    onDateClick: () -> Unit = {},
+    onTimeClick: () -> Unit = {},
+    onNowClick: () -> Unit = {},
+    modifier: Modifier = Modifier,
+    /** EXPANDED split pane only: the photo fills the pane's height. */
+    fillHeight: Boolean = false,
+    /** EXPANDED only: the pill seats at the hero pane's foot
+     * (there is no hero/sheet boundary inside the pane). */
+    pillAtHeroFoot: Boolean = false,
+    /** HERO REDESIGN (Nov 9, 2026): the weather line's tap door
+     * (the line seats on the hero's foot now, in HeroSection). */
+    onWeatherPillClick: (String) -> Unit = {},
+    /** HERO REDESIGN: the foot stack's reserve, measured by the
+     * stacked host from its straddle pill. Unused when
+     * [pillAtHeroFoot] (the reserve is measured locally there). */
+    footReserveDp: Float = com.runwear.app.ui.components.HeroComposition.DEFAULT_FOOT_RESERVE_DP
+) {
+    // WS-1 (D-01 mechanism, applied to the photo half): the caller's
+    // modifier belongs to THIS root — the direct child of the
+    // stacking Box — never forwarded to an inner node, or the Box
+    // cannot read its alignment from it.
+    AnimatedVisibility(
+        visible = contentVisible,
+        enter = fadeIn(tween(400, easing = FastOutSlowInEasing)),
+        modifier = modifier
+    ) {
+        // EXPANDED: the pane's measured height + the foot pill's
+        // measured height drive the hero's own composition (the
+        // crop geometry and the foot stack solve against the
+        // pane's true box, not the screen fraction).
+        var paneHeightDp by remember { mutableStateOf<Float?>(null) }
+        var footPillHeightPx by remember { mutableIntStateOf(0) }
+        val densityHere = LocalDensity.current
+        val effectiveReserve = if (pillAtHeroFoot) {
+            val pillDp = with(densityHere) { footPillHeightPx.toDp().value }
+            com.runwear.app.ui.components.HeroComposition.footReserveDp(pillDp) +
+                16f
+        } else {
+            footReserveDp
+        }
+        Box(
+            modifier = (if (fillHeight) Modifier.fillMaxSize() else Modifier.fillMaxWidth())
+                .onSizeChanged { size ->
+                    if (fillHeight) {
+                        paneHeightDp = with(densityHere) {
+                            size.height.toDp().value
+                        }
+                    }
+                }
+        ) {
+            HeroSection(
+                weather = uiState.weather,
+                outfit = uiState.outfit,
+                // WS-4/WS-1: the photo-zone chrome (the location pill)
+                // shows the SIMPLE place form, never the raw geocode
+                // string.
+                locationName = uiState.simplePlace?.display ?: uiState.locationName,
+                heroImageUrl = uiState.heroImageUrl,
+                // GEN-3 A-HERO (WS-A(1)/X-7): the scene's bundled fallback
+                // is the hero band's base from the scene's first frame —
+                // the band never sits on the designed gradient while a
+                // truthful photo is servable, and a place switch re-bases
+                // on the NEW place's fallback, never the old photo.
+                heroFallbackUrl = uiState.heroFallbackUrl,
+                heroSceneKey = uiState.locationName,
+                onHeroPhotoClick = onHeroPhotoClick,
+                scrollOffset = scrollOffset,
+                onLocationClick = onLocationClick,
+                onSettingsClick = onSettingsClick,
+                // RW-144: chip + feels-like frames.
+                selectedDateTime = uiState.selectedDateTime,
+                isNowSelected = uiState.isNowSelected,
+                onDateClick = onDateClick,
+                onTimeClick = onTimeClick,
+                onNowClick = onNowClick,
+                temperatureUnit = uiState.temperatureUnit,
+                comfortPreference = uiState.comfortPreference,
+                // HERO REDESIGN: weather line on the hero's foot.
+                onWeatherPillClick = onWeatherPillClick,
+                footReserveDp = effectiveReserve,
+                heroHeightOverride = if (fillHeight) {
+                    paneHeightDp?.dp
+                } else {
+                    null
+                },
+                // RW-16.27: the flag chip shows for ANY hero photo — a
+                // personal photo most of all (its menu is the personal
+                // one) — and the refresh chip follows the ROTATION size
+                // (personal photo + pool candidates), so both controls
+                // live in the personal state too.
+                showFlagButton = uiState.effectiveHeroUrl != null,
+                flagEnabled = heroFlagEnabled,
+                onFlagClick = onFlagClick,
+                heroIsPersonal = uiState.heroIsPersonal,
+                // GEN-5 (RW-28 item 32, A-23): the Now-state hero shows
+                // the FLAG control only; the refresh chip joins in
+                // CHANGED states (a non-Now moment selected).
+                showRefreshButton = !uiState.isNowSelected &&
+                    uiState.effectiveHeroUrl != null &&
+                    uiState.heroCandidates.size +
+                    (if (uiState.personalHeroImageUrl != null) 1 else 0) > 1,
+                onRefreshHeroClick = onCycleHero,
+                modifier = if (fillHeight) Modifier.fillMaxSize() else Modifier.fillMaxWidth()
+            )
+            // EXPANDED split only: the pill at the hero pane's foot.
+            if (pillAtHeroFoot && heroPill != null) {
+                com.runwear.app.ui.components.HeroPill(
+                    content = heroPill,
+                    onAction = onHeroPillAction,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 16.dp)
+                        .onSizeChanged { footPillHeightPx = it.height }
+                )
+            }
+        }
+    }
+}
+
+/**
+ * RW-144: the stacked layouts' first-screen unit — the hero
+ * with the sheet opening DIRECTLY below it on the same surface,
+ * and the Make It Me pill STRADDLING the hero/sheet boundary
+ * (centered, half over the photo's foot, half over the sheet),
+ * exactly as the v8 frames seat it. When no pill state exists
+ * (a stock serve), the sheet opens at the hero's foot with its
+ * plain inset — no gap is faked.
+ *
+ * HERO REDESIGN (Nov 9, 2026): the hero is now most of the
+ * first viewport (HeroComposition fractions) and the weather
+ * line seats on the hero's foot — the unit's sheet-opening
+ * block (HeroSheetContent / HeroSheetBlock) is retired from
+ * the home path; the unit is the hero plus the straddle
+ * clearance spacer.
+ */
+@Composable
+private fun HeroStackedUnit(
     uiState: MainUiState,
     contentVisible: Boolean,
     scrollOffset: Float,
@@ -735,42 +2519,81 @@ private fun HeroSectionContent(
     onNowClick: () -> Unit,
     onLocationClick: () -> Unit,
     onSettingsClick: () -> Unit,
-    onShareClick: () -> Unit,
-    onTempClick: () -> Unit,
     onWeatherPillClick: (String) -> Unit,
     onFlagClick: () -> Unit,
     heroFlagEnabled: Boolean,
     onCycleHero: () -> Unit = {},
+    heroPill: com.runwear.app.ui.components.HeroPillContent? = null,
+    onHeroPillAction: () -> Unit = {},
+    /** RW-133: tapping the photo opens the full-screen viewer. */
+    onHeroPhotoClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    AnimatedVisibility(
-        visible = contentVisible,
-        enter = fadeIn(tween(400, easing = FastOutSlowInEasing))
-    ) {
-        HeroSection(
-            weather = uiState.weather,
-            outfit = uiState.outfit,
-            locationName = uiState.locationName,
-            selectedDateTime = uiState.selectedDateTime,
-            locationNow = uiState.locationNow,
-            isNowSelected = uiState.isNowSelected,
-            heroImageUrl = uiState.heroImageUrl,
-            scrollOffset = scrollOffset,
-            onDateClick = onDateClick,
-            onTimeClick = onTimeClick,
-            onNowClick = onNowClick,
-            onLocationClick = onLocationClick,
-            onSettingsClick = onSettingsClick,
-            onShareClick = onShareClick,
-            onTempClick = onTempClick,
-            onWeatherPillClick = onWeatherPillClick,
-            showFlagButton = uiState.heroImageUrl != null && !uiState.heroIsPersonal,
-            flagEnabled = heroFlagEnabled,
-            onFlagClick = onFlagClick,
-            showRefreshButton = uiState.heroCandidates.size > 1,
-            onRefreshHeroClick = onCycleHero,
-            modifier = modifier
-        )
+    val configuration = LocalConfiguration.current
+    val heroHeight = heroPhotoHeight(configuration.screenHeightDp)
+    // The pill's half-height: its seat straddles the boundary by
+    // the pill's own MEASURED half. Pill states vary in height —
+    // the generating state stacks its upsell line under the main
+    // row — so a fixed estimate would let a tall pill cover the
+    // sheet's weather line (seen in the RW-144 walkthrough's
+    // generating frame) or leave a short pill floating off the
+    // seam. Measured, the seat and the sheet's clearance move
+    // together and the straddle is exact in every state.
+    var pillHeightPx by remember { mutableIntStateOf(0) }
+    val density = LocalDensity.current
+    val pillHalf = with(density) { (pillHeightPx / 2).toDp() }
+    Box(modifier = modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            HeroSectionContent(
+                uiState = uiState,
+                contentVisible = contentVisible,
+                scrollOffset = scrollOffset,
+                onLocationClick = onLocationClick,
+                onSettingsClick = onSettingsClick,
+                onFlagClick = onFlagClick,
+                heroFlagEnabled = heroFlagEnabled,
+                onCycleHero = onCycleHero,
+                heroPill = heroPill,
+                onHeroPillAction = onHeroPillAction,
+                onHeroPhotoClick = onHeroPhotoClick,
+                onDateClick = onDateClick,
+                onTimeClick = onTimeClick,
+                onNowClick = onNowClick,
+                // HERO REDESIGN (Nov 9, 2026): the weather line
+                // seats on the hero's foot (inside HeroSection);
+                // the sheet no longer opens with it. The hero's
+                // foot reserve is this unit's measured straddle
+                // half, so block / weather line / pill compose
+                // as one stack with guaranteed gaps.
+                onWeatherPillClick = onWeatherPillClick,
+                footReserveDp = if (heroPill != null) {
+                    com.runwear.app.ui.components.HeroComposition
+                        .footReserveDp(pillHalf.value)
+                } else {
+                    com.runwear.app.ui.components.HeroComposition
+                        .DEFAULT_FOOT_RESERVE_DP
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
+            // The straddle pill's lower half hangs below the
+            // hero; the sheet's first content (the outfit
+            // header) clears it by the same measured half + 12 —
+            // the clearance the sheet block's top padding used
+            // to carry, kept exact now that the block is gone.
+            if (heroPill != null) {
+                Spacer(Modifier.height(pillHalf + 12.dp))
+            }
+        }
+        if (heroPill != null) {
+            com.runwear.app.ui.components.HeroPill(
+                content = heroPill,
+                onAction = onHeroPillAction,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = heroHeight - pillHalf)
+                    .onSizeChanged { pillHeightPx = it.height }
+            )
+        }
     }
 }
 
@@ -799,57 +2622,22 @@ private fun OutfitSectionHeader(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-                // "X Items for Your Run"
+                // "X Items for Your Run" — RW-25: Bebas retired from
+                // the home surface; M3 headlineSmall (semibold sans).
                 Text(
-                    text = "$itemCount Items for Your Run",
-                    fontFamily = BebasNeueFontFamily,
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Normal,
-                    color = RunWearColors.TextPrimary,
-                    letterSpacing = 0.56.sp
+                    text = com.runwear.app.ui.components.OutfitHeaderCopy.header(itemCount),
+                    style = TextStyle(
+                        fontFamily = FontFamily.Default,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 19.sp,
+                        lineHeight = 24.sp
+                    ),
+                    color = RunWearColors.TextPrimary
                 )
 
-                // Shop button - opens shop modal
-                Box(
-                    modifier = Modifier
-                        .shadow(
-                            elevation = 8.dp,
-                            shape = RoundedCornerShape(50),
-                            ambientColor = RunWearColors.PrimaryGlow,
-                            spotColor = RunWearColors.PrimaryGlow
-                        )
-                        .background(
-                            brush = Brush.linearGradient(
-                                colors = listOf(
-                                    RunWearColors.Primary,
-                                    RunWearColors.PrimaryLight
-                                ),
-                                start = Offset(0f, 0f),
-                                end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
-                            ),
-                            shape = RoundedCornerShape(50)
-                        )
-                        .clickable { onShopAllClick() }
-                        .padding(horizontal = 18.dp, vertical = 10.dp)
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.ShoppingBag,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = Color.White
-                        )
-                        Text(
-                            text = "Shop",
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 13.sp,
-                            color = Color.White
-                        )
-                    }
-                }
+                // RW-144: the v8 frames' header is the count line
+                // alone — no Shop button rides it. (Shop-all remains
+                // reachable from an outfit item's own shop door.)
             }
         }
 }
@@ -895,7 +2683,34 @@ private fun LazyListScope.outfitListItems(
         )
     }
 
-    // Pro Tip Section
+    // GEN-5 (C-3 + Addendum 4): the Pro Tip and the feedback row
+    // NO LONGER live inside the outfit list. The settled home
+    // order is hero/headline → outfit → convergence band (while
+    // generating) → day-chart glance band → Pro Tip → Wear I've
+    // Run, so the trailing elements are emitted by
+    // homeTrailingListItems AFTER the band and the chart at each
+    // layout's call site.
+
+    // WS-8 (D-26): the hardcoded "v3.12" PWA version footer is
+    // removed — no design frame carries it; the real version lives
+    // in Settings → About.
+}
+
+/**
+ * GEN-5 (C-3): the home scroll's trailing elements for the list
+ * layout — the Pro Tip, then the contextual feedback entry —
+ * emitted after the convergence band and the day-chart glance
+ * band in the settled home order.
+ */
+private fun LazyListScope.homeTrailingListItems(
+    uiState: MainUiState,
+    onFeedbackClick: () -> Unit,
+    wirFooterPresent: Boolean = false,
+    wirFooterContent: @Composable () -> Unit = {}
+) {
+    val outfit = uiState.outfit ?: return
+
+    // Pro Tip Section — below the day chart (C-3).
     if (outfit.tips.isNotEmpty()) {
         item {
             TipsSection(
@@ -916,7 +2731,7 @@ private fun LazyListScope.outfitListItems(
             text = "Not what you'd wear? Tell us",
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
-            color = RunWearColors.Primary,
+            color = RunWearColors.PineAccent,
             textAlign = TextAlign.Center,
             modifier = Modifier
                 .fillMaxWidth()
@@ -925,17 +2740,11 @@ private fun LazyListScope.outfitListItems(
         )
     }
 
-    // Version footer
-    item {
-        Text(
-            text = "v3.12",
-            style = MaterialTheme.typography.bodySmall,
-            color = RunWearColors.TextMuted.copy(alpha = 0.5f),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 24.dp),
-            textAlign = TextAlign.Center
-        )
+    // RW-135 (Direction A / A-prime): the expanded Wear I've Run
+    // form is the page's FOOTER — the final item, in the flow.
+    // INTERIM form pending the owner's package approval.
+    if (wirFooterPresent) {
+        item(key = "wir-footer") { wirFooterContent() }
     }
 }
 
@@ -980,6 +2789,25 @@ private fun LazyGridScope.outfitGridItems(
         )
     }
 
+    // GEN-5 (C-3 + Addendum 4): Pro Tip + feedback moved out to
+    // homeTrailingGridItems, emitted after the band and the chart.
+
+    // WS-8 (D-26): grid presentation carries no version footer either.
+}
+
+/**
+ * GEN-5 (C-3): the grid layouts' trailing elements — Pro Tip,
+ * then the feedback entry, both full-span — emitted after the
+ * convergence band and the day-chart glance band.
+ */
+private fun LazyGridScope.homeTrailingGridItems(
+    uiState: MainUiState,
+    onFeedbackClick: () -> Unit,
+    wirFooterPresent: Boolean = false,
+    wirFooterContent: @Composable () -> Unit = {}
+) {
+    val outfit = uiState.outfit ?: return
+
     // Pro Tip Section (spans the pane, as in the PWA rail)
     if (outfit.tips.isNotEmpty()) {
         item(span = { GridItemSpan(maxLineSpan) }) {
@@ -998,7 +2826,7 @@ private fun LazyGridScope.outfitGridItems(
             text = "Not what you'd wear? Tell us",
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
-            color = RunWearColors.Primary,
+            color = RunWearColors.PineAccent,
             textAlign = TextAlign.Center,
             modifier = Modifier
                 .fillMaxWidth()
@@ -1007,17 +2835,11 @@ private fun LazyGridScope.outfitGridItems(
         )
     }
 
-    // Version footer
-    item(span = { GridItemSpan(maxLineSpan) }) {
-        Text(
-            text = "v3.12",
-            style = MaterialTheme.typography.bodySmall,
-            color = RunWearColors.TextMuted.copy(alpha = 0.5f),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 24.dp),
-            textAlign = TextAlign.Center
-        )
+    // RW-135: the footer section, full span — see the list helper.
+    if (wirFooterPresent) {
+        item(span = { GridItemSpan(maxLineSpan) }, key = "wir-footer") {
+            wirFooterContent()
+        }
     }
 }
 
@@ -1037,7 +2859,7 @@ private fun HeroFlagSheet(
     onSelectReason: (com.runwear.shared.domain.model.HeroFlagReason) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val sheetState = rememberModalBottomSheetState()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -1081,25 +2903,89 @@ private fun HeroFlagSheet(
     }
 }
 
+/**
+ * RW-16.27: the PERSONAL hero's flag sheet — same sheet idiom as
+ * the pool one, but the menu is the personal vocabulary, and every
+ * pick files the backend's flag_hero action against the photo on
+ * screen: it retires immediately and a regeneration is queued.
+ * (The pool sheet's insert cannot identify a personal photo and
+ * would retire nothing.)
+ *
+ * WS-6 (D-17): the hierarchy is design frame 45's — the sheet LEADS
+ * with "This doesn't look like me" as its heading (the heading is
+ * the lead reason's own control), its consequence stated beneath
+ * it; the other reasons follow as rows. The generic "Flag this
+ * photo" header belongs to the pool variant only.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PersonalHeroFlagSheet(
+    onSelectReason: (com.runwear.app.makeitme.PersonalHeroFlagReason) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = RunWearColors.Surface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        onSelectReason(
+                            com.runwear.app.makeitme.PersonalFlagSheetContent.headingReason
+                        )
+                    }
+                    .padding(bottom = 8.dp)
+            ) {
+                Text(
+                    text = com.runwear.app.makeitme.PersonalFlagSheetContent.heading,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = RunWearColors.TextPrimary
+                )
+                Text(
+                    text = com.runwear.app.makeitme.PersonalFlagSheetContent.HEADING_CONSEQUENCE,
+                    fontSize = 14.sp,
+                    color = RunWearColors.TextSecondary,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+            com.runwear.app.makeitme.PersonalFlagSheetContent.rowReasons.forEach { reason ->
+                Text(
+                    text = reason.label,
+                    fontSize = 16.sp,
+                    color = RunWearColors.TextPrimary,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSelectReason(reason) }
+                        .padding(vertical = 14.dp)
+                )
+            }
+            Text(
+                text = "Cancel",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                color = RunWearColors.TextSecondary,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onDismiss() }
+                    .padding(vertical = 14.dp)
+            )
+        }
+    }
+}
+
 // ============================================================================
 // ERROR SCREEN
 // ============================================================================
-
-/**
- * Temperature bracket label (ported from web PWA getTempBracket).
- * Used in share text to describe conditions.
- */
-private fun getTempBracket(temp: Double, isCelsius: Boolean): String {
-    val f = if (isCelsius) temp * 9 / 5 + 32 else temp
-    return when {
-        f >= 80 -> "hot"
-        f >= 65 -> "warm"
-        f >= 50 -> "mild"
-        f >= 35 -> "cool"
-        f >= 20 -> "cold"
-        else -> "freezing"
-    }
-}
 
 @Composable
 private fun HeroErrorScreen(
@@ -1119,20 +3005,35 @@ private fun HeroErrorScreen(
             Icon(
                 imageVector = Icons.Outlined.ErrorOutline,
                 contentDescription = null,
-                tint = RunWearColors.TempHot,
+                tint = MaterialTheme.colorScheme.error,
                 modifier = Modifier.size(64.dp)
             )
             Spacer(Modifier.height(16.dp))
             Text(
-                "Oops!",
+                "Couldn't load your weather",
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
                 color = RunWearColors.TextPrimary
             )
             Spacer(Modifier.height(8.dp))
+            // GEN-5 (RW-29 FA-15): the error body is AUTHORED
+            // (design frame 47) — it names the failure and what
+            // is safe. The gen-4 screen printed the exception's
+            // own message here ("Unable to resolve host
+            // api.open-meteo.com: No address associated with
+            // hostname" in Sol's field recordings). The raw
+            // message stays in state for diagnostics; it is
+            // never rendered.
             Text(
-                error,
+                "The weather service didn't answer.",
                 style = MaterialTheme.typography.bodyLarge,
+                color = RunWearColors.TextSecondary,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Your places, settings, and photos stay on this phone — nothing is lost.",
+                style = MaterialTheme.typography.bodyMedium,
                 color = RunWearColors.TextSecondary,
                 textAlign = TextAlign.Center
             )

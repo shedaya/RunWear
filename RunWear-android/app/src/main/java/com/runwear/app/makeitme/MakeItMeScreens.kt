@@ -1,5 +1,8 @@
 package com.runwear.app.makeitme
 
+import com.runwear.engine.MR
+import dev.icerock.moko.resources.compose.stringResource
+
 import android.app.Activity
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -8,11 +11,15 @@ import androidx.core.content.FileProvider
 import java.io.File
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.togetherWith
+import com.runwear.app.ui.screens.OnboardingMotion
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -28,6 +35,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.DirectionsRun
 import androidx.compose.material.icons.outlined.Refresh
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -40,12 +48,15 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -54,14 +65,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import com.runwear.app.ui.theme.BebasNeueFontFamily
+import kotlin.math.roundToInt
+import com.runwear.app.ui.theme.GreatVibesFontFamily
 import com.runwear.app.ui.theme.RunWearColors
 
 // ============================================================================
@@ -70,13 +84,156 @@ import com.runwear.app.ui.theme.RunWearColors
 // the top: it is the subject of the sentence.
 // ============================================================================
 
+/** What a system Back press does on the onboarding fork screen. */
+internal enum class ForkBackAction { EXIT_FLOW }
+
+/**
+ * WS-6 (BACKLOG open item from WS-5's Android lane): the fork's back
+ * policy, mirroring [UploadBackPolicy] — Back steps back within a
+ * flow and exits only at its root. The fork is a single screen and
+ * IS the Make It Me onboarding flow's root (its one step forward is
+ * the upload flow, whose own root-exit the fork's exit mirrors:
+ * leave as stock, the flow's settled end-state). Before this, the
+ * fork was a boolean overlay with NO BackHandler: system Back fell
+ * through to the activity and closed the app — the F-2 class on the
+ * one surface WS-5's conversion did not reach.
+ */
+internal object ForkBackPolicy {
+    fun actionFor(): ForkBackAction = ForkBackAction.EXIT_FLOW
+}
+
+/**
+ * W-3 (Nov 4 walkthrough): the fork header band's crop geometry.
+ *
+ * The band shows the SAME hero serve home shows, in a 300 dp-tall
+ * full-width box. Home anchors its Crop to the TOP (HeroSection's
+ * BiasAlignment verticalBias −1 at rest — see [com.runwear.app.ui
+ * .components.HeroImageGeometry]). The fork previously passed NO
+ * alignment, so AsyncImage's default CENTER anchor discarded the
+ * top (sourceHeight − sliceHeight)/2 of the frame before the slice
+ * even started — and on the fork's serve the runner's head sat in
+ * that discarded region: the chin crop Sol flagged on both
+ * platforms' forks (home was fine; do not touch it).
+ *
+ * The fix is the anchor alone: top-anchored, exactly as home, so
+ * the slice starts at source y = 0 and nothing above the runner
+ * can be discarded. The band's height is part of the geometry, not
+ * a free knob — at the standard portrait phone widths the 300 dp
+ * band's top-anchored slice reaches at least the bottom of the
+ * head band D-23 audited on the home serve (source y ≈ 392–509 of
+ * 1200); shrinking the band would pull the slice's bottom back up
+ * through the face. [headBandFullyVisible] pins that across the
+ * width matrix in tests.
+ */
+internal object ForkBandGeometry {
+
+    /**
+     * The band's height. GEN-5: 260 dp (was 300) — with the new
+     * hard-coded image the head's safety comes from the anchoring
+     * rule, not the band height (see below), and the shorter band
+     * is what lets BOTH fork doors arrive fully visible on the
+     * fork screen (item 19, A-4). At phone widths the band aspect
+     * stays in the asset lane's full-upper-body range; at wide
+     * (foldable/tablet) widths it lands in their tested range
+     * where face, shoulders and chest stay composed.
+     */
+    const val BAND_HEIGHT_DP = 260
+
+    // GEN-5 (RW-28, ruling C-2): the fork band is ONE purpose-designed
+    // hard-coded image (res/drawable-nodpi/mim_fork_hero.webp,
+    // 2048 x 1152, 16:9) — it no longer shows the home hero serve.
+    // Anchoring rule of record (asset lane README, binding): plain
+    // centre-crop is ruled OUT (the head has only 3.2% headroom).
+    //  - Band aspect <= image aspect: full image height is shown;
+    //    the horizontal window is centred on the face centre
+    //    (x = 0.507), clamped to the image edges.
+    //  - Band aspect > image aspect: full image width is shown; the
+    //    vertical window is anchored to the TOP of the image.
+    const val IMAGE_WIDTH_PX = 2048f
+    const val IMAGE_HEIGHT_PX = 1152f
+    const val FACE_CENTRE_X_FRACTION = 0.507f
+
+    /** The dashed face box, in image-normalised coordinates. */
+    const val FACE_BOX_X = 0.400f
+    const val FACE_BOX_Y = 0.018f
+    const val FACE_BOX_WIDTH = 0.214f
+    const val FACE_BOX_HEIGHT = 0.478f
+
+    /** A rectangle in band coordinates (px). */
+    data class RectF(val left: Float, val top: Float, val width: Float, val height: Float)
+
+    /**
+     * The displayed image rect for a band of [bandWidthPx] x
+     * [bandHeightPx] under the anchoring rule: the image is scaled
+     * to fill (cover), then positioned per the rule. The rect may
+     * extend past the band on the cropped axis (negative left/top).
+     */
+    fun displayedImageRect(bandWidthPx: Float, bandHeightPx: Float): RectF {
+        val bandAspect = bandWidthPx / bandHeightPx
+        val imageAspect = IMAGE_WIDTH_PX / IMAGE_HEIGHT_PX
+        val scale = maxOf(bandWidthPx / IMAGE_WIDTH_PX, bandHeightPx / IMAGE_HEIGHT_PX)
+        val displayedW = IMAGE_WIDTH_PX * scale
+        val displayedH = IMAGE_HEIGHT_PX * scale
+        val left: Float
+        val top: Float
+        if (bandAspect <= imageAspect) {
+            // Full height shown; window centred on the face centre.
+            val desired = FACE_CENTRE_X_FRACTION * displayedW - bandWidthPx / 2f
+            val offsetX = desired.coerceIn(0f, (displayedW - bandWidthPx).coerceAtLeast(0f))
+            left = -offsetX
+            top = 0f
+        } else {
+            // Full width shown; window anchored to the top.
+            left = 0f
+            top = 0f
+        }
+        return RectF(left, top, displayedW, displayedH)
+    }
+
+    /** The face box in band coordinates, from the displayed rect. */
+    fun faceBoxRect(bandWidthPx: Float, bandHeightPx: Float): RectF {
+        val img = displayedImageRect(bandWidthPx, bandHeightPx)
+        return RectF(
+            left = img.left + FACE_BOX_X * img.width,
+            top = img.top + FACE_BOX_Y * img.height,
+            width = FACE_BOX_WIDTH * img.width,
+            height = FACE_BOX_HEIGHT * img.height
+        )
+    }
+
+    /**
+     * True when the FULL head (measured box y 0.032..0.482, x
+     * 0.414..0.600) is inside the band window under the anchoring
+     * rule — pinned across the form-factor matrix in tests.
+     */
+    fun headFullyVisible(bandWidthPx: Float, bandHeightPx: Float): Boolean {
+        val img = displayedImageRect(bandWidthPx, bandHeightPx)
+        val headLeft = img.left + 0.414f * img.width
+        val headRight = img.left + 0.600f * img.width
+        val headTop = img.top + 0.032f * img.height
+        val headBottom = img.top + 0.482f * img.height
+        return headLeft >= 0f && headRight <= bandWidthPx &&
+            headTop >= 0f && headBottom <= bandHeightPx
+    }
+}
+
 @Composable
 fun MakeItMeForkScreen(
     heroImageUrl: String?,
     onUseMyPhotos: () -> Unit,
     onUseStandardPhotos: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** System Back at the flow's root (see [ForkBackPolicy]). */
+    onBack: () -> Unit = {}
 ) {
+    // The fork owns its Back press — it never falls through to the
+    // activity (which would close the app from onboarding's last
+    // step). Root exit only, per ForkBackPolicy.
+    androidx.activity.compose.BackHandler {
+        when (ForkBackPolicy.actionFor()) {
+            ForkBackAction.EXIT_FLOW -> onBack()
+        }
+    }
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -84,47 +241,124 @@ fun MakeItMeForkScreen(
             .verticalScroll(rememberScrollState())
     ) {
         // The first recommendation's photo — "that's a model in your
-        // outfit photo."
-        Box(
+        // outfit photo." W-3: the crop is TOP-anchored
+        // (ForkBandGeometry), as home's hero is — the runner's full
+        // head is in the band. The column below scrolls
+        // (verticalScroll on the root), so the whole fork — both
+        // option cards, the "Use standard photos" button included —
+        // is reachable however tall the content runs.
+        // GEN-5 (RW-28, C-2): the hard-coded fork hero — one
+        // purpose-designed bundled image, cover-cropped under the
+        // asset lane's anchoring rule (ForkBandGeometry), with the
+        // dashed face box drawn as a code overlay in image space so
+        // it stays registered to the face at every form factor. The
+        // band's placeholder is the designed cream, never white
+        // (A-5). Both doors below are fully visible on arrival: the
+        // root column scrolls AND the band is exactly one band tall
+        // (A-4's clip came from the old serve's composition; the
+        // settled fork keeps both cards reachable without a scroll
+        // cue hunt — the scroll remains for small screens).
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(300.dp)
-                .background(Color.White.copy(alpha = 0.05f))
+                .height(ForkBandGeometry.BAND_HEIGHT_DP.dp)
+                .background(RunWearColors.Background)
+                .clip(androidx.compose.ui.graphics.RectangleShape)
         ) {
-            if (heroImageUrl != null) {
-                AsyncImage(
-                    model = heroImageUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            val bandWidthPx = with(density) { maxWidth.toPx() }
+            val bandHeightPx = with(density) { maxHeight.toPx() }
+            val imgRect = ForkBandGeometry.displayedImageRect(bandWidthPx, bandHeightPx)
+            val boxRect = ForkBandGeometry.faceBoxRect(bandWidthPx, bandHeightPx)
+            androidx.compose.foundation.Image(
+                painter = androidx.compose.ui.res.painterResource(
+                    com.runwear.app.R.drawable.mim_fork_hero
+                ),
+                contentDescription = null,
+                contentScale = ContentScale.None,
+                modifier = Modifier
+                    .offset {
+                        androidx.compose.ui.unit.IntOffset(
+                            imgRect.left.roundToInt(), imgRect.top.roundToInt()
+                        )
+                    }
+                    .size(
+                        width = with(density) { imgRect.width.toDp() },
+                        height = with(density) { imgRect.height.toDp() }
+                    )
+            )
+            // The dashed face box — same dashed language as the
+            // guided capture's face oval, pine on the light image.
+            // RW-104 (Sol, Nov 6, 2026): properly visible — deep
+            // pine at 3.5dp with a longer dash. The gen-6 form
+            // (light PineAccent mint, 2.5dp, 10/7 dash) washed out
+            // against the photo, worst on the Fold's wide hero:
+            // "the user may not notice the dotted line square."
+            androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+                drawRoundRect(
+                    color = RunWearColors.Primary,
+                    topLeft = androidx.compose.ui.geometry.Offset(boxRect.left, boxRect.top),
+                    size = androidx.compose.ui.geometry.Size(boxRect.width, boxRect.height),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(
+                        boxRect.height * 0.12f, boxRect.height * 0.12f
+                    ),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(
+                        width = 3.5.dp.toPx(),
+                        pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(
+                            floatArrayOf(12.dp.toPx(), 6.dp.toPx())
+                        )
+                    )
                 )
             }
         }
 
         Column(modifier = Modifier.padding(horizontal = 24.dp)) {
-            Spacer(Modifier.height(24.dp))
-            Text(
-                text = MakeItMeStrings.F1_HEADLINE,
-                fontFamily = BebasNeueFontFamily,
+            Spacer(Modifier.height(16.dp))
+                    // Frame 32: the fork introduces Make It Me under its
+        // script wordmark (third wordmark, design §7.5).
+        Text(
+            text = "Make It Me",
+            fontFamily = GreatVibesFontFamily,
+            fontSize = 34.sp,
+            color = RunWearColors.TextPrimary,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+        Spacer(Modifier.height(8.dp))
+Text(
+                text = stringResource(MR.strings.mim_f1_headline),
+                fontFamily = FontFamily.Default,
                 fontSize = 30.sp,
                 letterSpacing = 0.5.sp,
                 color = RunWearColors.TextPrimary
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                text = MakeItMeStrings.F2_LEAD,
+                text = stringResource(MR.strings.mim_f2_lead),
                 fontSize = 14.sp,
                 lineHeight = 20.sp,
-                color = Color.White.copy(alpha = 0.65f)
+                color = RunWearColors.TextSecondary
             )
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(18.dp))
+
+            // RW-78 (owner device evidence, Nov 6, 2026) — SUPERSEDES
+            // the GEN-6 WAVE C (RW-52) select-then-commit reading
+            // above this fork's doors. On the gen-6 candidate the
+            // RW-52 rewire made each door only SELECT its card (a 2dp
+            // border) while the committing "Continue" sat below the
+            // fold: the owner tapped the full-width green "Use my
+            // photos" button and nothing happened. A button styled
+            // and labelled as the action must itself advance. Both
+            // doors therefore navigate DIRECTLY again — the gen-5
+            // form: "Use my photos" enters the photo path at the tap,
+            // "Use standard photos" settles the stock choice at the
+            // tap. No selection state, no Continue.
 
             // Option A — customize
             ForkOptionCard(
-                title = MakeItMeStrings.F3_OPTION_A_TITLE,
-                body = MakeItMeStrings.F4_OPTION_A_BODY,
-                buttonText = MakeItMeStrings.F5_OPTION_A_BUTTON,
+                title = stringResource(MR.strings.mim_f3_option_a_title),
+                body = stringResource(MR.strings.mim_f4_option_a_body),
+                buttonText = stringResource(MR.strings.mim_f5_option_a_button),
                 primary = true,
                 onClick = onUseMyPhotos
             )
@@ -133,20 +367,20 @@ fun MakeItMeForkScreen(
 
             // Option B — stock (a complete, respected end-state)
             ForkOptionCard(
-                title = MakeItMeStrings.F6_OPTION_B_TITLE,
-                body = MakeItMeStrings.F7_OPTION_B_BODY,
-                buttonText = MakeItMeStrings.F8_OPTION_B_BUTTON,
+                title = stringResource(MR.strings.mim_f6_option_b_title),
+                body = stringResource(MR.strings.mim_f7_option_b_body),
+                buttonText = stringResource(MR.strings.mim_f8_option_b_button),
                 primary = false,
                 onClick = onUseStandardPhotos
             )
 
             Spacer(Modifier.height(16.dp))
             Text(
-                text = MakeItMeStrings.F9_FOOTER,
+                text = stringResource(MR.strings.mim_f9_footer),
                 fontSize = 13.sp,
-                color = Color.White.copy(alpha = 0.5f)
+                color = RunWearColors.TextSecondary
             )
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(24.dp))
         }
     }
 }
@@ -159,12 +393,19 @@ private fun ForkOptionCard(
     primary: Boolean,
     onClick: () -> Unit
 ) {
+    // RW-78: no selection state — the card's button IS the action
+    // (see the fork's doors comment). The border is the resting
+    // card outline only.
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(24.dp))
-            .background(Color.White.copy(alpha = 0.07f))
-            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(24.dp))
+            .background(RunWearColors.BgCard)
+            .border(
+                1.dp,
+                RunWearColors.TextSecondary.copy(alpha = 0.3f),
+                RoundedCornerShape(24.dp)
+            )
             .padding(horizontal = 20.dp, vertical = 18.dp)
     ) {
         Text(
@@ -177,7 +418,7 @@ private fun ForkOptionCard(
             text = body,
             fontSize = 13.sp,
             lineHeight = 18.sp,
-            color = Color.White.copy(alpha = 0.6f),
+            color = RunWearColors.TextSecondary,
             modifier = Modifier.padding(top = 4.dp)
         )
         Spacer(Modifier.height(14.dp))
@@ -191,7 +432,7 @@ private fun ForkOptionCard(
                 ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary)
             } else {
                 ButtonDefaults.buttonColors(
-                    containerColor = Color.White.copy(alpha = 0.07f),
+                    containerColor = RunWearColors.BgCard,
                     contentColor = RunWearColors.TextPrimary
                 )
             }
@@ -207,7 +448,37 @@ private fun ForkOptionCard(
 // no photo UI exists before the consent screen.
 // ============================================================================
 
-private enum class UploadStep { CONSENT, PHOTOS, SUBMITTING, SAVED }
+internal enum class UploadStep { CONSENT, PHOTOS, SUBMITTING, SAVED }
+
+/**
+ * GEN-5 (RW-28 item 21): which door the user entered the upload
+ * flow through. STANDARD is the plain flow (fork, Settings
+ * opt-in). GUIDED_SELFIE / LIBRARY come from the Your Photos
+ * surface's two separate replacement doors: the named door
+ * pre-opens when the capture step arrives — the guided capture
+ * dialog for one, the library picker for the other.
+ */
+enum class MakeItMeEntryDoor { STANDARD, GUIDED_SELFIE, LIBRARY }
+
+/** What a system Back press does at one upload-flow step (WS-5, F-2). */
+internal enum class UploadBackAction { EXIT_FLOW, STEP_BACK_TO_CONSENT, STAY }
+
+/**
+ * WS-5 (F-2): the upload flow's back policy — Back steps back
+ * through the flow, then exits it; it never falls through to the
+ * activity. Pure, so the gate can pin every step's action.
+ */
+internal object UploadBackPolicy {
+    fun actionFor(step: UploadStep): UploadBackAction = when (step) {
+        UploadStep.CONSENT -> UploadBackAction.EXIT_FLOW
+        UploadStep.PHOTOS -> UploadBackAction.STEP_BACK_TO_CONSENT
+        // A submit in flight and the save-confirmation beat own
+        // their moment: Back does nothing rather than stranding
+        // either half-finished.
+        UploadStep.SUBMITTING -> UploadBackAction.STAY
+        UploadStep.SAVED -> UploadBackAction.STAY
+    }
+}
 
 private class PickedPhoto(val uri: Uri) {
     var checking: Boolean by mutableStateOf(true)
@@ -223,10 +494,59 @@ fun MakeItMeUploadFlow(
     todaysCell: Pair<String, List<String>>?,
     onFinished: () -> Unit,
     onExitAsStock: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    entryDoor: MakeItMeEntryDoor = MakeItMeEntryDoor.STANDARD
 ) {
+    MakeItMeUploadFlow(
+        recordConsent = { g, onResult -> viewModel.recordConsent(g, onResult) },
+        submitPhotos = { photos, rep, cell, onResult ->
+            viewModel.submitPhotos(photos, rep, cell, onResult)
+        },
+        gender = gender,
+        replace = replace,
+        todaysCell = todaysCell,
+        onFinished = onFinished,
+        onExitAsStock = onExitAsStock,
+        modifier = modifier,
+        entryDoor = entryDoor
+    )
+}
+
+/**
+ * GEN-2 A1 (W-2): the upload flow's implementation, with its two
+ * view-model calls carried as function seams so the gate can drive
+ * the REAL flow (consent -> photos, Back between them) in tests
+ * without a network or a RevenueCat init. Production callers use
+ * the view-model overload above; behavior is identical.
+ */
+@Composable
+internal fun MakeItMeUploadFlow(
+    recordConsent: (String, (Boolean) -> Unit) -> Unit,
+    submitPhotos: (List<ByteArray>, Boolean, Pair<String, List<String>>?, (Boolean) -> Unit) -> Unit,
+    gender: String,
+    replace: Boolean,
+    todaysCell: Pair<String, List<String>>?,
+    onFinished: () -> Unit,
+    onExitAsStock: () -> Unit,
+    modifier: Modifier = Modifier,
+    entryDoor: MakeItMeEntryDoor = MakeItMeEntryDoor.STANDARD
+) {
+    val transportErrorText = stringResource(MR.strings.mim_transport_error)
     val context = LocalContext.current
     var step by remember { mutableStateOf(UploadStep.CONSENT) }
+    // WS-5 (F-2): system Back is the flow's own — step back, then
+    // exit the flow to the surface that opened it (the host clears
+    // its state via onExitAsStock). BackHandler registers with the
+    // activity's OnBackPressedDispatcher, which is also the
+    // predictive-back path; before this, the app had no BackHandler
+    // anywhere and Back finished the activity from mid-flow.
+    androidx.activity.compose.BackHandler {
+        when (UploadBackPolicy.actionFor(step)) {
+            UploadBackAction.EXIT_FLOW -> onExitAsStock()
+            UploadBackAction.STEP_BACK_TO_CONSENT -> step = UploadStep.CONSENT
+            UploadBackAction.STAY -> Unit
+        }
+    }
     var attested by remember { mutableStateOf(false) }
     var working by remember { mutableStateOf(false) }
     var errorText by remember { mutableStateOf<String?>(null) }
@@ -252,24 +572,19 @@ fun MakeItMeUploadFlow(
         }
     }
 
-    // RW-16.14: the camera source. TakePicture drives the platform
-    // camera app into a FileProvider file in our cache — full
-    // resolution, NO manifest camera permission — and the result is
-    // a content Uri of exactly the shape the picker produces, so
-    // the quality-check effect below treats a capture identically
-    // to a library pick. There is one intake path, not two.
+    // GEN-5 (RW-28 item 16): the camera source is the IN-APP
+    // guided capture — the "Take photo" door opens the guided
+    // selfie dialog (CameraX live preview + the four live checks),
+    // never the stock camera app. Its accepted photo lands in the
+    // same photos list the picker feeds, so the quality-check
+    // effect below treats a capture identically to a library pick.
+    // There is one intake path, not two. (The gen-4 TakePicture
+    // hand-off is retired.)
     var showSourceChoice by remember { mutableStateOf(false) }
-    var sourceNote by remember { mutableStateOf<String?>(null) }
-    var pendingCaptureUri by remember { mutableStateOf<Uri?>(null) }
-    val cameraLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.TakePicture()
-    ) { success ->
-        val uri = pendingCaptureUri
-        pendingCaptureUri = null
-        if (success && uri != null && photos.none { it.uri == uri }) {
-            photos.add(PickedPhoto(uri))
-        }
+    var showGuidedCapture by remember {
+        mutableStateOf(entryDoor == MakeItMeEntryDoor.GUIDED_SELFIE)
     }
+    var sourceNote by remember { mutableStateOf<String?>(null) }
     val cameraPresent = remember {
         context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY)
     }
@@ -281,20 +596,30 @@ fun MakeItMeUploadFlow(
     }
 
     fun launchCamera() {
-        val file = File(context.cacheDir, "makeitme/capture-${System.currentTimeMillis()}.jpg")
-        file.parentFile?.mkdirs()
-        val uri = FileProvider.getUriForFile(
-            context, "${context.packageName}.fileprovider", file
-        )
-        pendingCaptureUri = uri
-        try {
-            cameraLauncher.launch(uri)
-        } catch (e: Exception) {
-            // No activity answers the capture intent after all:
-            // the policy's fallback — library, with the note.
-            pendingCaptureUri = null
-            sourceNote = PhotoIntakePolicy.CAMERA_UNAVAILABLE_NOTE
-            launchPicker()
+        showGuidedCapture = true
+    }
+
+    // GEN-5 (item 21): entering through the "Choose a Different
+    // Photo" door opens the library picker as soon as the capture
+    // step arrives (once — the door is an entry, not a state).
+    // GEN-6 WAVE A (RW-49): the intake OPENS on the guided capture
+    // as its primary surface (design frames 15–18) — arriving at
+    // the photos step with no photos yet presents the guided
+    // capture directly for the standard and guided-selfie doors,
+    // instead of landing on a photo-list step whose primary action
+    // is a "Take a guided selfie" button. The library door stays
+    // the explicit LIBRARY entry (and the secondary door inside
+    // the step). Once only: dismissing the capture never reopens
+    // it — the user chose to leave it.
+    var entryDoorConsumed by remember { mutableStateOf(false) }
+    LaunchedEffect(step) {
+        if (step == UploadStep.PHOTOS && !entryDoorConsumed && photos.isEmpty()) {
+            entryDoorConsumed = true
+            when (entryDoor) {
+                MakeItMeEntryDoor.LIBRARY -> launchPicker()
+                MakeItMeEntryDoor.STANDARD,
+                MakeItMeEntryDoor.GUIDED_SELFIE -> showGuidedCapture = true
+            }
         }
     }
 
@@ -340,26 +665,81 @@ fun MakeItMeUploadFlow(
                 Icon(
                     imageVector = Icons.Outlined.Close,
                     contentDescription = "Close",
-                    tint = Color.White.copy(alpha = 0.7f)
+                    tint = RunWearColors.TextSecondary
                 )
             }
         }
 
-        when (step) {
+        // GEN-2 A1 (W-2, P0) — THE OVERLAP MECHANISM, diagnosed:
+        // AnimatedContent's transition layout places EVERY root
+        // child of its content lambda at the same origin (it is a
+        // single-content transition container, like the onboarding
+        // host, whose branches each emit ONE root composable).
+        // This flow's branches emitted their whole layout as
+        // top-level siblings — title, body, attestation row,
+        // Continue, Not now — so every element was placed on top
+        // of the first: the title rendered over the first
+        // paragraph, the attestation was buried under both, and
+        // Continue sat underneath the text stack, unreachable.
+        // That is the garbled, dead-end consent sheet Sol recorded
+        // on Nov 4 in both modes. The fix is structural: each
+        // branch now emits exactly ONE root — a Column carrying
+        // the step's layout — so the transition container stacks
+        // steps, never the elements within a step.
+        //
+        // WS-10 (§1.4): the flow's steps advance with the same M3
+        // shared-axis horizontal slide + fade as onboarding's own
+        // steps — consent → capture is a step transition, not a cut.
+        androidx.compose.animation.AnimatedContent(
+            targetState = step,
+            transitionSpec = {
+                val forward = targetState.ordinal > initialState.ordinal
+                val easing = OnboardingMotion.EmphasizedEasing
+                val duration = OnboardingMotion.STEP_TRANSITION_MS
+                (androidx.compose.animation.slideInHorizontally(
+                    animationSpec = androidx.compose.animation.core.tween(duration, easing = easing)
+                ) { width -> if (forward) width else -width } +
+                    androidx.compose.animation.fadeIn(
+                        animationSpec = androidx.compose.animation.core.tween(duration, easing = easing)
+                    ))
+                    .togetherWith(
+                        androidx.compose.animation.slideOutHorizontally(
+                            animationSpec = androidx.compose.animation.core.tween(duration, easing = easing)
+                        ) { width -> if (forward) -width else width } +
+                            androidx.compose.animation.fadeOut(
+                                animationSpec = androidx.compose.animation.core.tween(duration, easing = easing)
+                            )
+                    )
+            },
+            label = "makeItMeUploadStep"
+        ) { animatedStep ->
+        when (animatedStep) {
             UploadStep.CONSENT -> {
+              Column {
+                // GEN-5 (RW-28 item 20, A-6): the consent screen
+                // carries the Make It Me SCRIPT header, like the
+                // fork and the paywall — the gen-4 build headed it
+                // with the plain title alone.
                 Text(
-                    text = MakeItMeStrings.C1A_CONSENT_TITLE,
-                    fontFamily = BebasNeueFontFamily,
+                    text = "Make It Me",
+                    fontFamily = GreatVibesFontFamily,
+                    fontSize = 34.sp,
+                    color = RunWearColors.TextPrimary
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = stringResource(MR.strings.mim_c1a_consent_title),
+                    fontFamily = FontFamily.Default,
                     fontSize = 28.sp,
                     letterSpacing = 0.5.sp,
                     color = RunWearColors.TextPrimary
                 )
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    text = MakeItMeStrings.C1B_CONSENT_BODY,
+                    text = stringResource(MR.strings.mim_c1b_consent_body),
                     fontSize = 14.sp,
                     lineHeight = 21.sp,
-                    color = Color.White.copy(alpha = 0.75f)
+                    color = RunWearColors.TextSecondary
                 )
                 Spacer(Modifier.height(20.dp))
                 Row(
@@ -371,26 +751,26 @@ fun MakeItMeUploadFlow(
                     Checkbox(checked = attested, onCheckedChange = { attested = it })
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = MakeItMeStrings.C1C_ATTESTATION,
+                        text = stringResource(MR.strings.mim_c1c_attestation),
                         fontSize = 14.sp,
                         color = RunWearColors.TextPrimary
                     )
                 }
                 errorText?.let {
                     Spacer(Modifier.height(8.dp))
-                    Text(text = it, fontSize = 13.sp, color = Color(0xFFFF8A80))
+                    Text(text = it, fontSize = 13.sp, color = MaterialTheme.colorScheme.error)
                 }
                 Spacer(Modifier.height(24.dp))
                 Button(
                     onClick = {
                         working = true
                         errorText = null
-                        viewModel.recordConsent(gender) { ok ->
+                        recordConsent(gender) { ok ->
                             working = false
                             if (ok) {
                                 step = UploadStep.PHOTOS
                             } else {
-                                errorText = MakeItMeStrings.TRANSPORT_ERROR
+                                errorText = transportErrorText
                             }
                         }
                     },
@@ -401,61 +781,95 @@ fun MakeItMeUploadFlow(
                     shape = RoundedCornerShape(18.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary)
                 ) {
+                    // GEN-5 (item 20, A-7): the working state
+                    // keeps its LABEL — spinner beside the word,
+                    // never a bare spinner arc on a greyed button
+                    // that reads as disabled.
                     if (working) {
                         CircularProgressIndicator(
-                            color = Color.White,
+                            color = com.runwear.app.ui.theme.PhotoInk,
                             modifier = Modifier.size(20.dp),
                             strokeWidth = 2.dp
                         )
-                    } else {
-                        Text(
-                            MakeItMeStrings.C1D_CONTINUE,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 16.sp
-                        )
+                        Spacer(Modifier.width(10.dp))
                     }
+                    Text(
+                        stringResource(MR.strings.mim_c1d_continue),
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 16.sp
+                    )
                 }
                 Spacer(Modifier.height(10.dp))
                 TextButton(
                     onClick = onExitAsStock,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(MakeItMeStrings.C1E_NOT_NOW, color = Color.White.copy(alpha = 0.7f))
+                    Text(stringResource(MR.strings.mim_c1e_not_now), color = RunWearColors.TextSecondary)
                 }
+              }
             }
 
             UploadStep.PHOTOS, UploadStep.SUBMITTING -> {
+              Column {
                 Text(
-                    text = MakeItMeStrings.C2A_CAPTURE_TITLE,
-                    fontFamily = BebasNeueFontFamily,
+                    text = stringResource(MR.strings.mim_c2a_capture_title),
+                    fontFamily = FontFamily.Default,
                     fontSize = 28.sp,
                     letterSpacing = 0.5.sp,
                     color = RunWearColors.TextPrimary
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = MakeItMeStrings.C2B_CAPTURE_GUIDANCE,
+                    text = stringResource(MR.strings.mim_c2b_capture_guidance),
                     fontSize = 13.sp,
                     lineHeight = 19.sp,
-                    color = Color.White.copy(alpha = 0.6f)
+                    color = RunWearColors.TextSecondary
                 )
-                Spacer(Modifier.height(8.dp))
-                // RW-16.14 guidance (Sol's ruling, Oct 31): a
-                // recommendation, shown where photos are chosen —
-                // never a requirement, never validated.
-                Text(
-                    text = MakeItMeStrings.C2D_FULL_BODY_GUIDANCE,
-                    fontSize = 13.sp,
-                    lineHeight = 19.sp,
-                    color = Color.White.copy(alpha = 0.6f)
-                )
+                Spacer(Modifier.height(14.dp))
+                // RW-26: guided capture is THE primary door (the app
+                // dictates the selfie: overlay + live ML Kit chips);
+                // upload stays the secondary door below, judged by
+                // the identical checks. (The RW-16.14 full-body
+                // guidance display is retired by the Nov 2 intake
+                // ruling — no full-body slot; the C2D string remains
+                // in the deck for the record.)
+                Button(
+                    onClick = { showGuidedCapture = true },
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary)
+                ) {
+                    Text("Take a guided selfie", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = com.runwear.app.ui.theme.PhotoInk)
+                }
+                if (showGuidedCapture) {
+                    androidx.compose.ui.window.Dialog(
+                        onDismissRequest = { showGuidedCapture = false },
+                        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+                    ) {
+                        GuidedSelfieCapture(
+                            onAccepted = { uri ->
+                                showGuidedCapture = false
+                                if (photos.none { it.uri == uri }) photos.add(PickedPhoto(uri))
+                            },
+                            onDismiss = { showGuidedCapture = false },
+                            // DA-18: the library door opens the
+                            // picker's library — close the capture
+                            // and launch the same picker the
+                            // upload door uses.
+                            onChooseFromLibrary = {
+                                showGuidedCapture = false
+                                launchPicker()
+                            }
+                        )
+                    }
+                }
                 if (replace) {
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = MakeItMeStrings.S7_REPLACE_NOTE,
+                        text = stringResource(MR.strings.mim_s7_replace_note),
                         fontSize = 13.sp,
                         lineHeight = 19.sp,
-                        color = Color.White.copy(alpha = 0.6f)
+                        color = RunWearColors.TextSecondary
                     )
                 }
                 Spacer(Modifier.height(18.dp))
@@ -476,7 +890,7 @@ fun MakeItMeUploadFlow(
                             .height(50.dp),
                         shape = RoundedCornerShape(16.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color.White.copy(alpha = 0.07f),
+                            containerColor = RunWearColors.BgCard,
                             contentColor = RunWearColors.TextPrimary
                         )
                     ) {
@@ -486,22 +900,26 @@ fun MakeItMeUploadFlow(
 
                 sourceNote?.let {
                     Spacer(Modifier.height(8.dp))
-                    Text(text = it, fontSize = 13.sp, color = Color.White.copy(alpha = 0.65f))
+                    Text(text = it, fontSize = 13.sp, color = RunWearColors.TextSecondary)
                 }
                 if (showSourceChoice) {
                     AlertDialog(
+                        // GEN-5 (RW-29 cream map): dialogs sit on
+                        // the design's dialog surface (BgCard),
+                        // never the Material baseline.
+                        containerColor = RunWearColors.BgCard,
                         onDismissRequest = { showSourceChoice = false },
-                        title = { Text(MakeItMeStrings.C2E_SOURCE_DIALOG_TITLE) },
+                        title = { Text(stringResource(MR.strings.mim_c2e_source_dialog_title)) },
                         text = {
                             Column {
                                 TextButton(onClick = {
                                     showSourceChoice = false
                                     chooseSource(PhotoIntakePolicy.Source.CAMERA)
-                                }) { Text(MakeItMeStrings.C2F_TAKE_PHOTO) }
+                                }) { Text(stringResource(MR.strings.mim_c2f_take_photo)) }
                                 TextButton(onClick = {
                                     showSourceChoice = false
                                     chooseSource(PhotoIntakePolicy.Source.LIBRARY)
-                                }) { Text(MakeItMeStrings.C2G_CHOOSE_FROM_LIBRARY) }
+                                }) { Text(stringResource(MR.strings.mim_c2g_choose_from_library)) }
                             }
                         },
                         confirmButton = {},
@@ -517,17 +935,15 @@ fun MakeItMeUploadFlow(
                 val anyChecking = photos.any { it.checking }
                 errorText?.let {
                     Spacer(Modifier.height(8.dp))
-                    Text(text = it, fontSize = 13.sp, color = Color(0xFFFF8A80))
+                    Text(text = it, fontSize = 13.sp, color = MaterialTheme.colorScheme.error)
                 }
                 Spacer(Modifier.height(20.dp))
                 Button(
                     onClick = {
                         step = UploadStep.SUBMITTING
                         errorText = null
-                        viewModel.submitPhotos(
-                            photos = accepted.map { it.jpegBytes!! },
-                            replace = replace,
-                            todaysCell = todaysCell
+                        submitPhotos(
+                            accepted.map { it.jpegBytes!! }, replace, todaysCell
                         ) { ok ->
                             if (ok) {
                                 // RW-16.15: confirm the save on
@@ -536,7 +952,7 @@ fun MakeItMeUploadFlow(
                                 step = UploadStep.SAVED
                             } else {
                                 step = UploadStep.PHOTOS
-                                errorText = MakeItMeStrings.TRANSPORT_ERROR
+                                errorText = transportErrorText
                             }
                         }
                     },
@@ -548,14 +964,24 @@ fun MakeItMeUploadFlow(
                     colors = ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary)
                 ) {
                     if (step == UploadStep.SUBMITTING) {
+                        // GEN-3 A-HERO (WS-B, X-1): a submitting state
+                        // is a spinner WITH its label — the bare
+                        // greyed spinner with no words is the exact
+                        // frame the gen-2 walkthrough condemned.
                         CircularProgressIndicator(
-                            color = Color.White,
+                            color = com.runwear.app.ui.theme.PhotoInk,
                             modifier = Modifier.size(20.dp),
                             strokeWidth = 2.dp
                         )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            if (replace) stringResource(MR.strings.mim_c2c_confirm_save) else stringResource(MR.strings.mim_c2c_confirm_first_look),
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 16.sp
+                        )
                     } else {
                         Text(
-                            if (replace) MakeItMeStrings.C2C_CONFIRM_SAVE else MakeItMeStrings.C2C_CONFIRM_FIRST_LOOK,
+                            if (replace) stringResource(MR.strings.mim_c2c_confirm_save) else stringResource(MR.strings.mim_c2c_confirm_first_look),
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 16.sp
                         )
@@ -563,6 +989,7 @@ fun MakeItMeUploadFlow(
                 }
             }
 
+              }
             UploadStep.SAVED -> {
                 // RW-16.15 save confirmation (spec C2J): the
                 // explicit "it saved," held for the beat by the
@@ -574,18 +1001,19 @@ fun MakeItMeUploadFlow(
                     Icon(
                         imageVector = Icons.Outlined.CheckCircle,
                         contentDescription = null,
-                        tint = RunWearColors.Primary,
+                        tint = RunWearColors.PineAccent,
                         modifier = Modifier.size(44.dp)
                     )
                     Spacer(Modifier.height(12.dp))
                     Text(
-                        text = MakeItMeStrings.C2J_SAVE_CONFIRMED,
+                        text = stringResource(MR.strings.mim_c2j_save_confirmed),
                         fontSize = 17.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = RunWearColors.TextPrimary
                     )
                 }
             }
+        }
         }
         Spacer(Modifier.height(32.dp))
     }
@@ -602,26 +1030,37 @@ private fun PickedPhotoRow(picked: PickedPhoto, onRemove: () -> Unit) {
                 modifier = Modifier
                     .size(72.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color.White.copy(alpha = 0.06f))
+                    .background(RunWearColors.BgCard)
             )
             Spacer(Modifier.width(12.dp))
             Box(modifier = Modifier.weight(1f)) {
                 when {
                     picked.checking -> CircularProgressIndicator(
-                        color = RunWearColors.Primary,
+                        color = RunWearColors.PineAccent,
                         modifier = Modifier.size(20.dp),
                         strokeWidth = 2.dp
                     )
-                    picked.rejection != null -> Text(
-                        text = PhotoQualityPolicy.stringFor(picked.rejection!!),
-                        fontSize = 13.sp,
-                        lineHeight = 18.sp,
-                        color = Color(0xFFFF8A80)
-                    )
+                    picked.rejection != null -> Column {
+                        Text(
+                            text = PhotoQualityPolicy.stringFor(picked.rejection!!),
+                            fontSize = 13.sp,
+                            lineHeight = 18.sp,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        // RW-26: the upload door's retake prompt
+                        // (C3F) — camera offered first, same checks.
+                        Text(
+                            text = stringResource(MR.strings.mim_c3f_retake_upload),
+                            fontSize = 12.sp,
+                            lineHeight = 17.sp,
+                            color = RunWearColors.TextSecondary,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
                     else -> Text(
                         text = "Looks good.",
                         fontSize = 13.sp,
-                        color = Color.White.copy(alpha = 0.6f)
+                        color = RunWearColors.TextSecondary
                     )
                 }
             }
@@ -629,7 +1068,7 @@ private fun PickedPhotoRow(picked: PickedPhoto, onRemove: () -> Unit) {
                 Icon(
                     imageVector = Icons.Outlined.Close,
                     contentDescription = "Remove photo",
-                    tint = Color.White.copy(alpha = 0.6f)
+                    tint = RunWearColors.TextSecondary
                 )
             }
         }
@@ -654,7 +1093,7 @@ private fun ReferencePhotoTile(url: String, onRetry: () -> Unit) {
         modifier = Modifier
             .size(96.dp)
             .clip(RoundedCornerShape(14.dp))
-            .background(Color.White.copy(alpha = 0.06f))
+            .background(RunWearColors.BgCard)
     ) {
         if (phase != ReferenceTilePhase.FAILED) {
             AsyncImage(
@@ -672,15 +1111,15 @@ private fun ReferencePhotoTile(url: String, onRetry: () -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 CircularProgressIndicator(
-                    color = RunWearColors.Primary,
+                    color = RunWearColors.PineAccent,
                     modifier = Modifier.size(18.dp),
                     strokeWidth = 2.dp
                 )
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text = MakeItMeStrings.S15_PHOTO_LOADING,
+                    text = stringResource(MR.strings.mim_s15_photo_loading),
                     fontSize = 11.sp,
-                    color = Color.White.copy(alpha = 0.65f)
+                    color = RunWearColors.TextSecondary
                 )
             }
             ReferenceTilePhase.FAILED -> Column(
@@ -694,19 +1133,19 @@ private fun ReferencePhotoTile(url: String, onRetry: () -> Unit) {
                 Icon(
                     imageVector = Icons.Outlined.Refresh,
                     contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.8f),
+                    tint = RunWearColors.TextSecondary,
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = MakeItMeStrings.S16_PHOTO_LOAD_FAILED,
+                    text = stringResource(MR.strings.mim_s16_photo_load_failed),
                     fontSize = 11.sp,
                     lineHeight = 14.sp,
                     textAlign = TextAlign.Center,
-                    color = Color.White.copy(alpha = 0.8f)
+                    color = RunWearColors.TextSecondary
                 )
                 Text(
-                    text = MakeItMeStrings.S17_PHOTO_RETRY,
+                    text = stringResource(MR.strings.mim_s17_photo_retry),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = RunWearColors.TextPrimary
@@ -727,13 +1166,13 @@ private fun ReferencePhotoTile(url: String, onRetry: () -> Unit) {
 private fun PhotosLoadError(onRetry: () -> Unit) {
     Column {
         Text(
-            text = MakeItMeStrings.S18_PHOTOS_LOAD_FAILED,
+            text = stringResource(MR.strings.mim_s18_photos_load_failed),
             fontSize = 14.sp,
-            color = Color(0xFFFF8A80)
+            color = MaterialTheme.colorScheme.error
         )
         Spacer(Modifier.height(10.dp))
         OutlinedButton(onClick = onRetry) {
-            Text(MakeItMeStrings.S19_TRY_AGAIN)
+            Text(stringResource(MR.strings.mim_s19_try_again))
         }
     }
 }
@@ -747,7 +1186,50 @@ fun MakeItMePhotosScreen(
     viewModel: MakeItMeViewModel,
     onReplaceClick: () -> Unit,
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onRetakeSelfieClick: () -> Unit = onReplaceClick,
+    onChooseDifferentPhotoClick: () -> Unit = onReplaceClick
+) {
+    // GEN-5 (item 21): the settled surface carries its own
+    // "Delete my photos" door, hosted here with the same dialog
+    // the Settings Danger zone uses.
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    MakeItMePhotosScreen(
+        loadReferenceUrls = { onResult -> viewModel.loadReferenceUrls(onResult) },
+        onReplaceClick = onReplaceClick,
+        onDismiss = onDismiss,
+        modifier = modifier,
+        onRetakeSelfieClick = onRetakeSelfieClick,
+        onChooseDifferentPhotoClick = onChooseDifferentPhotoClick,
+        onDeletePhotosClick = { showDeleteDialog = true }
+    )
+    if (showDeleteDialog) {
+        MakeItMeDeleteDialog(
+            viewModel = viewModel,
+            onDismiss = { showDeleteDialog = false },
+            onDeleted = {
+                showDeleteDialog = false
+                onDismiss()
+            }
+        )
+    }
+}
+
+/**
+ * GEN-2 A1 (F-2): the Your Photos implementation, with its one
+ * view-model call carried as a function seam so the gate can host
+ * the REAL screen in its production Dialog pattern in tests
+ * without a network. Production callers use the overload above.
+ */
+@Composable
+internal fun MakeItMePhotosScreen(
+    loadReferenceUrls: ((List<String>) -> Unit) -> Unit,
+    onReplaceClick: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+    onRetakeSelfieClick: () -> Unit = onReplaceClick,
+    onChooseDifferentPhotoClick: () -> Unit = onReplaceClick,
+    onDeletePhotosClick: (() -> Unit)? = null
 ) {
     var urls by remember { mutableStateOf<List<String>>(emptyList()) }
     var loaded by remember { mutableStateOf(false) }
@@ -763,7 +1245,7 @@ fun MakeItMePhotosScreen(
     var loadFailed by remember { mutableStateOf(false) }
     LaunchedEffect(loadToken) {
         loadFailed = false
-        viewModel.loadReferenceUrls { result ->
+        loadReferenceUrls { result ->
             urls = result
             loaded = true
         }
@@ -788,13 +1270,23 @@ fun MakeItMePhotosScreen(
                 Icon(
                     imageVector = Icons.Outlined.Close,
                     contentDescription = "Close",
-                    tint = Color.White.copy(alpha = 0.7f)
+                    tint = RunWearColors.TextSecondary
                 )
             }
         }
+        // GEN-5 (item 21): the title zone carries the script
+        // wordmark above the plain title, as on the fork, the
+        // consent and the paywall.
         Text(
-            text = MakeItMeStrings.S6_PHOTOS_ROW,
-            fontFamily = BebasNeueFontFamily,
+            text = "Make It Me",
+            fontFamily = GreatVibesFontFamily,
+            fontSize = 30.sp,
+            color = RunWearColors.TextPrimary
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = stringResource(MR.strings.mim_s6_photos_row),
+            fontFamily = FontFamily.Default,
             fontSize = 28.sp,
             letterSpacing = 0.5.sp,
             color = RunWearColors.TextPrimary
@@ -805,12 +1297,12 @@ fun MakeItMePhotosScreen(
                 onRetry = { loadToken++ }
             )
             !loaded -> Column {
-                CircularProgressIndicator(color = RunWearColors.Primary)
+                CircularProgressIndicator(color = RunWearColors.PineAccent)
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    text = MakeItMeStrings.S15_PHOTO_LOADING,
+                    text = stringResource(MR.strings.mim_s15_photo_loading),
                     fontSize = 13.sp,
-                    color = Color.White.copy(alpha = 0.65f)
+                    color = RunWearColors.TextSecondary
                 )
             }
             // A completed load with nothing to show is a failed
@@ -823,6 +1315,20 @@ fun MakeItMePhotosScreen(
                 }
             )
             else -> {
+            // GEN-5 (item 21): the settled current-photo block —
+            // its heading and arrival line above the photo itself.
+            Text(
+                text = stringResource(MR.strings.mim_s30_your_current_photo),
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = RunWearColors.TextPrimary
+            )
+            Text(
+                text = stringResource(MR.strings.mim_s31_current_photo_line),
+                fontSize = 13.sp,
+                color = RunWearColors.TextSecondary,
+                modifier = Modifier.padding(top = 2.dp, bottom = 10.dp)
+            )
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 urls.forEach { url ->
                     ReferencePhotoTile(
@@ -837,33 +1343,86 @@ fun MakeItMePhotosScreen(
             }
             Spacer(Modifier.height(12.dp))
             Text(
-                text = MakeItMeStrings.S7_REPLACE_NOTE,
+                text = stringResource(MR.strings.mim_s7_replace_note),
                 fontSize = 13.sp,
                 lineHeight = 19.sp,
-                color = Color.White.copy(alpha = 0.6f)
+                color = RunWearColors.TextSecondary
+            )
+            Spacer(Modifier.height(16.dp))
+            // Frame 38: the epoch, headed in the settled words,
+            // with the rule in plain words beneath it.
+            Text(
+                text = stringResource(MR.strings.mim_s32_epoch_heading),
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = RunWearColors.TextPrimary
+            )
+            Text(
+                text = stringResource(MR.strings.mim_s20_epoch_rule),
+                fontSize = 13.sp,
+                lineHeight = 19.sp,
+                color = RunWearColors.TextSecondary,
+                modifier = Modifier.padding(top = 2.dp)
             )
             }
         }
         Spacer(Modifier.height(24.dp))
+        // GEN-5 (item 21): TWO separate replacement doors — the
+        // guided selfie (primary) and a different library photo —
+        // not one merged "Replace photos" button. Each door routes
+        // into the replace flow through its own entry (the flow
+        // pre-opens the named door at its capture step).
         Button(
-            onClick = onReplaceClick,
+            onClick = onRetakeSelfieClick,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(52.dp),
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary)
         ) {
-            Text("Replace photos", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+            Text(
+                stringResource(MR.strings.mim_s33_retake_selfie),
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 15.sp
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+        OutlinedButton(
+            onClick = onChooseDifferentPhotoClick,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Text(
+                stringResource(MR.strings.mim_s34_choose_different_photo),
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 15.sp
+            )
+        }
+        if (onDeletePhotosClick != null) {
+            Spacer(Modifier.height(18.dp))
+            MakeItMeSettingsRow(
+                title = stringResource(MR.strings.mim_s10_delete_row),
+                sub = null,
+                destructive = true,
+                onClick = onDeletePhotosClick
+            )
         }
         Spacer(Modifier.height(32.dp))
     }
 }
 
 // ============================================================================
-// Generation progress line (spec §2.4, strings G1/G2) — sits with the
-// hero while a personal generation is in flight. The recommendation is
-// never blocked: the standard photo stays up until the verified
-// personal image lands.
+// Generation progress line (spec §2.4, strings G1/G2).
+// GEN-3 A-HERO (X-8): this line NO LONGER renders on home — the
+// generating state lives ON the hero image now, as the hero pill
+// (WS-A(2) state (a)), so the state sits on the photo it belongs to
+// instead of in the sheet's scroll content. The composable remains
+// as the G1/G2 strings' reference host. (Copy audit, X-8: G2 no
+// longer claims a standard photo is staying up — with WS-A(1) a
+// truthful photo IS up wherever one is servable, and the line does
+// not need to promise it.)
 // ============================================================================
 
 @Composable
@@ -876,22 +1435,22 @@ fun MakeItMeProgressLine(modifier: Modifier = Modifier) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         CircularProgressIndicator(
-            color = RunWearColors.Primary,
+            color = RunWearColors.PineAccent,
             modifier = Modifier.size(16.dp),
             strokeWidth = 2.dp
         )
         Spacer(Modifier.width(10.dp))
         Column {
             Text(
-                text = MakeItMeStrings.G1_PROGRESS,
+                text = stringResource(MR.strings.mim_g1_progress),
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium,
                 color = RunWearColors.TextPrimary
             )
             Text(
-                text = MakeItMeStrings.G2_PROGRESS_SUB,
+                text = stringResource(MR.strings.mim_g2_progress_sub),
                 fontSize = 11.sp,
-                color = Color.White.copy(alpha = 0.55f)
+                color = RunWearColors.TextSecondary
             )
         }
     }
@@ -915,7 +1474,7 @@ fun MakeItMeFailedLine(onRetry: () -> Unit, modifier: Modifier = Modifier) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = MakeItMeStrings.G5_LOOK_FAILED,
+            text = stringResource(MR.strings.mim_g5_look_failed),
             fontSize = 13.sp,
             fontWeight = FontWeight.Medium,
             color = RunWearColors.TextPrimary,
@@ -924,7 +1483,7 @@ fun MakeItMeFailedLine(onRetry: () -> Unit, modifier: Modifier = Modifier) {
         Spacer(Modifier.width(10.dp))
         TextButton(onClick = onRetry) {
             Text(
-                text = MakeItMeStrings.G6_RETRY,
+                text = stringResource(MR.strings.mim_g6_retry),
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold
             )
@@ -941,37 +1500,43 @@ fun MakeItMeFailedLine(onRetry: () -> Unit, modifier: Modifier = Modifier) {
 fun MakeItMeUpsellCard(
     onSubscribeClick: () -> Unit,
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** The ONE free-looks counter (the same MakeItMeUiState field
+     * the hero pill reads) — the card's body line counts from it. */
+    freeGenerationsUsed: Int = 0
 ) {
     Column(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(24.dp))
-            .background(Color.White.copy(alpha = 0.07f))
-            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(24.dp))
+            .background(RunWearColors.BgCard)
+            .border(1.dp, RunWearColors.TextSecondary.copy(alpha = 0.3f), RoundedCornerShape(24.dp))
             .padding(horizontal = 20.dp, vertical = 18.dp)
     ) {
+        // GEN-6 WAVE C (RW-65): the upsell card's title instance
+        // of the feature name is the Make It Me SCRIPT — every
+        // title instance in the app is script (DA-22 class); the
+        // sans caps eyebrow (U1A_EYEBROW) is retired here.
         Text(
-            text = MakeItMeStrings.U1A_EYEBROW,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 1.2.sp,
-            color = RunWearColors.PrimaryLight
+            text = stringResource(MR.strings.mim_u2a_sheet_title),
+            fontFamily = GreatVibesFontFamily,
+            fontSize = 26.sp,
+            color = RunWearColors.TextPrimary
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            text = MakeItMeStrings.U1B_HEADLINE,
-            fontFamily = BebasNeueFontFamily,
+            text = stringResource(MR.strings.mim_u1b_headline),
+            fontFamily = FontFamily.Default,
             fontSize = 24.sp,
             letterSpacing = 0.5.sp,
             color = RunWearColors.TextPrimary
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            text = MakeItMeStrings.U1C_BODY,
+            text = MakeItMeStrings.u1cBody(freeGenerationsUsed),
             fontSize = 13.sp,
             lineHeight = 19.sp,
-            color = Color.White.copy(alpha = 0.65f)
+            color = RunWearColors.TextSecondary
         )
         Spacer(Modifier.height(14.dp))
         Button(
@@ -983,7 +1548,7 @@ fun MakeItMeUpsellCard(
             colors = ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary)
         ) {
             Text(
-                MakeItMeStrings.U1D_PRIMARY,
+                stringResource(MR.strings.mim_u1d_primary),
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 14.sp
             )
@@ -992,15 +1557,18 @@ fun MakeItMeUpsellCard(
             onClick = onDismiss,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(MakeItMeStrings.U1E_NOT_NOW, color = Color.White.copy(alpha = 0.7f))
+            Text(stringResource(MR.strings.mim_u1e_not_now), color = RunWearColors.TextSecondary)
         }
     }
 }
 
 // ============================================================================
-// Subscription sheet (spec §5.3, strings U2). Prices come from the
-// RevenueCat offering when it resolves; the spec strings are the
-// fallback so the sheet is never blank.
+// Subscription sheet (spec §5.3, strings U2). Every price renders
+// from the fetched current RevenueCat offering — the experiment
+// requirement (RW-16.30, Nov 2 2026): a user assigned a variant
+// offering sees that variant's prices, never a hardcoded one. The
+// U2B fallback labels are price-free plan names shown only until
+// the offering resolves (rows stay disabled until then).
 // ============================================================================
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1011,6 +1579,7 @@ fun MakeItMePaywallSheet(
     onPurchased: () -> Unit
 ) {
     val context = LocalContext.current
+    val mimState by viewModel.uiState.collectAsState()
     var monthly by remember { mutableStateOf<PackagePrice?>(null) }
     var annual by remember { mutableStateOf<PackagePrice?>(null) }
     var purchasing by remember { mutableStateOf(false) }
@@ -1018,11 +1587,26 @@ fun MakeItMePaywallSheet(
 
     LaunchedEffect(Unit) {
         val offering = viewModel.offering()
+        val monthlyMicros = offering?.monthly?.product?.price?.amountMicros
         monthly = offering?.monthly?.let {
-            PackagePrice(it, it.product.price.formatted + " / month")
+            PackagePrice(
+                it,
+                MakeItMeStrings.monthlyRowLabel(it.product.price.formatted),
+                formatted = it.product.price.formatted,
+                amountMicros = it.product.price.amountMicros
+            )
         }
         annual = offering?.annual?.let {
-            PackagePrice(it, it.product.price.formatted + " / year — about 16% less than paying monthly")
+            PackagePrice(
+                it,
+                MakeItMeStrings.annualRowLabel(
+                    annualFormatted = it.product.price.formatted,
+                    annualAmountMicros = it.product.price.amountMicros,
+                    monthlyAmountMicros = monthlyMicros
+                ),
+                formatted = it.product.price.formatted,
+                amountMicros = it.product.price.amountMicros
+            )
         }
     }
 
@@ -1035,14 +1619,24 @@ fun MakeItMePaywallSheet(
             purchasing = false
             when (outcome) {
                 BillingManager.PurchaseOutcome.Success -> onPurchased()
+                // GEN-6 WAVE A (DA-10): the entitlement already
+                // existed — the flow was never launched; the sheet
+                // closes into the subscribed state the sync just
+                // landed (Settings / a reopened sheet render it).
+                BillingManager.PurchaseOutcome.AlreadySubscribed -> onPurchased()
                 BillingManager.PurchaseOutcome.Cancelled -> Unit
                 is BillingManager.PurchaseOutcome.Failed -> purchaseError = outcome.message
             }
         }
     }
 
+    // WS-5 (D-13): one anchor, like every sheet in the app.
+    val sheetState = androidx.compose.material3.rememberModalBottomSheetState(
+        skipPartiallyExpanded = true
+    )
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = sheetState,
         containerColor = RunWearColors.Surface
     ) {
         Column(
@@ -1051,32 +1645,230 @@ fun MakeItMePaywallSheet(
                 .padding(horizontal = 24.dp)
                 .padding(bottom = 32.dp)
         ) {
+            // Frame 22: the "Make It Me" script title (third wordmark).
             Text(
-                text = MakeItMeStrings.U2A_SHEET_TITLE,
-                fontFamily = BebasNeueFontFamily,
-                fontSize = 26.sp,
-                letterSpacing = 0.5.sp,
+                text = stringResource(MR.strings.mim_u2a_sheet_title),
+                fontFamily = GreatVibesFontFamily,
+                fontSize = 34.sp,
                 color = RunWearColors.TextPrimary
+            )
+            Spacer(Modifier.height(12.dp))
+
+            // Free bar + the real meter ("2 of 5 used" pattern).
+            Text(
+                text = stringResource(MR.strings.mim_u2d_free_bar, MakeItMeUpsellRules.FREE_ALLOWANCE),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                color = RunWearColors.TextSecondary
+            )
+            Text(
+                text = FreeLooksMeter.paywallLine(mimState.freeGenerationsUsed, mimState.anyLookMaking),
+                fontSize = 13.sp,
+                color = RunWearColors.TextSecondary,
+                modifier = Modifier.padding(top = 2.dp)
             )
             Spacer(Modifier.height(16.dp))
 
-            PaywallPriceRow(
-                label = monthly?.label ?: MakeItMeStrings.U2B_MONTHLY,
-                enabled = monthly != null && !purchasing,
-                onClick = { buy(monthly) }
+            // How Premium works — convergence copy (frame 22 verbatim).
+            Text(
+                text = stringResource(MR.strings.mim_u2e_how_premium_works),
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = RunWearColors.TextPrimary
             )
+            Text(
+                text = stringResource(MR.strings.mim_u2f_how_premium_works_body),
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+                color = RunWearColors.TextSecondary,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+            Spacer(Modifier.height(16.dp))
+
+            // GEN-5 (RW-29 FA-9): the settled plan structure —
+            // the annual card (selectable, NO call to action
+            // inside it), the monthly row as a selectable row
+            // beneath it, and ONE call to action below both that
+            // purchases the SELECTED plan. The gen-4 sheet bought
+            // on tap: the annual card carried its own CTA and the
+            // monthly row purchased immediately, so plan choice
+            // and purchase were the same gesture.
+            // GEN-5 (RW-29 FA-8): an already-subscribed user meets
+            // a plain subscribed state here — no purchase CTAs at
+            // all; Restore stays available below.
+            val subscribed = mimState.mode == MakeItMeMode.SUBSCRIBED
+            var annualSelected by remember { mutableStateOf(true) }
+            if (subscribed) {
+                // GEN-6 WAVE A (DA-11): the settled string, and the
+                // readiness claim is GATED on the real bank state —
+                // the gen-5 hard-coded literal promised "your photo
+                // is ready before you open the app" whether or not
+                // the bank had actually converged. Only a coverage
+                // read proving the bank complete may carry it;
+                // otherwise the honest subscribed + still-making
+                // lines stand.
+                val bankReady = mimState.bankCoverage?.let {
+                    it.total > 0 && it.ready >= it.total
+                } ?: false
+                if (bankReady) {
+                    Text(
+                        text = stringResource(MR.strings.mim_s5_state_c_sub),
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        lineHeight = 21.sp,
+                        color = RunWearColors.TextPrimary
+                    )
+                } else {
+                    Text(
+                        text = stringResource(MR.strings.mim_s28_subscribed_state),
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        lineHeight = 21.sp,
+                        color = RunWearColors.TextPrimary
+                    )
+                    Text(
+                        text = stringResource(MR.strings.mim_band_making_line),
+                        fontSize = 13.sp,
+                        lineHeight = 19.sp,
+                        color = RunWearColors.TextSecondary,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+            } else {
+            // The annual option: "Premium" / "All of Make It Me."
+            // Its price slot renders from the fetched Offering
+            // (parameterized — design §6). No Founding /
+            // Limited-time / struck-through elements anywhere.
+            // RW-100 (Sol, Nov 6, 2026): the card is ONE OF TWO
+            // equally selectable plan options — its highlighted
+            // treatment (the design's pale pine tint inside a 2px
+            // pine border, mockups .pw.hero) now FOLLOWS the
+            // selection instead of dressing the card permanently:
+            // unselected it rests on the plain card fill inside a
+            // hairline, and the radio indicator shows the state.
+            // (The gen-6 form kept the tint constant, so the card
+            // read as chosen even with Monthly selected.)
+            Surface(
+                onClick = { annualSelected = true },
+                shape = RoundedCornerShape(16.dp),
+                color = if (annualSelected) {
+                    RunWearColors.PaywallTint
+                } else {
+                    RunWearColors.BgCard
+                },
+                border = androidx.compose.foundation.BorderStroke(
+                    if (annualSelected) 2.dp else 1.dp,
+                    if (annualSelected) {
+                        RunWearColors.Primary
+                    } else {
+                        RunWearColors.Hairline
+                    }
+                ),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(modifier = Modifier.padding(16.dp)) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(MR.strings.mim_u2g_card_title),
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = RunWearColors.TextPrimary
+                    )
+                    Text(
+                        text = stringResource(MR.strings.mim_u2h_card_line),
+                        fontSize = 14.sp,
+                        color = RunWearColors.TextSecondary,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                    Text(
+                        text = annual?.label ?: stringResource(MR.strings.mim_u2b_annual),
+                        fontSize = 19.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = RunWearColors.TextPrimary,
+                        modifier = Modifier.padding(top = 10.dp)
+                    )
+                    // GEN-5 (RW-28 item 29): the per-run line sits
+                    // DIRECTLY UNDER the annual price (it used to
+                    // live only inside the fine print at the sheet's
+                    // foot). Derived from the displayed product,
+                    // basis stated in the line.
+                    annual?.let {
+                        Text(
+                            text = MakeItMeStrings.perRunLine(it.formatted, it.amountMicros),
+                            fontSize = 12.5.sp,
+                            lineHeight = 17.sp,
+                            color = RunWearColors.TextSecondary,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                        // RW-58: the basis, in the settled fine-print
+                        // wording (design-spec §14).
+                        Text(
+                            text = MakeItMeStrings.perRunBasis(it.formatted),
+                            fontSize = 11.5.sp,
+                            lineHeight = 16.sp,
+                            color = RunWearColors.TextSecondary,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                    }
+                }
+                PlanRadioIndicator(
+                    selected = annualSelected,
+                    modifier = Modifier.padding(start = 12.dp, top = 2.dp)
+                )
+                }
+            }
             Spacer(Modifier.height(10.dp))
-            PaywallPriceRow(
-                label = annual?.label ?: MakeItMeStrings.U2B_ANNUAL,
-                enabled = annual != null && !purchasing,
-                onClick = { buy(annual) }
+
+            // The monthly product, as the SECOND plan option —
+            // the same selectable row form as the annual card
+            // (radio, selection tint and border), its price from
+            // the same Offering object, never a literal. RW-100:
+            // it is no longer a "quiet door" subordinate to the
+            // card; both plans are explicit, equally selectable
+            // options and the selection visibly registers.
+            PlanOptionRow(
+                label = monthly?.label ?: stringResource(MR.strings.mim_u2b_monthly),
+                enabled = monthly != null && !purchasing,
+                selected = !annualSelected,
+                onClick = { annualSelected = false }
             )
+            Spacer(Modifier.height(14.dp))
+
+            // The sheet's ONE call to action — purchases the
+            // selected plan. RW-100: its label NAMES the selected
+            // plan and its price (composed from the fetched
+            // offering), so what the button buys is never in doubt.
+            Button(
+                onClick = { buy(if (annualSelected) annual else monthly) },
+                enabled = (if (annualSelected) annual else monthly) != null && !purchasing,
+                modifier = Modifier.fillMaxWidth().height(50.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary)
+            ) {
+                Text(
+                    if (annualSelected) {
+                        MakeItMeStrings.planCtaLabel(
+                            stringResource(MR.strings.mim_u2b_annual),
+                            annual?.formatted?.takeIf { it.isNotEmpty() }?.let { "$it/yr" }
+                        )
+                    } else {
+                        MakeItMeStrings.planCtaLabel(
+                            stringResource(MR.strings.mim_u2b_monthly),
+                            monthly?.formatted?.takeIf { it.isNotEmpty() }?.let { "$it/month" }
+                        )
+                    },
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 15.sp,
+                    color = com.runwear.app.ui.theme.PhotoInk
+                )
+            }
+            }
 
             if (purchasing) {
                 Spacer(Modifier.height(14.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(
-                        color = RunWearColors.Primary,
+                        color = RunWearColors.PineAccent,
                         modifier = Modifier.size(18.dp),
                         strokeWidth = 2.dp
                     )
@@ -1084,43 +1876,164 @@ fun MakeItMePaywallSheet(
                     Text(
                         text = "Completing your purchase…",
                         fontSize = 13.sp,
-                        color = Color.White.copy(alpha = 0.65f)
+                        color = RunWearColors.TextSecondary
                     )
                 }
             }
             purchaseError?.let {
                 Spacer(Modifier.height(10.dp))
-                Text(text = it, fontSize = 13.sp, color = Color(0xFFFF8A80))
+                Text(text = it, fontSize = 13.sp, color = MaterialTheme.colorScheme.error)
             }
 
             Spacer(Modifier.height(16.dp))
             Text(
-                text = MakeItMeStrings.U2C_FINE_PRINT,
+                // GEN-5 (item 29): the fine print is the settled
+                // U2C text alone now — the per-run line moved up
+                // under the annual price, and the store named is
+                // the one this build is sold through.
+                text = stringResource(MR.strings.mim_u2c_fine_print),
                 fontSize = 12.sp,
                 lineHeight = 17.sp,
-                color = Color.White.copy(alpha = 0.55f)
+                color = RunWearColors.TextSecondary
+            )
+
+            // GEN-5 (RW-29 FA-7): Restore purchases — present in
+            // every state of this sheet, subscribed included. A
+            // restore that lands the entitlement completes like a
+            // purchase; one that finds nothing says so honestly.
+            var restoring by remember { mutableStateOf(false) }
+            TextButton(
+                onClick = {
+                    restoring = true
+                    purchaseError = null
+                    viewModel.restorePurchases { outcome ->
+                        restoring = false
+                        when (outcome) {
+                            BillingManager.PurchaseOutcome.Success -> onPurchased()
+                            // Restore never yields this outcome
+                            // (it reports Success directly), but the
+                            // subscribed landing is the same.
+                            BillingManager.PurchaseOutcome.AlreadySubscribed -> onPurchased()
+                            BillingManager.PurchaseOutcome.Cancelled -> Unit
+                            is BillingManager.PurchaseOutcome.Failed ->
+                                purchaseError = outcome.message
+                        }
+                    }
+                },
+                enabled = !restoring && !purchasing,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    if (restoring) "Restoring…" else "Restore purchases",
+                    fontSize = 13.5.sp,
+                    color = RunWearColors.PineAccent
+                )
+            }
+        }
+    }
+}
+
+private class PackagePrice(
+    val pkg: com.revenuecat.purchases.Package,
+    val label: String,
+    val formatted: String = "",
+    val amountMicros: Long = 0L
+)
+
+/**
+ * RW-100 (Sol, Nov 6, 2026): the radio indicator every plan
+ * option carries — a filled pine dot inside a pine ring when
+ * selected, an empty hairline ring when not — so a plan
+ * selection is visible at a glance on both purchase surfaces
+ * (the paywall sheet and the Settings offer card).
+ */
+@Composable
+internal fun PlanRadioIndicator(
+    selected: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .size(22.dp)
+            .border(
+                if (selected) 2.dp else 1.5.dp,
+                if (selected) {
+                    RunWearColors.Primary
+                } else {
+                    RunWearColors.TextSecondary.copy(alpha = 0.45f)
+                },
+                androidx.compose.foundation.shape.CircleShape
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        if (selected) {
+            Box(
+                modifier = Modifier
+                    .size(11.dp)
+                    .background(
+                        RunWearColors.Primary,
+                        androidx.compose.foundation.shape.CircleShape
+                    )
             )
         }
     }
 }
 
-private class PackagePrice(val pkg: com.revenuecat.purchases.Package, val label: String)
-
+/**
+ * RW-100 (Sol, Nov 6, 2026 — supersedes the GEN-5 C-6 "quiet
+ * subordinate row" form): ONE plan option — an explicit,
+ * equally selectable row carrying the radio indicator and the
+ * same selection treatment as the annual card (paywall tint +
+ * 2dp pine border when selected; transparent + hairline when
+ * not). Tapping SELECTS the plan; the surface's one confirm
+ * button below buys the selected one (select-then-confirm
+ * stands — FA-9). Shared by the paywall sheet (monthly) and
+ * the Settings offer card (both plans).
+ */
 @Composable
-private fun PaywallPriceRow(label: String, enabled: Boolean, onClick: () -> Unit) {
-    Button(
+internal fun PlanOptionRow(
+    label: String,
+    enabled: Boolean,
+    selected: Boolean = false,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    // The selected fill: the paywall tint on the sheet's plain
+    // ground; on the Settings card (itself tinted) the plain
+    // card fill, so the selected row still pops.
+    selectedContainerColor: Color = RunWearColors.PaywallTint
+) {
+    Surface(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier
+        shape = RoundedCornerShape(14.dp),
+        color = if (selected) selectedContainerColor else Color.Transparent,
+        border = androidx.compose.foundation.BorderStroke(
+            if (selected) 2.dp else 1.dp,
+            if (selected) {
+                RunWearColors.Primary
+            } else {
+                RunWearColors.Hairline
+            }
+        ),
+        modifier = modifier
             .fillMaxWidth()
-            .height(52.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = Color.White.copy(alpha = 0.08f),
-            contentColor = RunWearColors.TextPrimary
-        )
+            .height(52.dp)
     ) {
-        Text(label, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp)
+        ) {
+            PlanRadioIndicator(selected = selected)
+            Text(
+                label,
+                fontWeight = FontWeight.Medium,
+                fontSize = 15.sp,
+                color = if (enabled) RunWearColors.TextPrimary else RunWearColors.TextSecondary,
+                modifier = Modifier.padding(start = 12.dp)
+            )
+        }
     }
 }
 
@@ -1133,103 +2046,556 @@ private fun PaywallPriceRow(label: String, enabled: Boolean, onClick: () -> Unit
 // server has confirmed the erasure.
 // ============================================================================
 
+/**
+ * WS-5 (D-14): what the Make It Me settings section presents in
+ * each configuration, as row titles — the pure mirror the inventory
+ * gate tests, so "the section emits something in every
+ * configuration" is a tested fact, not a review finding. The
+ * composable below renders exactly these rows (same string
+ * constants, same order).
+ */
+object MakeItMeSettingsPresentation {
+    fun rowTitles(makeItMeEnabled: Boolean, mode: MakeItMeMode): List<String> =
+        if (!makeItMeEnabled) {
+            // Flag OFF: the plain not-started row (frame 36) — the
+            // section exists, the feature's doors stay shut.
+            listOf(MakeItMeStrings.S2_STATE_A_ROW)
+        } else when (mode) {
+            MakeItMeMode.STOCK -> listOf(MakeItMeStrings.S2_STATE_A_ROW)
+            // Gen-3 WS-D: status group (not a row title — composed
+            // from FreeLooksMeter), then Your photos, then the
+            // Premium offer card. GEN-5 (RW-28 item 25): the
+            // destructive row moved OUT of this section into the
+            // quarantined Danger zone at the end of Settings —
+            // see dangerZoneRowTitles.
+            MakeItMeMode.FREE -> listOf(
+                MakeItMeStrings.S6_PHOTOS_ROW,
+                MakeItMeStrings.S35_NUMBER_OF_PHOTOS,
+                MakeItMeStrings.U2G_CARD_TITLE
+            )
+            MakeItMeMode.SUBSCRIBED -> listOf(
+                MakeItMeStrings.S6_PHOTOS_ROW,
+                MakeItMeStrings.S35_NUMBER_OF_PHOTOS,
+                MakeItMeStrings.U2G_CARD_TITLE
+            )
+        }
+
+    /**
+     * GEN-5 (RW-28 item 25): the Danger zone's rows, in order —
+     * Delete my photos (only for modes that hold photos), then
+     * Delete my data (every mode: a stock-mode user still has an
+     * account). Rendered by [DangerZoneSettingsSection] as the
+     * LAST section of Settings, under its own heading.
+     */
+    fun dangerZoneRowTitles(mode: MakeItMeMode): List<String> =
+        when (mode) {
+            MakeItMeMode.STOCK -> listOf(MakeItMeStrings.S20_DELETE_DATA_ROW)
+            MakeItMeMode.FREE, MakeItMeMode.SUBSCRIBED -> listOf(
+                MakeItMeStrings.S10_DELETE_ROW,
+                MakeItMeStrings.S20_DELETE_DATA_ROW
+            )
+        }
+}
+
 @Composable
 fun MakeItMeSettingsSection(
-    viewModel: MakeItMeViewModel,
+    viewModel: MakeItMeViewModel?,
     state: MakeItMeUiState,
     onOptInClick: () -> Unit,
     onPhotosClick: () -> Unit,
     onSubscribeClick: () -> Unit,
     onManageSubscriptionClick: () -> Unit,
-    onDeleted: () -> Unit
+    onDeleted: () -> Unit,
+    /** GEN-6 WAVE C (RW-61): the "Your looks" library door. */
+    onLooksClick: () -> Unit = {}
 ) {
-    var showDeleteDialog by remember { mutableStateOf(false) }
-    var deletedNotice by remember { mutableStateOf(false) }
+    // GEN-5: the delete-photos dialog state moved to
+    // DangerZoneSettingsSection with the row itself.
+
+    // Gen-3 WS-D/X-9: Settings re-reads the profile on open (the
+    // gen-2 Android section never did — its only reads were at
+    // ViewModel init). The re-read refreshes the DELIVERED count;
+    // truthfulness while a look is in flight comes from the
+    // anyLookMaking input composed through FreeLooksMeter below,
+    // not from this re-read.
+    LaunchedEffect(Unit) {
+        if (MakeItMeAvailability.ENABLED) viewModel?.refresh()
+    }
+
+    // GEN-6 WAVE C (RW-57): the user's selfie thumbnail for the
+    // "Your photos" row (settled, design-spec §13) — the first
+    // registered reference photo, loaded through the same signed-URL
+    // seam the Your Photos screen uses.
+    var referenceThumbnailUrl by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(state.mode) {
+        if ((state.mode == MakeItMeMode.FREE || state.mode == MakeItMeMode.SUBSCRIBED) &&
+            viewModel != null
+        ) {
+            viewModel.loadReferenceUrls { urls ->
+                referenceThumbnailUrl = urls.firstOrNull()
+            }
+        }
+    }
+
+    // The offer card's price, from the fetched store offering —
+    // parameterized, never a literal (design §6).
+    var offerAnnualFormatted by remember { mutableStateOf<String?>(null) }
+    var offerMonthlyFormatted by remember { mutableStateOf<String?>(null) }
+    // RW-100: the card is a purchase surface of its own now, so
+    // it also keeps the offering's PACKAGES — its confirm button
+    // buys the selected one directly (see the card below).
+    var offerAnnualPkg by remember { mutableStateOf<com.revenuecat.purchases.Package?>(null) }
+    var offerMonthlyPkg by remember { mutableStateOf<com.revenuecat.purchases.Package?>(null) }
+    LaunchedEffect(state.mode) {
+        if (state.mode == MakeItMeMode.FREE && viewModel != null) {
+            val offering = viewModel.offering()
+            offerAnnualPkg = offering?.annual
+            offerMonthlyPkg = offering?.monthly
+            offerAnnualFormatted = offering?.annual?.product?.price?.formatted
+            // C-5: the monthly price rides the same fetched offering.
+            offerMonthlyFormatted = offering?.monthly?.product?.price?.formatted
+        }
+    }
 
     Column {
+        // GEN-5 (RW-28 item 23): the section heading is the Make
+        // It Me SCRIPT wordmark — the same Great Vibes mark that
+        // leads every hero pill state — not a plain text label.
         Text(
-            text = MakeItMeStrings.S1_SECTION_HEADER,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Medium,
+            text = stringResource(MR.strings.mim_s1_section_header),
+            fontFamily = com.runwear.app.ui.theme.GreatVibesFontFamily,
+            fontSize = 30.sp,
             color = RunWearColors.TextPrimary
         )
         Spacer(Modifier.height(10.dp))
 
-        if (deletedNotice && state.mode == MakeItMeMode.STOCK) {
-            Text(
-                text = MakeItMeStrings.S14_POST_DELETE,
-                fontSize = 13.sp,
-                color = RunWearColors.TextPrimary,
-                modifier = Modifier.padding(bottom = 10.dp)
+        // GEN-5: the post-delete notice (S14) renders in the
+        // Danger zone section, where the deletion now happens.
+
+        // WS-5 (D-14): with the feature flag OFF the section still
+        // renders — the plain not-started row the design specifies
+        // (frame 36). What the flag keeps shut is the feature's
+        // function (opt-in flow, photos, purchase, generation —
+        // MakeItMeAvailability, consulted at those hosts), not the
+        // section's existence. Before WS-5 this composable returned
+        // early on the flag and the whole section — and everything
+        // hosted inside it — silently vanished from the sheet.
+        if (!MakeItMeAvailability.ENABLED) {
+            MakeItMeSettingsRow(
+                title = stringResource(MR.strings.mim_s2_state_a_row),
+                sub = stringResource(MR.strings.mim_s2_state_a_sub),
+                onClick = onOptInClick
             )
+            return@Column
         }
 
         when (state.mode) {
             MakeItMeMode.STOCK -> {
                 MakeItMeSettingsRow(
-                    title = MakeItMeStrings.S2_STATE_A_ROW,
-                    sub = MakeItMeStrings.S2_STATE_A_SUB,
-                    onClick = {
-                        deletedNotice = false
-                        onOptInClick()
-                    }
+                    title = stringResource(MR.strings.mim_s2_state_a_row),
+                    sub = stringResource(MR.strings.mim_s2_state_a_sub),
+                    onClick = onOptInClick
                 )
             }
 
             MakeItMeMode.FREE, MakeItMeMode.SUBSCRIBED -> {
-                Text(
-                    text = MakeItMeStrings.S3_STATUS,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = RunWearColors.TextPrimary
+                val subscribed = state.mode == MakeItMeMode.SUBSCRIBED
+
+                // GEN-5 (RW-28 item 22): while a subscriber's bank
+                // is generating, the convergence band occupies the
+                // STATUS SLOT — in place of the status block and the
+                // Premium offer card below (design §13). Resolved by
+                // the same ConvergenceBandPolicy, from the same
+                // state, as the home band; from the moment of
+                // subscription (an unknown coverage read still shows
+                // the band — see the policy).
+                val settingsBand = ConvergenceBandPolicy.content(
+                    mode = state.mode,
+                    coverage = state.bankCoverage,
+                    inTrial = state.inTrial
                 )
-                Text(
-                    text = if (state.mode == MakeItMeMode.SUBSCRIBED) {
-                        MakeItMeStrings.S5_STATE_C_SUB
-                    } else {
-                        MakeItMeStrings.s4FreeUsed(state.freeGenerationsUsed)
-                    },
-                    fontSize = 12.sp,
-                    color = Color.White.copy(alpha = 0.55f),
-                    modifier = Modifier.padding(top = 2.dp, bottom = 10.dp)
-                )
-                MakeItMeSettingsRow(
-                    title = MakeItMeStrings.S6_PHOTOS_ROW,
-                    sub = MakeItMeStrings.S6_PHOTOS_SUB,
-                    onClick = onPhotosClick
-                )
-                Spacer(Modifier.height(6.dp))
-                if (state.mode == MakeItMeMode.FREE) {
-                    MakeItMeSettingsRow(
-                        title = MakeItMeStrings.S8_STATE_B_SUBSCRIBE_ROW,
-                        sub = MakeItMeStrings.S8_STATE_B_SUBSCRIBE_SUB,
-                        onClick = onSubscribeClick
-                    )
+                if (settingsBand != null) {
+                    ConvergenceBand(content = settingsBand)
                 } else {
-                    MakeItMeSettingsRow(
-                        title = MakeItMeStrings.S9_MANAGE_SUBSCRIPTION,
-                        sub = null,
-                        onClick = onManageSubscriptionClick
-                    )
+
+                // ── Status group (WS-D group 2): status line +
+                // free-look meter composed as ONE block from the
+                // single FreeLooksMeter seam — the block can never
+                // contradict the flow state at the same moment.
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = RunWearColors.BgCard,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        val block = FreeLooksMeter.block(
+                            deliveredUsed = state.freeGenerationsUsed,
+                            // GEN-5 (FA-10): the real in-flight
+                            // count, not the Boolean.
+                            looksMaking = state.looksMakingCount,
+                            subscribed = subscribed
+                        )
+                        Text(
+                            text = block[0],
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = RunWearColors.TextPrimary
+                        )
+                        Text(
+                            text = block[1],
+                            fontSize = 12.sp,
+                            color = RunWearColors.TextSecondary,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                    }
                 }
-                Spacer(Modifier.height(6.dp))
+                }
+                Spacer(Modifier.height(14.dp))
+
+                // ── Your photos group (WS-D group 3). RW-57: the
+                // row carries the user's selfie thumbnail.
                 MakeItMeSettingsRow(
-                    title = MakeItMeStrings.S10_DELETE_ROW,
-                    sub = null,
-                    destructive = true,
-                    onClick = { showDeleteDialog = true }
+                    title = stringResource(MR.strings.mim_s6_photos_row),
+                    sub = stringResource(MR.strings.mim_s6_photos_sub),
+                    onClick = onPhotosClick,
+                    thumbnailUrl = referenceThumbnailUrl
                 )
+                Spacer(Modifier.height(14.dp))
+
+                // ── RW-84 (settled, design-spec §13): "Number of
+                // photos" — the intake cap stated as a plain value
+                // row. Not a door: the number is settled; changing
+                // the photos themselves happens in Your photos.
+                MakeItMeSettingsRow(
+                    title = stringResource(MR.strings.mim_s35_number_of_photos),
+                    sub = null,
+                    onClick = {},
+                    trailingValue = MakeItMeStrings.PHOTO_INTAKE_CAP.toString()
+                )
+                Spacer(Modifier.height(14.dp))
+
+                // ── GEN-6 WAVE C (RW-61): the "Your looks"
+                // library door — the surface where a gate-failed
+                // cell's explanation lives (frame 21 / §17).
+                MakeItMeSettingsRow(
+                    title = LooksLibraryStrings.TITLE,
+                    sub = "Every look RunWear has made for you",
+                    onClick = onLooksClick
+                )
+                Spacer(Modifier.height(14.dp))
+
+                // ── Premium offer card (WS-D group 4): a legible
+                // offer — the name "Premium", the settled
+                // two-benefit line, and (RW-100) the two selectable
+                // plan options with a confirm button that names
+                // the selected plan and its price and buys it. A
+                // subscriber sees the subscribed state instead.
+                val card = MakeItMeStrings.premiumOfferCard(
+                    annualFormatted = offerAnnualFormatted,
+                    subscribed = subscribed,
+                    monthlyFormatted = offerMonthlyFormatted
+                )
+                if (settingsBand == null) {
+                if (subscribed) {
+                    // GEN-5 (RW-29 FA-50): the subscribed state has
+                    // NO offer card at all (design-spec §13's
+                    // subscribed panel: status block · Your photos ·
+                    // Manage subscription · Danger zone — no
+                    // benefit or pitch copy). The gen-4 composition
+                    // kept the bordered offer card's frame and pitch
+                    // line around a Manage button, so a subscriber's
+                    // Settings still read as a sales surface. The
+                    // status block above already states the state;
+                    // here only the manage door stands, exactly as
+                    // it does while the band is showing.
+                    OutlinedButton(
+                        onClick = onManageSubscriptionClick,
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Text(
+                            stringResource(MR.strings.mim_s9_manage_subscription),
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 14.sp
+                        )
+                    }
+                } else {
+                // RW-100 (Sol, Nov 6, 2026): the card carries TWO
+                // explicit, equally selectable plan options, and
+                // its confirm button names the selected plan and
+                // its price and buys THAT plan — the same fix as
+                // the paywall sheet, on this surface too. (The
+                // gen-6 form showed the annual price as loose
+                // ambient text — not an option at all — monthly
+                // as a lone quiet text door, and a "Get Premium"
+                // button naming neither plan nor price: the user
+                // could not tell what they were purchasing.)
+                var settingsAnnualSelected by remember { mutableStateOf(true) }
+                var settingsPurchasing by remember { mutableStateOf(false) }
+                var settingsPurchaseError by remember { mutableStateOf<String?>(null) }
+                val settingsContext = LocalContext.current
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    // GEN-5 (cream map): the Settings offer card
+                    // takes the paywall's highlighted treatment —
+                    // pale pine tint inside a 2px pine border.
+                    color = RunWearColors.PaywallTint,
+                    border = androidx.compose.foundation.BorderStroke(2.dp, RunWearColors.Primary),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = card.title,
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = RunWearColors.TextPrimary
+                        )
+                        Text(
+                            text = card.benefitLine,
+                            fontSize = 13.sp,
+                            lineHeight = 18.sp,
+                            color = RunWearColors.TextSecondary,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        PlanOptionRow(
+                            label = card.priceLine?.let {
+                                "${stringResource(MR.strings.mim_u2b_annual)} — $it"
+                            } ?: stringResource(MR.strings.mim_u2b_annual),
+                            enabled = !settingsPurchasing,
+                            selected = settingsAnnualSelected,
+                            onClick = { settingsAnnualSelected = true },
+                            selectedContainerColor = RunWearColors.BgCard
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        PlanOptionRow(
+                            label = card.monthlyLine ?: stringResource(MR.strings.mim_u2b_monthly),
+                            enabled = !settingsPurchasing,
+                            selected = !settingsAnnualSelected,
+                            onClick = { settingsAnnualSelected = false },
+                            selectedContainerColor = RunWearColors.BgCard
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Button(
+                            onClick = {
+                                val pkg = if (settingsAnnualSelected) {
+                                    offerAnnualPkg
+                                } else {
+                                    offerMonthlyPkg
+                                }
+                                val activity = settingsContext as? Activity
+                                if (viewModel != null && pkg != null && activity != null) {
+                                    settingsPurchasing = true
+                                    settingsPurchaseError = null
+                                    viewModel.purchase(activity, pkg) { outcome ->
+                                        settingsPurchasing = false
+                                        when (outcome) {
+                                            // Success lands the
+                                            // entitlement; the
+                                            // section's own state
+                                            // flips to the
+                                            // subscribed form.
+                                            BillingManager.PurchaseOutcome.Success -> Unit
+                                            BillingManager.PurchaseOutcome.AlreadySubscribed -> Unit
+                                            BillingManager.PurchaseOutcome.Cancelled -> Unit
+                                            is BillingManager.PurchaseOutcome.Failed ->
+                                                settingsPurchaseError = outcome.message
+                                        }
+                                    }
+                                } else {
+                                    // No purchase seam in this
+                                    // composition (no view model —
+                                    // e.g. render harnesses): the
+                                    // paywall door remains the path.
+                                    onSubscribeClick()
+                                }
+                            },
+                            enabled = !settingsPurchasing,
+                            modifier = Modifier.fillMaxWidth().height(50.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary)
+                        ) {
+                            Text(
+                                if (settingsAnnualSelected) {
+                                    MakeItMeStrings.planCtaLabel(
+                                        stringResource(MR.strings.mim_u2b_annual),
+                                        card.priceLine
+                                    )
+                                } else {
+                                    MakeItMeStrings.planCtaLabel(
+                                        stringResource(MR.strings.mim_u2b_monthly),
+                                        offerMonthlyFormatted?.let { "$it/month" }
+                                    )
+                                },
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 15.sp,
+                                color = com.runwear.app.ui.theme.PhotoInk
+                            )
+                        }
+                        if (settingsPurchasing) {
+                            Spacer(Modifier.height(12.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(
+                                    color = RunWearColors.PineAccent,
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(Modifier.width(10.dp))
+                                Text(
+                                    text = "Completing your purchase…",
+                                    fontSize = 13.sp,
+                                    color = RunWearColors.TextSecondary
+                                )
+                            }
+                        }
+                        settingsPurchaseError?.let {
+                            Text(
+                                text = it,
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(top = 10.dp)
+                            )
+                        }
+                    }
+                }
+                }
+                } else {
+                    // While generating, the offer card is replaced
+                    // by the band above; Manage subscription stands
+                    // as its own row here (design §13: Your photos /
+                    // Manage subscription / Danger zone unchanged
+                    // below the band).
+                    OutlinedButton(
+                        onClick = onManageSubscriptionClick,
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Text(
+                            stringResource(MR.strings.mim_s9_manage_subscription),
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+
+                // GEN-5 (RW-28 item 25): the destructive rows no
+                // longer live in this section — they are
+                // quarantined together at the very end of Settings
+                // under their own "Danger zone" heading
+                // (DangerZoneSettingsSection, hosted by the sheet's
+                // final inventory entry).
             }
         }
     }
+}
 
-    if (showDeleteDialog) {
+/**
+ * WS-5 (D-14): Delete-my-data as its OWN settings row (RW-16.30
+ * decision 5a: the account-level erasure, offered in every mode —
+ * a stock-mode user still has an account). It used to be composed
+ * inside [MakeItMeSettingsSection], so it vanished whenever that
+ * section emitted nothing; now Settings hosts it as a registered
+ * section of its own, independent of the feature's flag and mode.
+ */
+@Composable
+fun DeleteMyDataSettingsRow(
+    viewModel: MakeItMeViewModel?,
+    onDeleted: () -> Unit
+) {
+    var showDeleteDataDialog by remember { mutableStateOf(false) }
+    var dataDeletedNotice by remember { mutableStateOf(false) }
+
+    Column {
+        if (dataDeletedNotice) {
+            Text(
+                text = stringResource(MR.strings.mim_s25_post_delete_data),
+                fontSize = 13.sp,
+                color = RunWearColors.TextPrimary,
+                modifier = Modifier.padding(bottom = 10.dp)
+            )
+        }
+        MakeItMeSettingsRow(
+            title = stringResource(MR.strings.mim_s20_delete_data_row),
+            sub = null,
+            destructive = true,
+            onClick = { showDeleteDataDialog = true }
+        )
+    }
+
+    if (showDeleteDataDialog && viewModel != null) {
+        MakeItMeDeleteDataDialog(
+            viewModel = viewModel,
+            onDismiss = { showDeleteDataDialog = false },
+            onDeleted = {
+                showDeleteDataDialog = false
+                dataDeletedNotice = true
+                onDeleted()
+            }
+        )
+    }
+}
+
+/**
+ * GEN-5 (RW-28 item 25): the Danger zone — the LAST section of
+ * Settings, under its own heading, holding both destructive rows
+ * together (Delete my photos, then Delete my data) so no mis-tap
+ * travels between an offer and an erasure, and neither row sits
+ * unheaded in the middle of the sheet (gen-4 finding B-16). The
+ * delete-my-data half keeps its own independent dialog state via
+ * [DeleteMyDataSettingsRow]'s rendering below; the photos half
+ * owns its dialog here. Hosted by the sheet's final inventory
+ * entry in EVERY mode (a stock-mode user still has an account to
+ * delete).
+ */
+@Composable
+fun DangerZoneSettingsSection(
+    viewModel: MakeItMeViewModel?,
+    state: MakeItMeUiState,
+    onDeleted: () -> Unit
+) {
+    var showDeletePhotosDialog by remember { mutableStateOf(false) }
+    var photosDeletedNotice by remember { mutableStateOf(false) }
+    val holdsPhotos = state.mode == MakeItMeMode.FREE ||
+        state.mode == MakeItMeMode.SUBSCRIBED
+
+    Column {
+        Text(
+            text = stringResource(MR.strings.mim_s29_danger_zone_heading),
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Medium,
+            color = RunWearColors.TextPrimary
+        )
+        Spacer(Modifier.height(10.dp))
+        if (photosDeletedNotice && state.mode == MakeItMeMode.STOCK) {
+            Text(
+                text = stringResource(MR.strings.mim_s14_post_delete),
+                fontSize = 13.sp,
+                color = RunWearColors.TextPrimary,
+                modifier = Modifier.padding(bottom = 10.dp)
+            )
+        }
+        if (holdsPhotos) {
+            MakeItMeSettingsRow(
+                title = stringResource(MR.strings.mim_s10_delete_row),
+                sub = null,
+                destructive = true,
+                onClick = { showDeletePhotosDialog = true }
+            )
+            Spacer(Modifier.height(6.dp))
+        }
+        DeleteMyDataSettingsRow(
+            viewModel = viewModel,
+            onDeleted = onDeleted
+        )
+    }
+
+    if (showDeletePhotosDialog && viewModel != null) {
         MakeItMeDeleteDialog(
             viewModel = viewModel,
-            onDismiss = { showDeleteDialog = false },
+            onDismiss = { showDeletePhotosDialog = false },
             onDeleted = {
-                showDeleteDialog = false
-                deletedNotice = true
+                showDeletePhotosDialog = false
+                photosDeletedNotice = true
                 onDeleted()
             }
         )
@@ -1241,31 +2607,62 @@ private fun MakeItMeSettingsRow(
     title: String,
     sub: String?,
     destructive: Boolean = false,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    /** RW-57: the user's selfie thumbnail (Your photos row only). */
+    thumbnailUrl: String? = null,
+    /**
+     * RW-84: a stated value at the row's end (e.g. "3" for Number
+     * of photos). A value row is not a door — it carries no click.
+     */
+    trailingValue: String? = null
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .clickable { onClick() }
+            .then(
+                if (trailingValue == null) {
+                    Modifier.clickable { onClick() }
+                } else {
+                    Modifier
+                }
+            )
             .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        if (thumbnailUrl != null) {
+            coil.compose.AsyncImage(
+                model = thumbnailUrl,
+                contentDescription = null,
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(8.dp))
+            )
+            Spacer(Modifier.width(10.dp))
+        }
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Medium,
-                color = if (destructive) Color(0xFFFF8A80) else RunWearColors.TextPrimary
+                color = if (destructive) MaterialTheme.colorScheme.error else RunWearColors.TextPrimary
             )
             sub?.let {
                 Text(
                     text = it,
                     fontSize = 12.sp,
-                    color = Color.White.copy(alpha = 0.55f),
+                    color = RunWearColors.TextSecondary,
                     modifier = Modifier.padding(top = 2.dp)
                 )
             }
+        }
+        trailingValue?.let {
+            Text(
+                text = it,
+                fontSize = 15.sp,
+                color = RunWearColors.TextSecondary
+            )
         }
     }
 }
@@ -1285,16 +2682,17 @@ fun MakeItMeDeleteDialog(
     var deleting by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
     AlertDialog(
+        containerColor = RunWearColors.BgCard,
         onDismissRequest = { if (!deleting) onDismiss() },
-        title = { Text(MakeItMeStrings.S11_DELETE_CONFIRM_TITLE) },
+        title = { Text(stringResource(MR.strings.mim_s11_delete_confirm_title)) },
         text = {
             Column {
-                Text(MakeItMeStrings.S12_DELETE_CONFIRM_BODY)
+                Text(stringResource(MR.strings.mim_s12_delete_confirm_body))
                 if (failed) {
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = MakeItMeStrings.TRANSPORT_ERROR,
-                        color = Color(0xFFFF8A80)
+                        text = stringResource(MR.strings.mim_transport_error),
+                        color = MaterialTheme.colorScheme.error
                     )
                 }
             }
@@ -1312,14 +2710,482 @@ fun MakeItMeDeleteDialog(
                 }
             ) {
                 Text(
-                    MakeItMeStrings.S13_DELETE_CONFIRM,
-                    color = Color(0xFFFF8A80)
+                    stringResource(MR.strings.mim_s13_delete_confirm),
+                    color = MaterialTheme.colorScheme.error
                 )
             }
         },
         dismissButton = {
             TextButton(enabled = !deleting, onClick = onDismiss) {
-                Text(MakeItMeStrings.S13_KEEP)
+                Text(stringResource(MR.strings.mim_s13_keep))
+            }
+        }
+    )
+}
+
+// ============================================================================
+// First-look moment (frame 34) — onboarding's end, on the fork's
+// success path. The onboarding look counts as look 1 of 5. The ONE
+// soft Premium ask lives here: the primary button returns to the
+// outfit ("See My Outfit"); "Upgrade to Premium" is the quiet
+// second door (Sol's Nov 4 wording for this surface). Shown once,
+// never a modal again. The band carries the §9 pair verbatim; NO
+// price appears anywhere in onboarding.
+// ============================================================================
+
+
+@Composable
+fun FirstLookMoment(
+    photoUrl: String?,
+    simplePlace: String?,
+    weatherLine: String?,
+    onSeeOutfit: () -> Unit,
+    onSeePremium: () -> Unit,
+    /**
+     * GEN-3 A-HERO (WS-B, X-1): the moment's presentation state,
+     * resolved by [FirstLookPresentation] from the look status and
+     * whether the generated photo is actually displayed. MAKING
+     * shows the generating state ON the photo with honest copy —
+     * no finished headline, no counter, no Premium band; READY is
+     * the only state that may claim "You're in the photo now";
+     * FAILED is the honest terminal state (no look was used).
+     */
+    state: FirstLookState = FirstLookState.READY,
+    /**
+     * GEN-5 (RW-29 FA-6): the shared free-look meter's count at
+     * this moment — the READY count line composes from it rather
+     * than asserting "look 1 of 5" for every user.
+     */
+    freeLooksUsed: Int = 1,
+    /**
+     * GEN-6 WAVE A (DA-12): the user's tier — the MAKING pill is
+     * resolved through HeroPillPolicy like every other hero
+     * surface, and the policy needs the tier (the C-4 green line
+     * rides the FREE generating pill only).
+     */
+    mode: MakeItMeMode = MakeItMeMode.FREE,
+    /**
+     * GEN-6 WAVE A (DA-03 / FA-12 residual): the FAILED phase's
+     * same-cell "Try again" — wired by the host to the main view
+     * model's retry of the cell in view. The failed surface
+     * previously had no tap target of its own.
+     */
+    onRetry: () -> Unit = {}
+) {
+    // Dismissing the ask IS continuing (design §9) — Back takes the
+    // primary door, never traps the user at onboarding's end.
+    androidx.activity.compose.BackHandler { onSeeOutfit() }
+
+    // §1.4 reveal sequence: the photo crossfades in (400 ms), the
+    // ONE success haptic fires as the photo lands (§1.7 — first
+    // look ready = success, once), and the summary band settles
+    // 120 ms after the photo lands. Neither button moves or
+    // pulses.
+    // GEN-3 A-HERO: the success half of the sequence (haptic + band)
+    // is re-aimed at the generated photo's ACTUAL landing — it runs
+    // when the presentation becomes READY, which may be after the
+    // moment has been up in its MAKING state; it never runs for a
+    // photo that has not landed.
+    var bandSettled by remember { mutableStateOf(false) }
+    // GEN-6 WAVE A (DA-03): the success sequence is gated on the
+    // photo being actually LOADED, not merely on its URL being
+    // the displayed one — the iOS choreography's rule (displayed
+    // AND loaded → 0.4 s crossfade, one haptic, Premium band at
+    // 0.52 s). Gen-5 keyed readiness to URL equality alone, so
+    // the haptic and band could fire over a photo that had not
+    // painted.
+    // RW-97 (Nov 6, 2026): "loaded" is tracked PER URL — this
+    // photo, actually painted. The gen-6 form set one boolean
+    // from the photo's own load callbacks while the photo itself
+    // composed only behind a reveal gate keyed on that boolean:
+    // a deadlock (see FirstLookPhotoLayers) that left the sheet
+    // blank in MAKING and DONE alike.
+    var loadedPhotoUrl by remember { mutableStateOf<String?>(null) }
+    val photoLoaded = photoUrl != null && loadedPhotoUrl == photoUrl
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    LaunchedEffect(state, photoLoaded) {
+        if (FirstLookRevealPolicy.shouldRunSuccessSequence(state, photoLoaded)) {
+            delay(OnboardingMotion.FIRST_LOOK_HAPTIC_AT_MS.toLong())
+            haptic.performHapticFeedback(
+                // §1.7's first-look confirm-class effect, named by the
+                // map (WS-9 fix, P-2).
+                com.runwear.app.ui.components.HapticSpec.CONFIRM
+            )
+            delay(OnboardingMotion.FIRST_LOOK_BAND_DELAY_AFTER_PHOTO_MS.toLong())
+            bandSettled = true
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(RunWearColors.Background)
+            .verticalScroll(rememberScrollState())
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 24.dp)) {
+            Spacer(Modifier.height(24.dp))
+            // Frame 34: the "Make It Me" script wordmark heads the moment.
+            Text(
+                text = "Make It Me",
+                fontFamily = GreatVibesFontFamily,
+                fontSize = 34.sp,
+                color = RunWearColors.TextPrimary
+            )
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = MakeItMeStrings.firstLookHeading(simplePlace),
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = RunWearColors.TextPrimary
+            )
+            weatherLine?.let {
+                Text(
+                    text = it,
+                    fontSize = 13.sp,
+                    color = RunWearColors.TextSecondary,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        // The look itself — the designed skeleton (a box of the
+        // outfit's own shape on the card token) until the photo is
+        // known, then the 400 ms crossfade (§1.4: never a
+        // placeholder flash, never a broken-image frame).
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(340.dp)
+                .background(RunWearColors.BgCard)
+        ) {
+            // RW-97: the photo layers — the image composes
+            // whenever a URL exists (never gated on its own load
+            // state); the last loaded photo holds beneath a
+            // loading one, then the new one crossfades over it.
+            FirstLookPhotoLayers(
+                photoUrl = photoUrl,
+                onPhotoLoaded = { loadedPhotoUrl = it }
+            )
+            // GEN-3 A-HERO (WS-B, X-1/X-2): while the look is being
+            // made, the generating state sits ON the photo — the same
+            // hero pill the home hero carries (WS-A(2) state (a)) —
+            // over the photo actually serving (the bundled fallback,
+            // WS-A(1)). The look/place requested is the one in view:
+            // this moment only exists for it.
+            if (state == FirstLookState.MAKING) {
+                // GEN-6 WAVE A (DA-12): resolved through the ONE
+                // HeroPillPolicy, exactly like the home pill — the
+                // gen-5 hand-built pill here dropped the script mark
+                // and the C-4 green line the policy guarantees.
+                val makingPill = com.runwear.app.ui.components.HeroPillPolicy.resolve(
+                    lookStatus = PersonalLookStatus.Making,
+                    serveKind = PersonalServeKind.EXACT,
+                    heroIsPersonal = false,
+                    mode = mode,
+                    freeGenerationsUsed = freeLooksUsed
+                )
+                if (makingPill != null) {
+                    com.runwear.app.ui.components.HeroPill(
+                        content = makingPill,
+                        onAction = onSeePremium,
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(start = 14.dp, bottom = 12.dp)
+                    )
+                }
+            }
+        }
+
+        Column(modifier = Modifier.padding(horizontal = 24.dp)) {
+            Spacer(Modifier.height(20.dp))
+            // GEN-3 A-HERO: the copy under the photo is state-honest.
+            // READY alone may claim the finished state + the counter;
+            // MAKING says what is happening (G1/G2 — with WS-A(1) the
+            // photo under the pill is real, and G2 no longer claims
+            // anything about a photo at all); FAILED is G5 + the
+            // no-look-used truth.
+            when (state) {
+                FirstLookState.READY -> {
+                    Text(
+                        text = stringResource(MR.strings.mim_first_look_headline),
+                        fontSize = 19.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        lineHeight = 25.sp,
+                        color = RunWearColors.TextPrimary
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = MakeItMeStrings.firstLookCountLine(freeLooksUsed),
+                        fontSize = 13.sp,
+                        lineHeight = 19.sp,
+                        color = RunWearColors.TextSecondary
+                    )
+                }
+                FirstLookState.MAKING -> {
+                    Text(
+                        text = stringResource(MR.strings.mim_g1_progress),
+                        fontSize = 19.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        lineHeight = 25.sp,
+                        color = RunWearColors.TextPrimary
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = stringResource(MR.strings.mim_g2_progress_sub),
+                        fontSize = 13.sp,
+                        lineHeight = 19.sp,
+                        color = RunWearColors.TextSecondary
+                    )
+                }
+                FirstLookState.FAILED -> {
+                    Text(
+                        text = stringResource(MR.strings.mim_g5_look_failed),
+                        fontSize = 19.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        lineHeight = 25.sp,
+                        color = RunWearColors.TextPrimary
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = stringResource(MR.strings.mim_first_look_failed_sub),
+                        fontSize = 13.sp,
+                        lineHeight = 19.sp,
+                        color = RunWearColors.TextSecondary
+                    )
+                    // GEN-6 WAVE A (DA-03, closing the FA-12
+                    // residual): the failed phase carries its own
+                    // same-cell "Try again" — the surface previously
+                    // told the user a retry existed in Settings but
+                    // offered no tap target of its own.
+                    Spacer(Modifier.height(14.dp))
+                    androidx.compose.material3.OutlinedButton(
+                        onClick = onRetry,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Text(
+                            stringResource(MR.strings.mim_g6_retry),
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 15.sp
+                        )
+                    }
+                }
+            }
+
+            // The summary band — the ONE soft ask (§9's pair,
+            // verbatim). It slides up and settles after the photo;
+            // the primary button below never moves during the reveal.
+            androidx.compose.animation.AnimatedVisibility(
+                visible = bandSettled,
+                enter = androidx.compose.animation.slideInVertically(
+                    animationSpec = androidx.compose.animation.core.tween(
+                        OnboardingMotion.FIRST_LOOK_BAND_SETTLE_MS,
+                        easing = OnboardingMotion.EmphasizedEasing
+                    )
+                ) { height -> height / 2 } +
+                    androidx.compose.animation.fadeIn(
+                        animationSpec = androidx.compose.animation.core.tween(
+                            OnboardingMotion.FIRST_LOOK_BAND_SETTLE_MS,
+                            easing = OnboardingMotion.EmphasizedEasing
+                        )
+                    )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(top = 18.dp)
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(RunWearColors.BgCard)
+                        .border(
+                            1.dp,
+                            RunWearColors.TextSecondary.copy(alpha = 0.3f),
+                            RoundedCornerShape(24.dp)
+                        )
+                        .padding(horizontal = 20.dp, vertical = 18.dp)
+                ) {
+                    Text(
+                        text = stringResource(MR.strings.mim_first_look_band_header),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 1.2.sp,
+                        color = RunWearColors.PineAccent
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = stringResource(MR.strings.mim_first_look_band_readiness),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        lineHeight = 20.sp,
+                        color = RunWearColors.TextPrimary
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = stringResource(MR.strings.mim_first_look_band_no_cap),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        lineHeight = 20.sp,
+                        color = RunWearColors.TextPrimary
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
+            Button(
+                onClick = onSeeOutfit,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = RoundedCornerShape(18.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary)
+            ) {
+                Text(
+                    stringResource(MR.strings.mim_first_look_primary),
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 16.sp
+                )
+            }
+            // GEN-3 A-HERO: the second door is part of the Premium
+            // ask — withheld while the look is still being made and
+            // on failure (FirstLookPresentation.showsPremiumBand);
+            // the primary door is always available.
+            if (FirstLookPresentation.showsPremiumBand(state)) {
+                TextButton(
+                    onClick = onSeePremium,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        stringResource(MR.strings.mim_first_look_second_door),
+                        color = RunWearColors.TextSecondary
+                    )
+                }
+            }
+            Spacer(Modifier.height(32.dp))
+        }
+    }
+}
+
+// ===========================================================================
+// Delete-my-data confirmation (RW-16.30 decision 5a, strings S21–S24) —
+// the same destructive pattern as the photos dialog, one level up:
+// the safe action is the quiet button, the destructive one is labeled
+// with the act itself, and success is claimed only on the server's
+// receipt (the account_deleted confirmation), never optimistically.
+// ===========================================================================
+
+/**
+ * RW-97 (Nov 6, 2026) — the first-look sheet's photo layers.
+ * THE DEFECT this replaces: the sheet composed its AsyncImage
+ * only inside an AnimatedVisibility gated on a `revealed` flag,
+ * and `revealed` required the image's own load callback — but
+ * the host resolves the serving URL before the sheet composes,
+ * so the callback could never fire, the gate never opened, and
+ * the photo area stayed blank in MAKING and DONE alike (Sol's
+ * Android walkthrough, Nov 6). THE FORM: the current URL's image
+ * composes whenever a URL exists; the last fully loaded photo
+ * stays beneath it while a newer URL loads, then the new photo
+ * crossfades over it (§1.4's 400 ms) — no blank frame, no
+ * placeholder flash, and the previous photo never vanishes
+ * mid-wait. Success AND error both settle the load (DA-03): the
+ * parent keys its success sequence on the photo having landed
+ * or failed honestly, never on URL bookkeeping alone.
+ */
+@Composable
+private fun FirstLookPhotoLayers(
+    photoUrl: String?,
+    onPhotoLoaded: (String) -> Unit
+) {
+    var settledUrl by remember { mutableStateOf<String?>(null) }
+    var currentLoaded by remember { mutableStateOf(false) }
+    LaunchedEffect(photoUrl) { currentLoaded = false }
+    val fade by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (currentLoaded) 1f else 0f,
+        animationSpec = androidx.compose.animation.core.tween(
+            OnboardingMotion.FIRST_LOOK_PHOTO_CROSSFADE_MS,
+            easing = OnboardingMotion.EmphasizedEasing
+        ),
+        label = "firstLookPhotoFade"
+    )
+    if (settledUrl != null && settledUrl != photoUrl) {
+        AsyncImage(
+            model = settledUrl,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            // Top-anchored like every other hero surface (FA-44).
+            alignment = Alignment.TopCenter,
+            modifier = Modifier.fillMaxSize()
+        )
+    }
+    if (photoUrl != null) {
+        AsyncImage(
+            model = photoUrl,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            alignment = Alignment.TopCenter,
+            onSuccess = {
+                currentLoaded = true
+                settledUrl = photoUrl
+                onPhotoLoaded(photoUrl)
+            },
+            onError = {
+                currentLoaded = true
+                onPhotoLoaded(photoUrl)
+            },
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer { alpha = fade }
+        )
+    }
+}
+
+@Composable
+fun MakeItMeDeleteDataDialog(
+    viewModel: MakeItMeViewModel,
+    onDismiss: () -> Unit,
+    onDeleted: () -> Unit
+) {
+    var deleting by remember { mutableStateOf(false) }
+    var failed by remember { mutableStateOf(false) }
+    AlertDialog(
+        containerColor = RunWearColors.BgCard,
+        onDismissRequest = { if (!deleting) onDismiss() },
+        title = { Text(stringResource(MR.strings.mim_s21_delete_data_confirm_title)) },
+        text = {
+            Column {
+                Text(stringResource(MR.strings.mim_s22_delete_data_confirm_body))
+                if (failed) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = stringResource(MR.strings.mim_transport_error),
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = !deleting,
+                onClick = {
+                    deleting = true
+                    failed = false
+                    viewModel.deleteData { ok ->
+                        deleting = false
+                        if (ok) onDeleted() else failed = true
+                    }
+                }
+            ) {
+                Text(
+                    stringResource(MR.strings.mim_s23_delete_data_confirm),
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(enabled = !deleting, onClick = onDismiss) {
+                Text(stringResource(MR.strings.mim_s24_delete_data_keep))
             }
         }
     )

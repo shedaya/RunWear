@@ -1,7 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Fusion icon background token (Sol's handover package): bg-dark-teal #17262A. -->
-    <color name="ic_launcher_background">#FF17262A</color>
-    <!-- RunWearColors.Background (#0A0A0A) — the app's own dark surface. -->
-    <color name="runwear_background">#FF0A0A0A</color>
+    <!-- GEN-5 Addendum 9 (Sol's icon pick, Nov 5, 2026): the
+         launcher icon is Candidate C — the fusion-ring mark on
+         the cream ground, shirt fill in pine #175E4C — so the
+         adaptive background color resource is the cream ground
+         itself, per the staged integration note. -->
+    <color name="ic_launcher_background">#FFF5F1E8</color>
+    <!-- GEN-5 (RW-29 cream map): the splash ground is the
+         design's cream ground in the light appearance (the
+         values-night copy carries Warm Charcoal). The gen-4
+         value was a retired near-black. -->
+    <color name="runwear_background">#FFF5F1E8</color>
 </resources>

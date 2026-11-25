@@ -49,7 +49,7 @@ class AffiliateRepository @Inject constructor() {
 
     private fun buildAmazonLink(searchTerm: String): String {
         val encoded = searchTerm.replace(" ", "+")
-        return "https://www.amazon.com/s?k=$encoded&tag=runwear-20"
+        return "https://www.amazon.com/s?k=$encoded&tag=runwearapp-20"
     }
 
     private fun buildReiLink(searchTerm: String): String {

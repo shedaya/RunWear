@@ -9,7 +9,18 @@ data class OpenMeteoResponse(
     val longitude: Double,
     val timezone: String,
     val current: CurrentWeather? = null,
-    val hourly: HourlyWeather? = null
+    val hourly: HourlyWeather? = null,
+    // GEN-6 WAVE C (RW-53(ii)): the daily block (sunrise,sunset) —
+    // the same forecast payload already carries it; the app simply
+    // never requested or parsed it before.
+    val daily: DailyWeather? = null
+)
+
+@Serializable
+data class DailyWeather(
+    val time: List<String> = emptyList(),
+    val sunrise: List<String> = emptyList(),
+    val sunset: List<String> = emptyList()
 )
 
 @Serializable
@@ -118,11 +129,25 @@ data class NominatimSearchResult(
     val isUSA: Boolean
         get() = address?.countryCode?.equals("us", ignoreCase = true) == true
 
+    /**
+     * WS-4: a search result's display name IS a simple place, derived
+     * once here at the search boundary (city + abbreviated region) —
+     * never the raw "City, Full State Name" geocode string.
+     */
     val formattedDisplayName: String
-        get() = buildString {
-            append(cityName)
-            if (stateName.isNotEmpty()) append(", $stateName")
-        }
+        get() = com.runwear.shared.domain.model.SimplePlace.fromGeocode(
+            city = cityName,
+            region = stateName.takeIf { it.isNotEmpty() },
+            countryCode = address?.countryCode
+        ).display
+
+    /** WS-4: this result as a [com.runwear.shared.domain.model.SimplePlace]. */
+    val simplePlace: com.runwear.shared.domain.model.SimplePlace
+        get() = com.runwear.shared.domain.model.SimplePlace.fromGeocode(
+            city = cityName,
+            region = stateName.takeIf { it.isNotEmpty() },
+            countryCode = address?.countryCode
+        )
 
     val fullLocationDetail: String
         get() = buildString {

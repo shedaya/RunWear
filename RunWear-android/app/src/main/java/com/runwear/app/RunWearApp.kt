@@ -63,7 +63,7 @@ class RunWearApp : Application(), Configuration.Provider {
 
         // RW-14 billing: configure RevenueCat at startup so entitlement
         // state is current before any surface reads it. Idempotent and
-        // crash-safe; the Make it me ViewModel also configures it.
+        // crash-safe; the Make It Me ViewModel also configures it.
         runCatching { billingManager.configure() }
 
         // Widget recovery backstop (spec §B.3.3): periodic refresh with

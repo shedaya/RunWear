@@ -32,7 +32,7 @@ struct ClothingItem: Identifiable {
     let amazonSearchTerm: String
 
     /// Affiliate tag for Amazon links
-    static let affiliateTag = "runwear-20"
+    static let affiliateTag = "runwearapp-20"
 
     /// Build affiliate URL with gender preference and platform subtag
     /// - Parameters:
