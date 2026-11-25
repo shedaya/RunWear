@@ -439,7 +439,12 @@ final class RWNextBuildTests: XCTestCase {
 
     func testRW152_ChangeButtonTakesSettledPrimaryInk_SourcePin() throws {
         let chart = try sourceFile("../RunWear/Views/Components/DayChartView.swift")
-        let change = try XCTUnwrap(chart.range(of: "Text(\"Change\")"))
+        // MERGE ADAPTATION (2026-11-25, train/rw-next +
+        // release builds 28–34): the control's label stands in
+        // its WP-R3 localized form on the merged lineage; the
+        // pin anchors on that form — the ink assertions below
+        // are unchanged and at the same strength.
+        let change = try XCTUnwrap(chart.range(of: "Text(AppStrings.chartChange)"))
         let buttonBlock = chart[change.lowerBound...].prefix(600)
         XCTAssertTrue(buttonBlock.contains("AppTheme.inkPrimary"),
                       "the glance-band Change control reads in the settled primary ink")

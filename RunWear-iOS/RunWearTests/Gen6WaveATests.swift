@@ -557,9 +557,21 @@ final class Gen6WaveATests: XCTestCase {
                        "RW-151/J4: the stalled line is retired")
         XCTAssertFalse(models.contains("BankStallTracker"),
                        "RW-151/J4: the stall tracker is retired")
-        XCTAssertTrue(models.contains("static let heading = \"Making your looks\""),
+        // MERGE ADAPTATION (2026-11-25, train/rw-next +
+        // release builds 28–34): on the merged lineage the two
+        // settled strings stand in their WP-R3 localized form
+        // in the model layer; byte-identity is therefore
+        // asserted at the English facade, where the canonical
+        // spelling lives — the same strength, at the merged
+        // tree's one spelling home.
+        XCTAssertTrue(models.contains("static let heading = AppStrings.mimBandHeading"),
+                      "the settled heading stands in the model layer (localized form)")
+        XCTAssertTrue(models.contains("static let line = AppStrings.mimBandLine"),
+                      "the settled in-progress line stands in the model layer (localized form)")
+        let english = try sourceFile("../RunWear/Localization/AppEnglish.swift")
+        XCTAssertTrue(english.contains("mimBandHeading: String { \"Making your looks\" }"),
                       "the settled heading is byte-identical")
-        XCTAssertTrue(models.contains("static let line = \"We're generating your outfits across all running conditions, so it will be ready when you need it.\""),
+        XCTAssertTrue(english.contains("mimBandLine: String { \"We're generating your outfits across all running conditions, so it will be ready when you need it.\" }"),
                       "the settled in-progress line is byte-identical")
         XCTAssertTrue(models.contains("enum FillReconcile"),
                       "RW-151 §5: the reconcile rule stands in the model layer")

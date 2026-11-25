@@ -174,7 +174,12 @@ final class RW168ShareMenuTests: XCTestCase {
         let gearIndex = try XCTUnwrap(top.range(of: "gearshape.fill")).lowerBound
         XCTAssertLessThan(shareIndex, gearIndex,
                           "share sits beside the gear, gear outermost at the top right")
-        XCTAssertTrue(top.contains(".accessibilityLabel(\"Settings\")"),
+        // MERGE ADAPTATION (2026-11-25, train/rw-next +
+        // release builds 28–34): the gear's label stands in
+        // its WP-R3 localized form on the merged lineage
+        // (AppEnglish pin: "Settings"); the pin asserts that
+        // form — the gear's own door is untouched.
+        XCTAssertTrue(top.contains(".accessibilityLabel(AppStrings.a11ySettings)"),
                       "the gear's own door is untouched")
         // The menu card: the RW-152 boundary/depth construction.
         XCTAssertTrue(hero.contains("struct HomeShareMenuView"))
