@@ -261,18 +261,23 @@ enum HeroChipPlacement {
 // MARK: - Hero pill metrics (Ruling 2, Nov 9, 2026)
 //
 // The straddle pill's height by state — the input the hero's
-// vertical layout guarantees against. The single-line states
-// (making, free look, Premium, exhausted) render one row inside
-// the straddle seat's 10 pt vertical padding (≈40 pt actual);
-// the two-line generating form (script row + the green upsell
-// line, HeroPillView's makingWithUpsell) renders ≈58 pt. The
-// planning values carry margin over both, so the guarantee —
-// no pill state can cover the weather line (the build-33 device
-// defect: the two-line pill's top-anchored seat grew DOWN over
-// the sheet's opening line, cutting the wind value and the UV
-// figure) — holds for the real view, not just the model.
+// vertical layout guarantees against. EVERY state renders one
+// row inside the straddle seat's 10 pt vertical padding
+// (≈40 pt actual): RW-174 / RW-171 (Sol, Nov 12, 2026) — the
+// pill holds ONE line in every state; the two-line generating
+// form (script row + a stacked green upsell line) is removed
+// entirely. The planning value carries margin over the row,
+// so the guarantee — no pill state can cover the weather
+// line (the build-33 device defect: a taller pill's
+// top-anchored seat grew DOWN over the sheet's opening line,
+// cutting the wind value and the UV figure) — holds for the
+// real view, not just the model.
 enum HeroPillMetrics {
     static let singleLineHeight: CGFloat = 44
+    /// Retained as a layout VALUE for callers that plan
+    /// against an arbitrary pill height (the folded-hero
+    /// geometry tests exercise it as an input); NO pill state
+    /// plans at it any more — RW-171 leaves no two-line state.
     static let twoLineHeight: CGFloat = 62
 
     /// The planning height for a pill state; 0 when the state
@@ -281,7 +286,6 @@ enum HeroPillMetrics {
     static func height(for state: HeroPillState) -> CGFloat {
         switch state {
         case .hidden: return 0
-        case .makingWithUpsell: return twoLineHeight
         case .making, .freeLook, .exhausted, .premium: return singleLineHeight
         }
     }
@@ -577,19 +581,27 @@ struct HeroTopChromeView: View {
     let luminance: Double
     let onPlaceTapped: () -> Void
     let onSettingsTapped: () -> Void
+    /// RW-168 (Nov 11, 2026): the share control beside the
+    /// gear — same circle chrome, same cream glyph. Optional
+    /// so non-home compositions of this row (render fixtures)
+    /// carry exactly the controls they pass.
+    var onShareTapped: (() -> Void)? = nil
 
     var body: some View {
-        ZStack {
-            // Wordmark, centered on the hero (not on the row's
-            // remaining space — the frames center it on screen).
-            Text(AppStrings.heroWordmark)
-                .font(.greatVibes(size: 25))
-                .lineLimit(1)
-                .foregroundColor(HeroChrome.cream)
-                .shadow(color: Color.black.opacity(0.35), radius: 6, y: 2)
-                .accessibilityHidden(true)
-
-            HStack(alignment: .top, spacing: 8) {
+        // RW-169 §7C (D10): ONE negotiating layout pass — place
+        // pill, wordmark, share and gear are siblings in a
+        // single HStack, so they divide the row's width
+        // together. (The pre-fix form centred the wordmark in
+        // an overlaying ZStack layer that never negotiated with
+        // the pill: the pill truncated at a 110 pt cap copied
+        // from a mock whose place was "Phoenix, AZ", and what
+        // remained still slid under the wordmark.)
+        // §7B width law: the wordmark and the place name are
+        // FIXED-CLAIM — both are fixedSize and carry layout
+        // priority; the flexible space (the two spacers) is
+        // what yields. The wordmark's centred zone is reserved
+        // by the equal spacers around it.
+        HStack(alignment: .top, spacing: 8) {
                 Button(action: onPlaceTapped) {
                     HStack(spacing: 6) {
                         Image(systemName: "mappin")
@@ -597,13 +609,15 @@ struct HeroTopChromeView: View {
                         Text(placeName)
                             .font(.system(size: 13, weight: .semibold))
                             .lineLimit(1)
-                            .truncationMode(.tail)
-                            // The pill must never reach the
-                            // centered wordmark: long place names
-                            // truncate inside the pill (the mock's
-                            // pill is ~118 pt wide).
-                            .frame(maxWidth: 110, alignment: .leading)
+                            // RW-169 §7B: the pill SIZES TO ITS
+                            // TEXT — no width cap, no tail
+                            // truncation. The 110 pt cap that
+                            // stood here was a constant copied
+                            // from a mock whose place happened
+                            // to be "Phoenix, AZ" (D10).
+                            .fixedSize(horizontal: true, vertical: false)
                     }
+                    .layoutPriority(1)
                     .foregroundColor(HeroChrome.cream)
                     .padding(.horizontal, 12)
                     .frame(height: 32)
@@ -620,6 +634,46 @@ struct HeroTopChromeView: View {
 
                 Spacer(minLength: 0)
 
+                // The RunWear wordmark, centred in its reserved
+                // zone between the two flexible spacers — a
+                // sibling in this same pass, fixed-claim
+                // (fixedSize + highest priority), so neither the
+                // pill nor the button pair can slide under it
+                // or compress it.
+                Text(AppStrings.heroWordmark)
+                    .font(.greatVibes(size: 25))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .layoutPriority(2)
+                    .foregroundColor(HeroChrome.cream)
+                    .shadow(color: Color.black.opacity(0.35), radius: 6, y: 2)
+                    .accessibilityHidden(true)
+
+                Spacer(minLength: 0)
+
+                // RW-168: share sits beside the gear, in the
+                // gear's own circle chrome (fill, hairline,
+                // cream glyph) — the pair stays structurally
+                // bound as end-of-row siblings
+                // ([Spacer][share][gear], RW-169 §7C).
+                if let onShareTapped {
+                    Button(action: onShareTapped) {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(HeroChrome.cream)
+                            .frame(width: 32, height: 32)
+                            .background(
+                                Circle().fill(HeroChrome.fillInk.opacity(
+                                    HeroScrimMath.chromeAlpha(base: HeroChrome.placeFillAlpha, luminance: luminance)))
+                            )
+                            .overlay(
+                                Circle().stroke(HeroChrome.cream.opacity(HeroChrome.placeOutlineAlpha), lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Share")
+                }
+
                 Button(action: onSettingsTapped) {
                     Image(systemName: "gearshape.fill")
                         .font(.system(size: 16, weight: .semibold))
@@ -635,7 +689,6 @@ struct HeroTopChromeView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(AppStrings.a11ySettings)
-            }
         }
     }
 }
@@ -840,6 +893,8 @@ struct HeroChromeOverlayView: View {
     let footLuminance: Double
     let onPlaceTapped: () -> Void
     let onSettingsTapped: () -> Void
+    /// RW-168: the top row's share control (see HeroTopChromeView).
+    var onShareTapped: (() -> Void)? = nil
     let onDateTapped: () -> Void
     let onTimeTapped: () -> Void
     let onNowTapped: () -> Void
@@ -935,7 +990,8 @@ struct HeroChromeOverlayView: View {
                     placeName: placeName,
                     luminance: topLuminance,
                     onPlaceTapped: onPlaceTapped,
-                    onSettingsTapped: onSettingsTapped
+                    onSettingsTapped: onSettingsTapped,
+                    onShareTapped: onShareTapped
                 )
                 .padding(.horizontal, 16)
                 .padding(.top, 10)
@@ -984,5 +1040,66 @@ struct HeroChromeOverlayView: View {
             }
             .frame(width: size.width, height: size.height)
         }
+    }
+}
+
+// MARK: - RW-168 home share menu (Nov 11, 2026)
+//
+// The floating card the hero's share control opens: the three
+// EXISTING doors of HomeShareMenuEntry, nothing else. Its
+// boundary/depth follows the studio's RW-152 standard — the
+// mini bar's own construction: sheet fill, a hairline stroke
+// in the same rounded shape, and the soft shadow applied
+// outside it (radius 12, y 6, black 14%). Colours are the
+// dynamic cream / Warm Charcoal tokens, so the card is correct
+// in both themes by construction.
+
+struct HomeShareMenuView: View {
+    let onSelect: (HomeShareMenuEntry) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(HomeShareMenuEntry.allCases.enumerated()), id: \.element.id) { index, entry in
+                Button {
+                    onSelect(entry)
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: entry.systemImage)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(AppTheme.pinePayload)
+                            .frame(width: 20, alignment: .center)
+                        Text(entry.title)
+                            .font(.appSecondary.weight(.medium))
+                            .foregroundColor(AppTheme.inkPrimary)
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 11)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(entry.title)
+
+                if index < HomeShareMenuEntry.allCases.count - 1 {
+                    Rectangle()
+                        .fill(AppTheme.sheetHairline)
+                        .frame(height: 0.5)
+                        .padding(.leading, 44)
+                        .padding(.trailing, 14)
+                }
+            }
+        }
+        .frame(width: 252)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(AppTheme.sheet)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(AppTheme.sheetHairline, lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.14), radius: 12, x: 0, y: 6)
     }
 }

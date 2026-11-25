@@ -154,6 +154,18 @@ final class WS10CopyTests: XCTestCase {
         // copy superseded the promise's welcome RENDERING — the
         // canonical wording stays defined, and A1's ban on every
         // other surface (setup form, fork) stands untouched.
+        // MERGE RESOLUTION (2026-11-25, train/rw-next +
+        // release builds 28–34): the definition is the
+        // Localizable catalog accessor (WP-R3 — the catalog is
+        // the one canonical spelling, per the pins below), and
+        // the release lineage's RW-TRAIN derivation intent is
+        // kept in this pin's expectation instead: the expected
+        // sentence is DERIVED from the one allowance constant,
+        // so if FreeLooksAllowance ever changes, this test
+        // fails until the catalog entry (and AppEnglish's
+        // pinned literal) is updated in the same commit.
+        XCTAssertEqual(OnboardingCopy.freeLooksPromise, "Your first \(FreeLooksAllowance.value) looks are free.",
+                       "the promise renders exactly the canonical sentence at the current allowance")
         let lines = try appCodeLines()
         let hits = lines.filter { $0.text.contains(OnboardingCopy.freeLooksPromise) }
         // WP-R3: the promise's one canonical spelling now lives in

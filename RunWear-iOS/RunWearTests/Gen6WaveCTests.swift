@@ -1117,24 +1117,65 @@ final class Gen6FixWaveTests: XCTestCase {
                        "the measured mini endpoint (the blank-bar mechanism) is gone")
         XCTAssertFalse(bar.contains("morphContent(showsExpandedBlock: false"),
                        "no phantom mini measurer copy exists")
-        // RE-PINNED for RW-135 spec §2.2/§3 (Direction A′,
-        // approved Nov 7, 2026): the footer is ALWAYS in the
-        // layout while a session entry exists — the interim
-        // build's full-expression gating
-        // (onFullExpressionChange / wearFooterPresented) is
-        // removed, and the dock's visibility is the §3
-        // position-derived handoff fade. RW-86's discipline
-        // stands in the new shape: no second copy of the
-        // expanded content exists in any paint path — the bar
-        // is MINI-only and the footer is the single expanded
-        // copy, mounted from the session entry alone.
-        XCTAssertTrue(bar.contains("handoffFade"),
-                      "spec §3: the dock consumes the position-derived handoff fade")
+        // RW-152 §1 ADDITION (Nov 10, 2026 — new pins, the
+        // RW-86 assertions above stand verbatim): the overlay
+        // morph's mini endpoint is the surface's REST height,
+        // captured on the CONTAINER and confined to the pure
+        // rest state, and no height is applied to the surface
+        // at rest. Inside the bar, the one pre-existing
+        // measurement (dockHeight) serves only the entrance's
+        // rise distance — it never sizes the bar (RW-86's
+        // actual discipline). The panel endpoint is the
+        // panel's measured content height (RW-152 §2's gate),
+        // which RW-86 never governed.
+        // RW-TRAIN (2026-11-15): the barBody slice pin that stood
+        // here sliced the file between the two retired standalone
+        // forms (WearIveRunMiniBarView / WearIveRunExpandedPanelView)
+        // and pinned RW-86's no-self-sizing rule on the mini form.
+        // Both standalone forms are removed as dead code (no app
+        // call site; the live dock is WearIveRunUnifiedSurfaceView);
+        // the unified-surface pins below stand unchanged.
+        // RE-PINNED for RW-169 §7A (Nov 11, 2026; supersedes
+        // the RW-152 §1 rest-capture pins that stood here):
+        // the dual-form overlay — whose rest capture was
+        // confined to the panel-unmounted state and which
+        // carried no explicit height at rest — is RETIRED
+        // (diagnosis D3). The unified surface's container
+        // height is ALWAYS the interpolation of the two REST
+        // heights, both captured at their own rest states
+        // (the surface reports them via onRestHeights from
+        // rest-state geometry reads only, p == 0 / p == 1).
+        XCTAssertTrue(bar.contains("onRestHeights"),
+                      "RW-169 §7A: rest heights are reported from rest-state reads only")
+        XCTAssertTrue(bar.contains("if p == 0 { miniNarrationHeight = height }"),
+                      "RW-169 §7A: the mini rest capture is confined to the mini rest state")
+        XCTAssertTrue(bar.contains("if p == 1 { expandedNarrationHeight = height }"),
+                      "RW-169 §7A: the expanded rest capture is confined to the expanded rest state")
+        XCTAssertTrue(bar.contains(".frame(height: containerHeight)"),
+                      "RW-169 §7A: the container height is the rest-height interpolation at every progress value")
+        // RE-PINNED for RW-152 §1 (Nov 9, 2026; supersedes the
+        // RW-135 §2.2/§3 re-pin that stood here): the footer
+        // section is REMOVED from the layout entirely — the
+        // expanded form is the mini dock's own overlay state,
+        // morphed in place by the one expansionProgress in
+        // WearIveRunOverlayView. RW-86's discipline stands in
+        // the new shape: no second copy of the expanded content
+        // exists in any paint path — the panel is the single
+        // expanded copy, mounted from the session entry alone,
+        // inside the one overlay surface.
+        XCTAssertTrue(bar.contains("WearIveRunOverlayView"),
+                      "RW-152 §1: the overlay container owns the two states of the one surface")
+        XCTAssertTrue(bar.contains("expansionProgress"),
+                      "RW-152 §1: one progress value drives the morph")
+        XCTAssertFalse(bar.contains("handoffFade"),
+                       "RW-152 §1: the position-derived handoff fade is removed")
         XCTAssertFalse(bar.contains("onFullExpressionChange"),
                        "spec §2.2: the full-expression gating is removed")
         let homeView = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
-        XCTAssertTrue(homeView.contains("if let todays = wearExitInProgress ? wearExitEntry : liveEntry"),
-                      "spec §2.2: the single expanded copy (the footer section) mounts whenever a session entry exists")
+        XCTAssertTrue(homeView.contains("let todays = wearExitInProgress ? wearExitEntry : liveEntry"),
+                      "RW-152 §1: the overlay dock mounts whenever a session entry exists (or an exit renders its snapshot)")
+        XCTAssertFalse(homeView.contains("wearIveRunFooterSection"),
+                       "RW-152 §1: no in-flow footer section remains in the host")
     }
 
     // MARK: RW-89 / RW-92 / RW-95 / RW-101 — composition pins
@@ -1704,12 +1745,15 @@ final class Gen6SuccessorWaveTests: XCTestCase {
             .hidden)
         // Precedence preserved: MAKING outranks the exhausted
         // branch; a scaffold serve stays silent over it.
+        // RW-174 / RW-171: the making resolution is the
+        // one-line .making on the free tier too (was the
+        // two-line upsell state under GEN-5 C-4).
         XCTAssertEqual(
             HeroPill.resolve(
                 optedIn: true, lookState: .making, personalPhotoDisplayed: false,
                 isSubscribed: false, freeGenerationsUsed: 5, freeAllowance: 5,
                 isExhaustedCell: true),
-            .makingWithUpsell)
+            .making)
         XCTAssertEqual(
             HeroPill.resolve(
                 optedIn: true, lookState: .ready, personalPhotoDisplayed: true,
@@ -1854,8 +1898,11 @@ final class Gen6SuccessorWaveTests: XCTestCase {
                        "§7.1: no empty/placeholder form stands in the dock's seat")
         XCTAssertTrue(view.contains("if state != .preAdd"),
                       "the dock renders only while a session entry stands")
-        XCTAssertEqual(WearIveRunEmptyDockView.emptyLine, "Your scrapbook starts with today's run.",
-                       "the designed empty state's head line, verbatim (collection surface)")
+        // RW-TRAIN (2026-11-15): the WearIveRunEmptyDockView.emptyLine
+        // equality pin that stood here is removed with the dead
+        // empty-dock view itself; the designed empty copy is still
+        // pinned verbatim on the live collection surface directly
+        // below.
         let collection = try sourceFile("../RunWear/Views/WearIveRunCollectionView.swift")
         XCTAssertTrue(collection.contains("AppStrings.wirEmptyLine"),
                       "the collection's empty state carries the settled copy")
@@ -2323,10 +2370,16 @@ extension Gen6FixWaveTests {
         // chip, dock retired) are superseded by the owner's
         // ruling — the floating dock is restored and the
         // expanded form is the footer section.
+        // RE-PINNED for RW-152 §1 (Nov 9, 2026): the expanded
+        // form is no longer a section in the host at all — it is
+        // the overlay dock's expanded state, composed in the
+        // mini bar's residence.
         XCTAssertTrue(view.contains("miniBarDock"),
                       "RW-135 Direction A: the floating dock is restored as the Home presence")
-        XCTAssertTrue(view.contains("wearIveRunFooterSection"),
-                      "RW-135 Direction A (interim): the expanded form is the footer section")
+        XCTAssertTrue(view.contains("WearIveRunOverlayView"),
+                      "RW-152 §1: the host mounts the one overlay surface")
+        XCTAssertFalse(view.contains("wearIveRunFooterSection"),
+                       "RW-152 §1: the in-flow footer section is removed (supersedes the RW-135 interim form)")
         XCTAssertFalse(view.contains("wearIveRunInlineSection"),
                        "RW-135: the synthesis inline section is removed")
         XCTAssertFalse(view.contains("wearIveRunJumpChip"),
@@ -2528,7 +2581,7 @@ extension Gen6FixWaveTests {
     }
 
     /// Direction A source pins: the dock's seat and geometry in
-    /// the host, the footer's interim anatomy, and the machine's
+    /// the host, the expanded form's anatomy, and the machine's
     /// one-pulse rule.
     func testRW135_DirectionA_sourcePins() throws {
         let view = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
@@ -2542,10 +2595,17 @@ extension Gen6FixWaveTests {
         XCTAssertTrue(view.contains("miniBarDock"),
                       "the restored dock is what the overlay hosts")
         let bar = try sourceFile("../RunWear/Views/WearIveRunMiniBar.swift")
-        XCTAssertTrue(bar.contains("struct WearIveRunFooterSectionView"),
-                      "the interim expanded form is the footer section view")
+        // RE-PINNED for RW-152 §1 (Nov 9, 2026): the expanded
+        // form is the overlay PANEL in the same residence — the
+        // in-flow footer section view is removed.
+        // RW-TRAIN (2026-11-15): the struct-presence pin for the
+        // retired standalone expanded panel is removed with that
+        // dead view; the expanded form lives in the one unified
+        // surface (WearIveRunUnifiedSurfaceView) in the same file.
+        XCTAssertFalse(bar.contains("struct WearIveRunFooterSectionView"),
+                       "RW-152 §1: the in-flow footer section view is removed")
         XCTAssertTrue(bar.contains("WearIveRunNarration.expandedLine"),
-                      "the footer renders §7.2's entry line from the record")
+                      "the panel renders §7.2's entry line from the record")
         XCTAssertFalse(bar.contains("viewedNarrationPayload"),
                        "§7.0: the bar carries no live-view narration input")
         let machine = try sourceFile("../RunWear/Models/WearIveRunElementMachine.swift")
@@ -2553,65 +2613,73 @@ extension Gen6FixWaveTests {
                        "§7.4: a changed settle is not a cue driver in the machine")
     }
 
-    /// RW-135 spec §3 (Direction A′): the handoff fade is a
-    /// pure function of the footer's position — endpoints,
-    /// midpoint, and the hit-testing rule (hit-testable only
-    /// below fade 0.5).
+    /// RE-PINNED for RW-152 §1 (Nov 9, 2026; supersedes the
+    /// RW-135 §3 handoff test that stood here): the handoff
+    /// fade — a pure function of an in-flow footer's position —
+    /// is REMOVED with the footer. What survives of the §3
+    /// dissolve is the morph's own window, now driven by the
+    /// overlay's one expansionProgress: the expanded content
+    /// stays invisible through 45% of the travel and is fully
+    /// in at the settle, and the container height interpolates
+    /// linearly between the two measured state heights. Those
+    /// are the functions pinned here, at the old test's
+    /// strength.
     func testRW135_HandoffFade_EndpointsMidpointAndHitRule() {
-        // Below the window (footer top < 83 pt above the
-        // viewport's bottom edge): the dock stands fully.
-        XCTAssertEqual(WearIveRunMorph.handoffFade(footerTopAboveViewportBottom: -40), 0, accuracy: 0.0001)
-        XCTAssertEqual(WearIveRunMorph.handoffFade(footerTopAboveViewportBottom: 0), 0, accuracy: 0.0001)
-        XCTAssertEqual(WearIveRunMorph.handoffFade(footerTopAboveViewportBottom: 83), 0, accuracy: 0.0001)
-        // Window midpoint (101.5 pt): smoothstep(0.5) == 0.5 —
-        // the exact point hit-testing turns off (fade < 0.5).
-        XCTAssertEqual(WearIveRunMorph.handoffFade(footerTopAboveViewportBottom: 101.5), 0.5, accuracy: 0.0001)
-        XCTAssertTrue(WearIveRunMorph.handoffFade(footerTopAboveViewportBottom: 100) < 0.5,
-                      "just inside the window the dock still takes hits")
-        XCTAssertFalse(WearIveRunMorph.handoffFade(footerTopAboveViewportBottom: 103) < 0.5,
-                       "past the midpoint taps pass through (§3 hit rule)")
-        // At and past the window's end (120 pt): handed off.
-        XCTAssertEqual(WearIveRunMorph.handoffFade(footerTopAboveViewportBottom: 120), 1, accuracy: 0.0001)
-        XCTAssertEqual(WearIveRunMorph.handoffFade(footerTopAboveViewportBottom: 212), 1, accuracy: 0.0001)
-        // Monotonic across the window — position is the only
-        // input, so scrolling back up retraces the same frames.
+        // The dissolve window: closed through 0.45, half at the
+        // window's midpoint (0.725), fully open at 1.0.
+        XCTAssertEqual(WearIveRunMorph.expandedContentOpacity(progress: 0), 0, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.expandedContentOpacity(progress: 0.45), 0, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.expandedContentOpacity(progress: 0.725), 0.5, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.expandedContentOpacity(progress: 1), 1, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.expandedContentOpacity(progress: 1.4), 1, accuracy: 0.0001,
+                       "overshoot clamps: opacity never exceeds the settled value")
+        // The drift rides the same window: +4 pt at the window's
+        // start, 0 at the settle.
+        XCTAssertEqual(WearIveRunMorph.expandedContentOffset(progress: 0.45), 4, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.expandedContentOffset(progress: 1), 0, accuracy: 0.0001)
+        // Height: linear between the two measured heights,
+        // clamped outside [0, 1].
+        XCTAssertEqual(WearIveRunMorph.height(mini: 56, expanded: 264, progress: 0), 56, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.height(mini: 56, expanded: 264, progress: 0.5), 160, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.height(mini: 56, expanded: 264, progress: 1), 264, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.height(mini: 56, expanded: 264, progress: -0.5), 56, accuracy: 0.0001)
+        // Monotonic across the travel — progress is the only
+        // input, so collapsing retraces the same frames.
         var previous = -1.0
-        for a in stride(from: 83.0, through: 120.0, by: 3.7) {
-            let fade = WearIveRunMorph.handoffFade(footerTopAboveViewportBottom: a)
-            XCTAssertGreaterThanOrEqual(fade, previous)
-            previous = fade
+        for progress in stride(from: 0.0, through: 1.0, by: 0.037) {
+            let opacity = WearIveRunMorph.expandedContentOpacity(progress: progress)
+            XCTAssertGreaterThanOrEqual(opacity, previous)
+            previous = opacity
         }
-        // Reduce Motion (§5): a step at the window's midpoint.
-        XCTAssertEqual(WearIveRunMorph.handoffFade(footerTopAboveViewportBottom: 101.4, reduceMotion: true), 0, accuracy: 0.0001)
-        XCTAssertEqual(WearIveRunMorph.handoffFade(footerTopAboveViewportBottom: 101.5, reduceMotion: true), 1, accuracy: 0.0001)
-        // Smoothstep's own endpoints.
-        XCTAssertEqual(WearIveRunMorph.smoothstep(-1), 0, accuracy: 0.0001)
-        XCTAssertEqual(WearIveRunMorph.smoothstep(0), 0, accuracy: 0.0001)
-        XCTAssertEqual(WearIveRunMorph.smoothstep(0.5), 0.5, accuracy: 0.0001)
-        XCTAssertEqual(WearIveRunMorph.smoothstep(1), 1, accuracy: 0.0001)
-        XCTAssertEqual(WearIveRunMorph.smoothstep(2), 1, accuracy: 0.0001)
     }
 
-    /// RW-135 spec §4.4: the glide duration rule —
-    /// clamp(450 ms, 350 + 0.55 × distancePt, 950 ms).
+    /// RE-PINNED for RW-152 §1 (Nov 9, 2026; supersedes the
+    /// RW-135 §4.4 glide-duration test that stood here): the
+    /// page glide is REMOVED — expansion is in place, so there
+    /// is no glide distance to price. The motion that remains
+    /// is the overlay morph, whose drivers are the decision's
+    /// own springs: tap (response 0.42, damping 0.92) summons,
+    /// collapse (response 0.34, damping 1.0) dismisses, the cue
+    /// is the only overshoot, and Reduce Motion is the
+    /// ≤150 ms crossfade.
     func testRW135_GlideDuration_ClampRule() {
-        XCTAssertEqual(WearIveRunMorph.glideDurationSeconds(distancePt: 0), 0.45, accuracy: 0.0001,
-                       "zero distance still lands on the 450 ms floor")
-        XCTAssertEqual(WearIveRunMorph.glideDurationSeconds(distancePt: -120), 0.45, accuracy: 0.0001,
-                       "negative distance clamps to the floor")
-        XCTAssertEqual(WearIveRunMorph.glideDurationSeconds(distancePt: 200), 0.46, accuracy: 0.0001,
-                       "350 + 0.55 × 200 = 460 ms")
-        XCTAssertEqual(WearIveRunMorph.glideDurationSeconds(distancePt: 1000), 0.9, accuracy: 0.0001,
-                       "350 + 0.55 × 1000 = 900 ms")
-        XCTAssertEqual(WearIveRunMorph.glideDurationSeconds(distancePt: 1090.9), 0.95, accuracy: 0.0001,
-                       "the linear rule reaches the cap at ≈1091 pt")
-        XCTAssertEqual(WearIveRunMorph.glideDurationSeconds(distancePt: 5000), 0.95, accuracy: 0.0001,
-                       "long pages cap at 950 ms")
+        XCTAssertEqual(WearIveRunMorph.springResponse(for: .tap), 0.42, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.springDampingFraction(for: .tap), 0.92, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.springResponse(for: .collapse), 0.34, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.springDampingFraction(for: .collapse), 1.0, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.durationGateSeconds(for: .tap), 0.45, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.durationGateSeconds(for: .collapse), 0.32, accuracy: 0.0001)
+        XCTAssertTrue(WearIveRunMorph.permitsOvershoot(.cue))
+        XCTAssertFalse(WearIveRunMorph.permitsOvershoot(.tap))
+        XCTAssertFalse(WearIveRunMorph.permitsOvershoot(.collapse))
+        XCTAssertEqual(WearIveRunMorph.reducedMotionDurationSeconds, 0.15, accuracy: 0.0001)
     }
 
     /// RW-135 spec §9.2 glyphs + §4.1 cue peak, source pins:
-    /// dock = corners-out (no rotation), footer = chevron-down,
-    /// and the doorway element stands in the footer (§2.2).
+    /// dock = corners-out (no rotation), expanded panel =
+    /// chevron-down (RW-152 §1: the panel's dismissal control),
+    /// and the doorway element stands in the panel (§2.2
+    /// anatomy, carried into the overlay).
     func testRW135_GlyphsAndDoorway_sourcePins() throws {
         let bar = try sourceFile("../RunWear/Views/WearIveRunMiniBar.swift")
         XCTAssertTrue(bar.contains("\"arrow.up.left.and.arrow.down.right\""),
@@ -2622,8 +2690,13 @@ extension Gen6FixWaveTests {
                        "§9.2: no rotation is applied on the dock path (the morph's pure rotation function remains for its unit pins, unused by the views)")
         XCTAssertTrue(bar.contains("AppEnglish.wirOpenCollection"),
                       "§2.2: the footer carries the collection doorway element")
-        XCTAssertTrue(bar.contains("greatVibes(size: 31)"),
-                      "§2.2: the footer's wordmark is 31 pt")
+        // RW-TRAIN RE-PIN (2026-11-15): the literal 31 pt form
+        // stood in the retired standalone expanded panel; the
+        // live unified surface's one wordmark interpolates
+        // 17 → 31 pt on the morph, reaching the same 31 pt at
+        // full expansion.
+        XCTAssertTrue(bar.contains("greatVibes(size: lerp(17, 31))"),
+                      "§2.2: the footer's wordmark is 31 pt (the unified surface's expanded endpoint)")
         XCTAssertTrue(bar.contains("cornerRadius: 14"),
                       "§2.2: the entry thumbnail's radius is 14")
         // §4.1: the creation cue peak as pinned on the machine.

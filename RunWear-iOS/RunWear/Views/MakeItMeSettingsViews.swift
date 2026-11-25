@@ -957,7 +957,12 @@ struct MakeItMeSubscriptionSheet: View {
 
                     Button {
                         Task {
-                            await store.billing.restore()
+                            // RW-137 (DESIGN §4.4.3): Restore runs
+                            // the store's restore + reconcile +
+                            // adoption sync, so a restored
+                            // subscription brings its looks back
+                            // in the same pass.
+                            await store.restorePurchases()
                             if store.billing.isSubscribed { dismiss() }
                         }
                     } label: {

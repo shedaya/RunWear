@@ -232,12 +232,13 @@ final class Gen3HeroServingTests: XCTestCase {
     func testPillMakingState_BindsToTheRequestedCell() {
         // (a) personal photo generating for THIS cell, none on
         // screen yet → the pill rides the fallback photo.
-        // GEN-5 (C-4 AMENDED): a FREE user's generating pill is
-        // its own state — it carries the green instantly line. A
-        // subscriber's generating pill stays .making (pinned in
-        // the gen-5 suite).
+        // RW-174 / RW-171 SUPERSEDES the GEN-5 C-4 pin that
+        // stood here (a FREE user's generating pill was its own
+        // two-line state carrying an upsell line): the pill is
+        // ONE line in every state, so a free user's generating
+        // pill is the same .making as a subscriber's.
         XCTAssertEqual(
-            .makingWithUpsell,
+            .making,
             HeroPill.resolve(optedIn: true, lookState: .making, personalPhotoDisplayed: false,
                              isSubscribed: false, freeGenerationsUsed: 0, freeAllowance: 5)
         )
@@ -265,11 +266,12 @@ final class Gen3HeroServingTests: XCTestCase {
         // scaffold state: the settled precedence — Android's
         // HeroPillPolicy is test-pinned to it — is that a
         // generation in flight OUTRANKS the scaffold serve, so
-        // the pill reports the making state (with the C-4
-        // amendment's free-tier gating), never "Your photo",
-        // while the look is still being made.
+        // the pill reports the making state, never "Your photo",
+        // while the look is still being made. (RW-174 / RW-171:
+        // the C-4 free-tier gating this pin once carried is
+        // superseded — one .making state on both tiers.)
         XCTAssertEqual(
-            .makingWithUpsell,
+            .making,
             HeroPill.resolve(optedIn: true, lookState: .making, personalPhotoDisplayed: true,
                              isSubscribed: false, freeGenerationsUsed: 1, freeAllowance: 5)
         )
@@ -387,8 +389,18 @@ final class Gen3HeroServingTests: XCTestCase {
 
     func testAllPhotoSurfacesShareTheAlwaysAvailableResolution_sourcePin() throws {
         let view = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
-        XCTAssertTrue(view.contains("viewModel.alwaysAvailableHeroReference()"),
-                      "Wear I've Run entry recording must be fed by the same always-available resolution as the hero (X-10)")
+        // RE-PINNED for RW-169 §7E.3 (Nov 11, 2026; narrows the
+        // X-10 pin that stood here): a FALLBACK serve is never
+        // recorded as the entry's hero reference — the bundled
+        // always-available resolution no longer feeds the
+        // recording. Only a remote serve actually on screen
+        // (viewModel.heroImageUrl) is recorded; the
+        // always-available resolution still feeds the HERO's
+        // own paint (the VM pin below stands).
+        XCTAssertTrue(view.contains("heroImageReference: viewModel.heroImageUrl ?? \"\""),
+                      "RW-169 §7E.3: the entry records the remote serve on screen, never a fallback serve")
+        XCTAssertFalse(view.contains("heroImageReference: viewModel.currentHeroFlagTarget?.imageUrl ?? viewModel.alwaysAvailableHeroReference()"),
+                      "RW-169 §7E.3: the fallback-inclusive recording expression is retired")
         let vm = try sourceFile("../RunWear/ViewModels/WeatherViewModel.swift")
         XCTAssertTrue(vm.contains("func alwaysAvailableHeroReference()"))
         XCTAssertTrue(vm.contains("heroOwnerPlaceKey = placeDisplayName"),

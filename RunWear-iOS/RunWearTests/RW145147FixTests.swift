@@ -131,11 +131,14 @@ final class RW145147FixTests: XCTestCase {
 
     func testRuling2PillPlanningHeights() {
         // The layout's pill seats are planned from these
-        // heights; the two-line generating/exhausted-class
-        // forms are the tall ones the guarantee must cover.
+        // heights. RW-174 / RW-171 SUPERSEDES the two-line
+        // pin that stood here (the free generating state
+        // planned at twoLineHeight): EVERY state is one line
+        // now, so every rendered state plans at the
+        // single-line height. (twoLineHeight remains only as
+        // a layout input value, exercised as such below.)
         XCTAssertEqual(HeroPillMetrics.height(for: .hidden), 0)
         XCTAssertEqual(HeroPillMetrics.height(for: .making), HeroPillMetrics.singleLineHeight)
-        XCTAssertEqual(HeroPillMetrics.height(for: .makingWithUpsell), HeroPillMetrics.twoLineHeight)
         XCTAssertEqual(HeroPillMetrics.height(for: .freeLook(used: 3, allowance: 10)),
                        HeroPillMetrics.singleLineHeight)
         XCTAssertEqual(HeroPillMetrics.height(for: .exhausted(used: 10, allowance: 10)),
@@ -218,13 +221,22 @@ final class RW145147FixTests: XCTestCase {
     func testRW147DockResidenceArithmetic() {
         XCTAssertEqual(DockResidence.dockTop(viewportHeight: 852, dockHeight: 56), 782, accuracy: 0.5)
         XCTAssertEqual(DockResidence.dockTop(viewportHeight: 834, dockHeight: 56), 764, accuracy: 0.5)
-        XCTAssertEqual(DockResidence.footerTopContentY(contentHeight: 2000, footerHeight: 200),
-                       2000 - DockResidence.scrollEndClearance - 200, accuracy: 0.5)
-        // The scroll-end clearance is UNCHANGED by this pass:
-        // it is what carries the glance band (and every other
-        // sheet element) fully clear of the dock at scroll end,
-        // in the stacked layout and the Duo column alike.
-        XCTAssertEqual(DockResidence.scrollEndClearance, 80, accuracy: 0.5)
+        // RE-PINNED for RW-152 §1 (Nov 9, 2026): the
+        // footerTopContentY assertion that stood here pinned
+        // the host's glide bookkeeping for the in-flow footer —
+        // the footer and its bookkeeping are removed, and the
+        // expanded panel is the overlay dock's own state, so
+        // there is no footer-top arithmetic left to pin. The
+        // RW-147 invariant below is untouched.
+        // The scroll-end clearance carries the glance band
+        // (and every other sheet element) fully clear of the
+        // dock at scroll end, in the stacked layout and the
+        // Duo column alike. RE-PINNED for RW-170 (Nov 12,
+        // 2026): it prices the PRESENTED form exactly —
+        // bottom inset 14 + presented mini height 49 = 63
+        // (the 80 pt constant priced 17 pt of empty band;
+        // DIAGNOSIS Q1/Q4).
+        XCTAssertEqual(DockResidence.scrollEndClearance, 63, accuracy: 0.5)
     }
 
     // MARK: - RW-147 (Duo): the expanded-layout dock residence,
@@ -745,26 +757,36 @@ final class RW145147FixTests: XCTestCase {
         }
     }
 
-    private func dock() -> WearIveRunMiniBarView {
-        WearIveRunMiniBarView(
+    /// RW-TRAIN (2026-11-15): the frame fixture's dock is the
+    /// LIVE unified surface at its mini rest state (progress 0);
+    /// the retired standalone mini form it used before is
+    /// removed as dead code. The frames' subjects (hero / pill /
+    /// sheet layout) are unchanged.
+    private func dock() -> WearIveRunUnifiedSurfaceView {
+        WearIveRunUnifiedSurfaceView(
             state: .updated(payload: .placeAtMoment("Phoenix, AZ", .now)),
             entry: fixtureEntry(),
             formattedFeelsLike: "58°F", cueCount: 0,
-            onOpenCollection: {}, onTrash: {})
+            viewportHeight: 852, heroURLResolver: nil, expansionProgress: 0,
+            onToggle: {}, onOpenCollection: {}, onOpenShareEntry: nil, onTrash: {})
     }
 
     // MARK: - Frames
 
     /// (1) Short portrait (iPhone SE class, 375×667), Now,
     /// 3-item outfit at rest, real photo, in the build-33
-    /// defect's own state — the two-line generating pill. The
-    /// pill now rides the hero's foot over its reserved space;
-    /// the weather line sits above it on the hero, whole.
+    /// defect's own state — the generating pill. The pill now
+    /// rides the hero's foot over its reserved space; the
+    /// weather line sits above it on the hero, whole.
+    /// RW-174 / RW-171: the generating state is the ONE-line
+    /// .making (the two-line state this frame used is
+    /// superseded and removed); the frame's gap guarantee is
+    /// now exercised at the single-line planning height.
     @MainActor
     func testRW145147ShortPortraitFrame() throws {
         let viewport = CGSize(width: 375, height: 667)
         let heroHeight = HeroHeightPolicy.stackedHeight(viewportHeight: viewport.height)
-        let pillState = HeroPillState.makingWithUpsell
+        let pillState = HeroPillState.making
         let layout = HeroVerticalLayout.layout(
             heroHeight: heroHeight, requestedNumeralSize: 72,
             pillHeight: HeroPillMetrics.height(for: pillState),

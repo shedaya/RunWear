@@ -1,6 +1,17 @@
 import SwiftUI
 import StoreKit // for the \.requestReview environment action (R-15)
 
+/// RB-01 (RW-135 rebuild, Nov 12, 2026): one scroll-geometry
+/// sample from a Home scroll view — the hero handoff's offset
+/// AND the Wear I've Run footer zone's inputs (the remaining
+/// distance to the content's end, and the container height
+/// it is judged against), from the same ScrollGeometry read.
+private struct HomeScrollSample: Equatable {
+    let offset: CGFloat
+    let distanceToEnd: CGFloat
+    let containerHeight: CGFloat
+}
+
 struct WeatherOutfitView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -12,12 +23,35 @@ struct WeatherOutfitView: View {
     /// rule); the store behind it is the collection itself.
     @StateObject private var collectionModel = WearIveRunCollectionModel()
     @State private var showCollection = false
+    /// RW-158 (user ruling, Nov 10, 2026): the past entry whose
+    /// tap on the expanded panel's entry row opened the Share
+    /// Studio sheet directly.
+    @State private var wearShareEntry: WearIveRunEntry?
+    /// RW-161 (device verdict, Nov 10, 2026): ONE presentation
+    /// owner for every Home sheet. The states above and below
+    /// remain the sheets' backings, but no backing presents
+    /// unless its route owns this token — every presentation
+    /// funnels through claimSheet/releaseSheet (HomeSheetArbiter),
+    /// a second request queues FIFO, and the toast/failure-line
+    /// layer defers while a sheet owns the screen. Build 27's
+    /// failure was ten independent states on two hosts cycling
+    /// behind/over each other on a swipe.
+    @State private var homeSheetOwner: HomeSheetRoute?
+    @State private var homeSheetQueue: [HomeSheetRoute] = []
+    /// Item-sheet payloads stashed while their route is queued.
+    @State private var pendingWeatherDetail: WeatherDetailType?
+    @State private var pendingWearShareEntry: WearIveRunEntry?
     /// RW-26 feedback door from the rating moment (frame 49).
     @State private var showFeedbackSheet = false
     /// RW-25 scroll-handoff progress (0 = hero full-frame at rest,
     /// 1 = settled as a card under the nav bar), driven by
     /// onScrollGeometryChange on the stacked scroll views.
     @State private var heroScrollProgress: CGFloat = 0
+    /// RW-173: the stacked scroll's raw offset (the same
+    /// sample updateHeroScrollProgress consumes), kept so the
+    /// dock host can place the straddle pill's bottom edge in
+    /// screen coordinates for the panel's pill-title cap.
+    @State private var homeScrollOffset: CGFloat = 0
     @EnvironmentObject var personalStore: PersonalHeroStore
     @ObservedObject var viewModel: WeatherViewModel
     @ObservedObject var locationService: LocationService
@@ -29,6 +63,10 @@ struct WeatherOutfitView: View {
     let recommendation: OutfitRecommendation
     let onRefresh: () -> Void
     var onUseCurrentLocation: () -> Void = {}
+    /// RW-168: the direct save's photo-library seam — the
+    /// production Photos writer by default; tests inject a
+    /// recording mock (ShareCardPhotoSaving).
+    var photoSaver: ShareCardPhotoSaving = PhotoLibraryShareCardSaver()
 
     // Modal state
     @State private var showSettings = false
@@ -43,58 +81,72 @@ struct WeatherOutfitView: View {
     // Hero-flag confirmation toast (the snackbar equivalent):
     // shown briefly after the user flags the hero photo.
     @State private var showFlagThanks = false
+    /// RW-168: the hero share menu's presentation, and the
+    /// direct save's confirmation toasts — the save toasts
+    /// reuse the flag toast's surface, timing, and deferral
+    /// rule exactly (see the toast blocks in body).
+    @State private var showShareMenu = false
+    @State private var showSavedToPhotosThanks = false
+    @State private var showSaveToPhotosFailed = false
     /// GEN-3 (WS-A(2)): the hero pill's free-look state opens the
     /// Premium paywall from the hero.
     @State private var showHeroPillPaywall = false
     /// GEN-6 (RW-61): the looks library sheet, opened from the
     /// failed cell's "See all your looks" door.
     @State private var showLooksLibrary = false
-    /// RW-135 spec (Direction A′, approved Nov 7, 2026): the
-    /// floating MINI dock is the Wear I've Run presence on
-    /// Home; its EXPANDED form is a full-bleed section at the
-    /// page footer, ALWAYS in the layout while a session entry
-    /// exists (§2.2). The handoff between them is a pure
-    /// function of the footer's measured position (§3) — the
-    /// interim build's machine-gated footer presentation
-    /// (wearFooterPresented / onFullExpressionChange /
-    /// externalCollapseNonce) and the isAtEndOfScroll dock
-    /// wiring are removed; the measurements below are the only
-    /// inputs.
-    /// The shared scroll position both glides (§4.4) drive,
-    /// bound to each footer-bearing ScrollView.
-    @State private var wearScrollPosition = ScrollPosition()
-    /// The footer's frame and its scroll view's frame, both in
-    /// .global space (§3 measurement), written by whichever
-    /// layout is on screen.
-    @State private var wearFooterGlobalFrame: CGRect = .zero
-    @State private var wearScrollGlobalFrame: CGRect = .zero
-    /// The footer's measured height — host scroll bookkeeping
-    /// only (glide targets); never in the dock's paint path
-    /// (RW-86).
-    @State private var wearFooterHeight: Double = 0
-    /// Scroll geometry from the footer-bearing scroll views:
-    /// content height, visible height, raw content offset.
-    @State private var wearContentHeight: Double = 0
-    @State private var wearVisibleHeight: Double = 0
-    @State private var wearContentOffsetY: Double = 0
-    /// The footer's top edge in content coordinates
-    /// (= contentHeight − bottomPadding − footerHeight),
-    /// recomputed by each layout's geometry feed.
-    @State private var wearFooterTopContentY: Double = 0
-    /// §4.7/§4.8 exit orchestration: while an exit runs, both
-    /// surfaces render this FROZEN snapshot of the record; the
-    /// store removal fires when the longest exit completes.
+    /// RW-152 §1 (Nov 9, 2026 — supersedes the RW-135 two-surface
+    /// split this comment used to describe): the Wear I've Run
+    /// presence on Home is ONE overlay surface with two states —
+    /// the floating MINI dock and its EXPANDED panel state,
+    /// morphed in place inside WearIveRunOverlayView (the
+    /// WearIveRunMiniBar.swift residence). The in-flow footer
+    /// section and ALL of its host bookkeeping (footer/scroll
+    /// frames, footer height, glide targets, the §3 handoff
+    /// fade) are REMOVED; the scroll carries only the RW-147
+    /// scroll-end clearance below the page content, exactly the
+    /// mini-dock reservation. What remains below is the exit
+    /// orchestration state only.
+    /// §4.7/§4.8 exit orchestration: while an exit runs, the
+    /// overlay renders this FROZEN snapshot of the record; the
+    /// store removal fires when the exit completes.
     @State private var wearExitEntry: WearIveRunEntry?
     @State private var wearExitState: WearIveRunState?
+    /// RB-01/R-1: the footer-zone verdict from the Home scroll
+    /// views' real geometry (WearIveRunFooterZone) — reaching
+    /// the page end presents the Wear I've Run expanded form,
+    /// leaving the zone re-docks it (the overlay's R-1 policy
+    /// holds the summon/suppression state).
+    @State private var wearAtFooter = false
+    /// The overlay surface's current expanded state, reported
+    /// by the overlay itself — the §4.7 exit split keys the
+    /// host's exit choreography on the form the exit starts
+    /// from (MINI: 300 ms fade+sink; EXPANDED: 160 ms fade
+    /// then 400 ms fold).
+    @State private var wearSurfaceExpanded = false
+    /// RW-170 — ONE BAND: the Wear surface's PRESENTED (mini)
+    /// rest height, reported by the overlay as its rest
+    /// geometry lands. The scroll clearance below prices this
+    /// presented form (plus the 14 pt lift) — a wrapped
+    /// narration grows it and the reserve follows; the
+    /// expanded height is never reserved.
+    @State private var wearPresentedMiniHeight: CGFloat = DockResidence.measuredDockHeight
     @State private var wearExitInProgress = false
     @State private var wearExitRemovesData = false
     @State private var wearDockExitProgress: Double = 0
-    @State private var wearFooterExitOpacity: Double = 1
-    @State private var wearFooterExitHeightFraction: Double = 1
     /// The last presented session entry, kept so a session end
     /// (day rollover — the entry leaves the store without a
     /// trash tap) can still run the §4.8 exit over a snapshot.
     @State private var lastWearEntry: WearIveRunEntry?
+    /// RW-169 §7E (PresentedEntry): the ONE presented snapshot
+    /// every Wear I've Run surface renders — committed by the
+    /// stability gate below, swapped whole, never mutated.
+    /// A restored session entry (already settled in a prior
+    /// session) promotes to the snapshot immediately; a NEW
+    /// viewed frame reaches it only through the gate.
+    @State private var presentedSnapshot: WearIveRunPresentedSnapshot?
+    /// RW-169 §7E.1: the stability gate — a viewed frame must
+    /// stand unchanged for ≈2 s before it may commit.
+    @State private var settleGate = WearIveRunSettleGate()
     /// RW-135 §7.5: true while any home scroll gesture (or its
     /// deceleration) is live — fed by the layouts'
     /// onScrollPhaseChange; the dock defers a mid-gesture
@@ -152,7 +204,32 @@ struct WeatherOutfitView: View {
 
                 // Hero-flag confirmation toast, bottom-center of
                 // the run screen (Android's snackbar placement).
-                if showFlagThanks {
+                // RW-161: the toast layer DEFERS while a sheet
+                // owns the screen — build 27 rendered a toast
+                // sandwiched between stacked sheets; a transient
+                // line never renders over or between sheets.
+                // RW-168: the direct save's confirmation —
+                // the flag toast's surface with the save's own
+                // words (HomeShareMenuPolicy), shown only while
+                // no sheet owns the screen, like the flag toast.
+                if (showSavedToPhotosThanks || showSaveToPhotosFailed) && !anyHomeSheetPresented {
+                    VStack {
+                        Spacer()
+                        Text(showSavedToPhotosThanks
+                             ? HomeShareMenuPolicy.savedConfirmationText
+                             : HomeShareMenuPolicy.saveFailureText)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(Capsule().fill(AppTheme.darkBackground.opacity(0.92)))
+                            .padding(.bottom, 32)
+                    }
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+                }
+
+                if showFlagThanks && !anyHomeSheetPresented {
                     VStack {
                         Spacer()
                         Text(AppStrings.viewThanksFlagReview)
@@ -171,23 +248,30 @@ struct WeatherOutfitView: View {
                     .transition(.opacity)
                 }
             }
-            // RW-135 spec §3 (Direction A′, approved Nov 7,
-            // 2026): the floating MINI dock is a true OVERLAY on
-            // the root ZStack — alignment bottom, inset 12 pt
-            // left/right, 14 pt above the bottom edge, radius
-            // 16, translucent card material, soft shadow. (The
-            // interim build hosted it in a safeAreaInset; the
-            // spec's dock floats OVER the page, and the §3
-            // handoff fade is a pure function of the footer's
-            // position.) No session entry → no bar, ever
-            // (§7.1): the dock renders nothing before the
-            // session's first recorded entry. The EXPANDED form
-            // is the footer section in the flow (see
-            // wearIveRunFooterSection), not a chip.
+            // RW-152 §1: the Wear I've Run overlay is a true
+            // OVERLAY on the root ZStack — alignment bottom,
+            // inset 12 pt left/right, 14 pt above the bottom
+            // edge — ONE surface whose two states (mini dock,
+            // expanded panel) morph in place inside it. No
+            // session entry → no surface, ever (§7.1): the
+            // overlay renders nothing before the session's
+            // first recorded entry. The GeometryReader exists
+            // only to hand the overlay its viewport height (the
+            // expanded panel's cap input, §2).
             .overlay(alignment: .bottom) {
-                miniBarDock
+                GeometryReader { proxy in
+                    VStack {
+                        Spacer()
+                        miniBarDock(
+                            viewportHeight: proxy.size.height,
+                            pillBottomY: wirPillBottomY(
+                                viewportHeight: proxy.size.height,
+                                isDuoLayout: horizontalSizeClass == .regular
+                                    && proxy.size.width > proxy.size.height))
+                    }
                     .padding(.horizontal, 12)
                     .padding(.bottom, 14)
+                }
             }
             // §4.8 session end: the session entry leaving the
             // store without a trash tap (day rollover) runs the
@@ -198,9 +282,27 @@ struct WeatherOutfitView: View {
             .onChange(of: collectionModel.sessionEntry()?.id) { _, newID in
                 if let entry = collectionModel.sessionEntry() {
                     lastWearEntry = entry
+                    // RW-169 §7E: a RESTORED entry (settled in
+                    // a prior session, already the record)
+                    // promotes to the presented snapshot at
+                    // once — it is not a new viewed change and
+                    // does not pass the stability gate.
+                    if presentedSnapshot == nil {
+                        presentedSnapshot = makePresentedSnapshot(for: entry)
+                    }
                 } else if newID == nil, !wearExitInProgress,
                           let snapshot = lastWearEntry {
                     beginWearExit(snapshot: snapshot, removesData: false)
+                }
+            }
+            // RW-168: the share menu overlay — a floating
+            // card under the hero's top-right controls, over a
+            // tap-to-dismiss layer. Sheets present above it
+            // (they are separate presentations), and selecting
+            // an entry closes it before routing.
+            .overlay {
+                if showShareMenu {
+                    shareMenuOverlay
                 }
             }
             .onChange(of: showFlagThanks) { _, visible in
@@ -216,7 +318,26 @@ struct WeatherOutfitView: View {
             // tree is the first with both the flag surface and the
             // vocabulary, so the hook lands here on the confirmation
             // state itself.
+            .onChange(of: showSavedToPhotosThanks) { _, visible in
+                if visible {
+                    Task {
+                        try? await Task.sleep(nanoseconds: 2_500_000_000)
+                        withAnimation { showSavedToPhotosThanks = false }
+                    }
+                }
+            }
+            .onChange(of: showSaveToPhotosFailed) { _, visible in
+                if visible {
+                    Task {
+                        try? await Task.sleep(nanoseconds: 2_500_000_000)
+                        withAnimation { showSaveToPhotosFailed = false }
+                    }
+                }
+            }
             .sensoryFeedback(.impact(weight: .light), trigger: showFlagThanks)
+            // RW-168: the save's success carries the flag
+            // confirmation's light impact, on its own state.
+            .sensoryFeedback(.impact(weight: .light), trigger: showSavedToPhotosThanks)
             // RW-144: the navigation bar is hidden on Home — the
             // v8 hero carries the chrome itself (place pill,
             // wordmark, gear circle over the photograph's top
@@ -243,9 +364,9 @@ struct WeatherOutfitView: View {
             // hero's own top scrim carries its chrome. The Shop
             // entry the toolbar carried moves to the outfit
             // header (see outfitSection) — no surface is dropped.
-            .sheet(isPresented: $showSettings) {
+            .sheet(isPresented: ownedBinding(.settings, $showSettings)) {
                 SettingsModal(
-                    isPresented: $showSettings,
+                    isPresented: ownedBinding(.settings, $showSettings),
                     temperatureUnit: $viewModel.temperatureUnit,
                     genderPreference: $viewModel.genderPreference,
                     comfortLevel: $viewModel.comfortLevel,
@@ -257,10 +378,10 @@ struct WeatherOutfitView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
             }
-            .sheet(isPresented: $showDatePicker) {
+            .sheet(isPresented: ownedBinding(.datePicker, $showDatePicker)) {
                 DatePickerSheet(
                     selectedDate: $viewModel.selectedDate,
-                    isPresented: $showDatePicker
+                    isPresented: ownedBinding(.datePicker, $showDatePicker)
                 )
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
@@ -268,7 +389,7 @@ struct WeatherOutfitView: View {
                     viewModel.updateSelectedTime(date: newDate, hour: viewModel.selectedHour)
                 }
             }
-            .sheet(isPresented: $showTimePicker) {
+            .sheet(isPresented: ownedBinding(.timePicker, $showTimePicker)) {
                 // GEN-4: the chart sheet works on a DRAFT — the
                 // view model's selection is written only by
                 // Confirm, through applyTimePickerCommit. (The
@@ -283,7 +404,7 @@ struct WeatherOutfitView: View {
                     initialHour: timePickerInitialHour,
                     openedInNowState: viewModel.isNowSelection,
                     nowHour: viewModel.dayChartNowHour,
-                    isPresented: $showTimePicker,
+                    isPresented: ownedBinding(.timePicker, $showTimePicker),
                     onConfirm: { viewModel.applyTimePickerCommit($0) },
                     // GEN-6 (RW-66): the day picker's door inside
                     // the sheet (its context line's date segment).
@@ -306,7 +427,7 @@ struct WeatherOutfitView: View {
                     // selected hour.
                     dateSelection: $viewModel.selectedDate,
                     onDateConfirmed: {
-                        showTimePicker = false
+                        dismissSheet(.timePicker)
                         viewModel.updateSelectedTime(
                             date: viewModel.selectedDate,
                             hour: viewModel.selectedHour
@@ -339,7 +460,7 @@ struct WeatherOutfitView: View {
             // (white) sheet -- the blank UV overlay of 2026-10-29.
             // With .sheet(item:) the content exists exactly when
             // a detail does.
-            .sheet(item: $selectedWeatherDetail) { detail in
+            .sheet(item: weatherDetailSheetItem) { detail in
                 WeatherDetailSheet(
                     detailType: detail,
                     allDetails: allWeatherDetails,
@@ -353,9 +474,9 @@ struct WeatherOutfitView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
             }
-            .sheet(isPresented: $showLocationPicker) {
+            .sheet(isPresented: ownedBinding(.locationPicker, $showLocationPicker)) {
                 LocationPickerSheet(
-                    isPresented: $showLocationPicker,
+                    isPresented: ownedBinding(.locationPicker, $showLocationPicker),
                     // RW-146: the DISPLAYED truth (see the view
                     // model's displayedPlaceName/displayedSourceIsGPS).
                     isUsingGPS: viewModel.displayedSourceIsGPS,
@@ -415,6 +536,17 @@ struct WeatherOutfitView: View {
                 try? await Task.sleep(nanoseconds: 30_000_000_000)
                 if Task.isCancelled { break }
                 viewModel.maintainNowIfNeeded()
+            }
+        }
+        // RW-169 §7E.1: the settle gate's clock — a parked
+        // candidate commits only once its frame has stood
+        // unchanged for the stability window, and only at
+        // scroll rest (§7E.4: flips defer past a live gesture).
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 250_000_000)
+                if Task.isCancelled { break }
+                commitStableSettleIfReady()
             }
         }
         // RW-79: the foreground re-read. A generation running
@@ -519,7 +651,7 @@ struct WeatherOutfitView: View {
         .onChange(of: personalStore.landedHeroVersion) { _, _ in
             recordTodaysEntry()
         }
-        .sheet(isPresented: $showCollection) {
+        .sheet(isPresented: ownedBinding(.collection, $showCollection)) {
             NavigationStack {
                 WearIveRunCollectionView(
                     model: collectionModel,
@@ -530,14 +662,28 @@ struct WeatherOutfitView: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $showFeedbackSheet) {
+        // RW-158: the Share Studio sheet for a past entry,
+        // opened directly from the expanded panel's entry row.
+        // Opening is viewing — the Studio's Share button is
+        // the only path to the system share sheet.
+        .sheet(item: wearShareSheetItem) { entry in
+            WearIveRunShareStudioHost(
+                entry: entry,
+                formatTemperature: { viewModel.temperatureUnit.formatFromFahrenheit($0) },
+                genderPreference: viewModel.genderPreference,
+                onHeroRecovered: { collectionModel.healHeroReference(entryID: $0.id, durableReference: $1) }
+            )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: ownedBinding(.feedback, $showFeedbackSheet)) {
             // WS-5 (§1.3): named detent — the feedback Form
             // scrolls, so .large only.
             FeedbackSheet()
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $showHeroPillPaywall, onDismiss: {
+        .sheet(isPresented: ownedBinding(.heroPaywall, $showHeroPillPaywall), onDismiss: {
             // RW-79: the paywall stood over Home while a
             // generation ran — dismissing it re-reads the cell's
             // look state, so the hero the user comes back to
@@ -553,7 +699,7 @@ struct WeatherOutfitView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $showLooksLibrary) {
+        .sheet(isPresented: ownedBinding(.looksLibrary, $showLooksLibrary)) {
             // GEN-6 (RW-61): the looks library, one tap from the
             // failed cell's home line.
             NavigationStack {
@@ -567,7 +713,7 @@ struct WeatherOutfitView: View {
         // cropped further), one quiet caption line naming the
         // outfit's pieces, tap-again or swipe-down dismisses,
         // pinch zooms.
-        .fullScreenCover(isPresented: $showHeroViewer) {
+        .fullScreenCover(isPresented: ownedBinding(.heroViewer, $showHeroViewer)) {
             HeroPhotoViewer(
                 imageURL: viewModel.heroImageUrl ?? viewModel.fallbackImageUrl,
                 caption: recommendation.allItems.map(\.name).joined(separator: AppStrings.wirSubtitleJoin)
@@ -580,7 +726,7 @@ struct WeatherOutfitView: View {
         .alert(AppStrings.viewEnjoying, isPresented: $showRatingPrompt) {
             Button(AppStrings.viewSendFeedback) {
                 ratingTracker.recordPromptShown()
-                showFeedbackSheet = true
+                requestSheet(.feedback)
             }
             Button(AppStrings.viewRate) {
                 ratingTracker.recordPromptShown()
@@ -594,16 +740,21 @@ struct WeatherOutfitView: View {
         }
     }
 
-    // MARK: - Share (WS-6 / T-4 ruling)
+    // MARK: - Share (WS-6 / T-4 ruling; RW-168, Nov 11, 2026)
 
-    // There is NO home-level share. The RW-6.5 toolbar ShareLink
-    // that sent the raw hero photo + text from here was removed by
-    // the T-4 ruling (Sol, Nov 3, 2026 — register D-15's iOS half):
-    // the design has no home share on either platform, and sharing
-    // lives in the collection, whose Poster / Kit Card share is
-    // the designed artifact path (WearIveRunCollectionView).
-    // GEN-6 (DA-23): the view model's consumerless shareText
-    // computation is deleted with this comment's predecessor.
+    // T-4 removed the RW-6.5 toolbar share control that sent
+    // the raw hero photo + text from here (Sol, Nov 3, 2026 —
+    // register D-15's iOS half), and that removal stands: there
+    // is still no raw-photo share from Home, and the view
+    // model's consumerless share text stays deleted (GEN-6
+    // DA-23). RW-168 (user ruling, Nov 11, 2026) adds the home
+    // share MENU at the hero's top right — a menu of the
+    // EXISTING doors only: the RW-158 Share Studio sheet for
+    // the current outfit, the Wear I've Run collection (where
+    // per-entry sharing lives), and a direct save of today's
+    // card to Photos through the Studio's own renderer. Its
+    // wiring: heroChrome's share toggle, shareMenuOverlay,
+    // handleShareMenuSelection, saveCurrentCardToPhotos.
 
     // MARK: - Layouts (design record §5.2, frame f5)
 
@@ -638,7 +789,7 @@ struct WeatherOutfitView: View {
                                         HeroPillView(
                                             pillState: heroPillState,
                                             seat: .straddle,
-                                            onPillGetUnlimited: { showHeroPillPaywall = true }
+                                            onPillGetUnlimited: { requestSheet(.heroPaywall) }
                                         )
                                         .padding(.bottom, HeroVerticalLayout.duoPillBottomInset)
                                     }
@@ -684,41 +835,39 @@ struct WeatherOutfitView: View {
                                     .padding(.top, 24)
                                 personalSection
                                     .padding(.top, 24)
-                                // RW-135 spec §2.2: the footer
-                                // section, in the duo column's
-                                // flow as in the stacked layouts
-                                // — always in the layout while a
-                                // session entry exists, as the
-                                // column's final section, with
-                                // 34 pt of sheet above its top
-                                // edge. The duo takes the same
-                                // position-derived handoff (§3)
-                                // via this column's scroll view.
-                                wearIveRunFooterSection
-                                    .padding(.top, 34)
+                                // RW-152 §1: the expanded form
+                                // no longer sits in this column's
+                                // flow — it is the overlay dock's
+                                // expanded state (miniBarDock).
                             }
-                            // RW-147: the scroll-end clearance
-                            // (DockResidence) — the column's
-                            // content can rest fully clear of the
-                            // full-width dock band.
-                            .padding(.bottom, DockResidence.scrollEndClearance)
+                            // RW-147 / RW-170: the scroll-end
+                            // clearance — the column's content
+                            // can rest fully clear of the dock's
+                            // PRESENTED band (presented mini
+                            // height + 14 pt lift, and nothing
+                            // for any other state).
+                            .padding(.bottom, DockResidence.clearance(
+                                forPresentedMiniHeight: wearPresentedMiniHeight))
                         }
-                        .scrollPosition($wearScrollPosition)
                         .onScrollPhaseChange { _, phase in
                             isScrollGestureActive = phase != .idle
                         }
-                        .onScrollGeometryChange(for: WearScrollMetrics.self) { geometry in
-                            WearScrollMetrics(geometry)
-                        } action: { _, metrics in
-                            wearContentHeight = metrics.contentHeight
-                            wearVisibleHeight = metrics.visibleHeight
-                            wearContentOffsetY = metrics.offsetY
-                            wearFooterTopContentY = DockResidence.footerTopContentY(contentHeight: metrics.contentHeight, footerHeight: wearFooterHeight)
-                        }
-                        .onGeometryChange(for: CGRect.self) { proxy in
-                            proxy.frame(in: .global)
-                        } action: { _, frame in
-                            wearScrollGlobalFrame = frame
+                        // RB-01/R-1 (duo column): the column's
+                        // end is this layout's page end — feed
+                        // the same footer zone the single-column
+                        // scrolls feed (the interim build never
+                        // fed the duo scrolls an end-of-scroll
+                        // signal at all).
+                        .onScrollGeometryChange(for: Bool.self) { geometry in
+                            WearIveRunFooterZone.isAtFooter(
+                                distanceToEnd: WearIveRunFooterZone.distanceToEnd(
+                                    contentHeight: Double(geometry.contentSize.height),
+                                    contentInsetsBottom: Double(geometry.contentInsets.bottom),
+                                    containerHeight: Double(geometry.containerSize.height),
+                                    contentOffsetY: Double(geometry.contentOffset.y)),
+                                viewportHeight: Double(geometry.containerSize.height))
+                        } action: { _, atFooter in
+                            wearAtFooter = atFooter
                         }
                         .refreshable { onRefresh() }
                         fullWeatherEntry
@@ -738,33 +887,20 @@ struct WeatherOutfitView: View {
                 .onScrollPhaseChange { _, phase in
                     isScrollGestureActive = phase != .idle
                 }
-                .onScrollGeometryChange(for: CGFloat.self) { geometry in
-                    max(0, geometry.contentOffset.y + geometry.contentInsets.top)
-                } action: { _, offset in
-                    updateHeroScrollProgress(offset: offset)
-                }
-                .scrollPosition($wearScrollPosition)
-                .onScrollGeometryChange(for: WearScrollMetrics.self) { geometry in
-                    WearScrollMetrics(geometry)
-                } action: { _, metrics in
-                    // RW-135 spec §3/§4.4 bookkeeping: content
-                    // height, visible height and offset feed the
-                    // glide targets; the footer's top in content
-                    // coordinates is content height minus its
-                    // measured height (it is the final section;
-                    // no bottom padding in the stacked layouts).
-                    // The interim isAtEndOfScroll feed and its
-                    // 0.5 s footer-mount guard are removed — the
-                    // handoff is a pure position function now.
-                    wearContentHeight = metrics.contentHeight
-                    wearVisibleHeight = metrics.visibleHeight
-                    wearContentOffsetY = metrics.offsetY
-                    wearFooterTopContentY = DockResidence.footerTopContentY(contentHeight: metrics.contentHeight, footerHeight: wearFooterHeight)
-                }
-                .onGeometryChange(for: CGRect.self) { proxy in
-                    proxy.frame(in: .global)
-                } action: { _, frame in
-                    wearScrollGlobalFrame = frame
+                .onScrollGeometryChange(for: HomeScrollSample.self) { geometry in
+                    HomeScrollSample(
+                        offset: max(0, geometry.contentOffset.y + geometry.contentInsets.top),
+                        distanceToEnd: CGFloat(WearIveRunFooterZone.distanceToEnd(
+                            contentHeight: Double(geometry.contentSize.height),
+                            contentInsetsBottom: Double(geometry.contentInsets.bottom),
+                            containerHeight: Double(geometry.containerSize.height),
+                            contentOffsetY: Double(geometry.contentOffset.y))),
+                        containerHeight: geometry.containerSize.height)
+                } action: { _, sample in
+                    updateHeroScrollProgress(offset: sample.offset)
+                    wearAtFooter = WearIveRunFooterZone.isAtFooter(
+                        distanceToEnd: Double(sample.distanceToEnd),
+                        viewportHeight: Double(sample.containerHeight))
                 }
                 .refreshable { onRefresh() }
             } else {
@@ -783,33 +919,20 @@ struct WeatherOutfitView: View {
                 .onScrollPhaseChange { _, phase in
                     isScrollGestureActive = phase != .idle
                 }
-                .onScrollGeometryChange(for: CGFloat.self) { geometry in
-                    max(0, geometry.contentOffset.y + geometry.contentInsets.top)
-                } action: { _, offset in
-                    updateHeroScrollProgress(offset: offset)
-                }
-                .scrollPosition($wearScrollPosition)
-                .onScrollGeometryChange(for: WearScrollMetrics.self) { geometry in
-                    WearScrollMetrics(geometry)
-                } action: { _, metrics in
-                    // RW-135 spec §3/§4.4 bookkeeping: content
-                    // height, visible height and offset feed the
-                    // glide targets; the footer's top in content
-                    // coordinates is content height minus its
-                    // measured height (it is the final section;
-                    // no bottom padding in the stacked layouts).
-                    // The interim isAtEndOfScroll feed and its
-                    // 0.5 s footer-mount guard are removed — the
-                    // handoff is a pure position function now.
-                    wearContentHeight = metrics.contentHeight
-                    wearVisibleHeight = metrics.visibleHeight
-                    wearContentOffsetY = metrics.offsetY
-                    wearFooterTopContentY = DockResidence.footerTopContentY(contentHeight: metrics.contentHeight, footerHeight: wearFooterHeight)
-                }
-                .onGeometryChange(for: CGRect.self) { proxy in
-                    proxy.frame(in: .global)
-                } action: { _, frame in
-                    wearScrollGlobalFrame = frame
+                .onScrollGeometryChange(for: HomeScrollSample.self) { geometry in
+                    HomeScrollSample(
+                        offset: max(0, geometry.contentOffset.y + geometry.contentInsets.top),
+                        distanceToEnd: CGFloat(WearIveRunFooterZone.distanceToEnd(
+                            contentHeight: Double(geometry.contentSize.height),
+                            contentInsetsBottom: Double(geometry.contentInsets.bottom),
+                            containerHeight: Double(geometry.containerSize.height),
+                            contentOffsetY: Double(geometry.contentOffset.y))),
+                        containerHeight: geometry.containerSize.height)
+                } action: { _, sample in
+                    updateHeroScrollProgress(offset: sample.offset)
+                    wearAtFooter = WearIveRunFooterZone.isAtFooter(
+                        distanceToEnd: Double(sample.distanceToEnd),
+                        viewportHeight: Double(sample.containerHeight))
                 }
                 .refreshable { onRefresh() }
             }
@@ -869,7 +992,24 @@ struct WeatherOutfitView: View {
     /// Scroll-coupled 1:1 per §1.1 — a direct function of the
     /// offset, no spring and no lag is applied to it.
     private func updateHeroScrollProgress(offset: CGFloat) {
+        homeScrollOffset = offset
         heroScrollProgress = HomeHandoffGeometry.progress(forScrollOffset: offset)
+    }
+
+    /// RW-173: the straddle pill's bottom edge in screen
+    /// coordinates at the current scroll position — hero foot
+    /// (HeroHeightPolicy.stackedHeight) + the 14 pt dip
+    /// (HeroVerticalLayout.straddleDip), travelling up with
+    /// the scroll content. Nil when no pill renders, and nil
+    /// in the Duo layout (its pill rides inside the hero pane
+    /// at the pane's foot — a different seat, not the stacked
+    /// straddle seat this cap serves).
+    private func wirPillBottomY(
+        viewportHeight: CGFloat, isDuoLayout: Bool
+    ) -> CGFloat? {
+        guard !isDuoLayout, heroPillState != .hidden else { return nil }
+        return HeroHeightPolicy.stackedHeight(viewportHeight: viewportHeight)
+            + HeroVerticalLayout.straddleDip - homeScrollOffset
     }
 
     /// The sheet surface for the stacked layouts: overlaps the
@@ -921,26 +1061,23 @@ struct WeatherOutfitView: View {
                 .padding(.top, 24)
             personalSection
                 .padding(.top, 24)
-            // RW-135 spec §2.2: the EXPANDED form's seat — a
-            // full-bleed section at the page footer, ALWAYS in
-            // the layout while a session entry exists (the
-            // interim build rendered it only at the dock
-            // machine's full expression; that gating is
-            // removed). 34 pt of sheet sit between the preceding
-            // section and the footer's top edge; the footer is
-            // the page's final section (no trailing spacer —
-            // its own 32 pt bottom padding closes the page).
-            // The RW-136 "Making your looks" band redesign
-            // remains declined and untouched.
-            wearIveRunFooterSection
-                .padding(.top, 34)
-            // RW-147: the scroll-end clearance (DockResidence) —
-            // present exactly while a session entry (and so the
-            // dock) exists, so at scroll end the footer rests
-            // fully clear above the dock's band.
+            // RW-152 §1: the EXPANDED form's seat is GONE from
+            // the flow — the expanded state lives in the overlay
+            // dock (miniBarDock), summoned in place. The page
+            // now ends with the personal section plus the
+            // scroll-end clearance below.
+            // RW-147 / RW-170: the scroll-end clearance
+            // (DockResidence) — present exactly while a session
+            // entry (and so the dock) exists, so at scroll end
+            // the page's end rests fully clear above the dock's
+            // rest band. The value prices the PRESENTED form:
+            // presented mini height + the 14 pt lift — the same
+            // quantity the Duo column reserves, and never the
+            // expanded height.
             if collectionModel.sessionEntry() != nil || wearExitInProgress {
                 Color.clear
-                    .frame(height: DockResidence.scrollEndClearance)
+                    .frame(height: DockResidence.clearance(
+                        forPresentedMiniHeight: wearPresentedMiniHeight))
             }
         }
         .background {
@@ -990,10 +1127,20 @@ struct WeatherOutfitView: View {
             HeroPillView(
                 pillState: heroPillState,
                 seat: .straddle,
-                onPillGetUnlimited: { showHeroPillPaywall = true }
+                onPillGetUnlimited: { requestSheet(.heroPaywall) }
             )
-            .offset(y: HeroVerticalLayout.pillOffsetFromSheetTop(
-                pillHeight: currentPillHeight))
+            // RW-169 §7D (D8): the seat is MEASURED, not
+            // planned — the pill's own measured height feeds
+            // its top alignment guide in the same layout pass,
+            // so its bottom lands on the hero-foot + dip anchor
+            // at every pill height on the first frame. (The
+            // pre-fix seat was an offset computed from
+            // HeroPillMetrics planning heights, 44/62 pt
+            // estimates: wrong first seat, then the snap.)
+            .alignmentGuide(.top) { dimensions in
+                StraddleSeatGuide.topGuideValue(
+                    measuredPillHeight: dimensions.height)
+            }
         }
     }
 
@@ -1004,7 +1151,7 @@ struct WeatherOutfitView: View {
     private var detailedWeatherBlock: some View {
         DetailedWeatherBlockView(
             details: allWeatherDetails,
-            onSelect: { selectedWeatherDetail = $0 }
+            onSelect: { requestWeatherDetail($0) }
         )
     }
 
@@ -1048,7 +1195,7 @@ struct WeatherOutfitView: View {
                 selectedHour: viewModel.selectedHour,
                 nowHour: viewModel.dayChartNowHour,
                 unit: viewModel.temperatureUnit,
-                onChange: { showTimePicker = true }
+                onChange: { requestSheet(.timePicker) }
             )
             .padding(.horizontal, 16)
         }
@@ -1123,33 +1270,25 @@ struct WeatherOutfitView: View {
     private var anyHomeSheetPresented: Bool {
         showSettings || showDatePicker || showTimePicker
             || showLocationPicker || selectedWeatherDetail != nil
-            || showCollection || showFeedbackSheet
+            || showCollection || showFeedbackSheet || wearShareEntry != nil
             // GEN-6 (RW-61): the looks library is a home sheet too.
             || showLooksLibrary
     }
 
-    /// RW-135 spec §3: the handoff fade as a pure function of
-    /// the footer's measured position — a = the footer's top
-    /// edge above the scroll viewport's bottom edge, both in
-    /// .global space. Before the first measurement (frames
-    /// still .zero) the fade is 0: the dock stands.
-    private var wearHandoffFade: Double {
-        guard wearFooterGlobalFrame != .zero, wearScrollGlobalFrame != .zero else { return 0 }
-        let a = wearScrollGlobalFrame.maxY - wearFooterGlobalFrame.minY
-        return WearIveRunMorph.handoffFade(
-            footerTopAboveViewportBottom: a, reduceMotion: reduceMotion)
-    }
-
-    /// RW-135 (Direction A′): the floating MINI dock — the
-    /// session's entry drives the bar, and the bar exists ONLY
-    /// while the session holds an entry (§7.1: no entry → no
-    /// bar, ever — no placeholder state; the RW-119 empty form
-    /// that stood in this seat is superseded on Home by §7.1,
-    /// and the collection's own empty state still carries that
-    /// copy behind the doorway). The dock renders the entry
-    /// record only (§7.0). During a §4.7/§4.8 exit it renders
-    /// the host's frozen snapshot instead.
-    @ViewBuilder private var miniBarDock: some View {
+    /// RW-152 §1: the Wear I've Run overlay dock — ONE surface,
+    /// two states (mini dock / expanded panel), morphed in place
+    /// by WearIveRunOverlayView. The session's entry drives it,
+    /// and it exists ONLY while the session holds an entry
+    /// (§7.1: no entry → no surface, ever — no placeholder state;
+    /// the RW-119 empty form that stood in this seat is
+    /// superseded on Home by §7.1, and the collection's own
+    /// empty state still carries that copy behind the doorway).
+    /// The surface renders the entry record only (§7.0). During
+    /// a §4.7/§4.8 exit it renders the host's frozen snapshot
+    /// instead.
+    @ViewBuilder private func miniBarDock(
+        viewportHeight: CGFloat, pillBottomY: CGFloat? = nil
+    ) -> some View {
         // GEN-3 (the presentation half, superseding W-15's
         // by-date key): the dock presents the CURRENT SESSION's
         // entry — the entry's own place is what the narration
@@ -1157,7 +1296,13 @@ struct WeatherOutfitView: View {
         // another place, and it can never announce a place the
         // session has moved past, because the session's one
         // entry always holds the last settled place.
-        let liveEntry = collectionModel.sessionEntry()
+        // RW-169 §7E.2: the surface renders ONLY the presented
+        // snapshot — the store's live entry is consulted solely
+        // as the restored-snapshot source before the first
+        // promotion lands (onChange above) and for the exit
+        // path. A parked, not-yet-stable candidate is never
+        // rendered here.
+        let liveEntry = presentedSnapshot?.entry ?? collectionModel.sessionEntry()
         let todays = wearExitInProgress ? wearExitEntry : liveEntry
         // WS-4 + Y-5: the state derives EVERYTHING from the one
         // entry value above — the narration payload AND the
@@ -1166,21 +1311,21 @@ struct WeatherOutfitView: View {
         // write as the content).
         // GEN-5 (RW-29 FA-3): the moment below is the ENTRY's
         // recorded momentReading — never the live sheetMoment.
-        let state = wearExitInProgress
-            ? (wearExitState ?? .preAdd)
-            : WearIveRunMiniBarModel.state(
-                todaysEntry: todays,
-                moment: todays?.momentReading ?? .now,
-                wasUpdatedThisSession: todays?.wasUpdatedInSession ?? false
-            )
+        // RW-169 §7E.2: when the presented snapshot stands, its
+        // OWN committed state is the surface's state (the
+        // snapshot and its narration are one object). Computed
+        // by a plain helper — a result builder cannot hold
+        // imperative branch assignment.
+        let state = dockPresentedState(todays: todays)
         if state != .preAdd, let todays {
-            WearIveRunMiniBarView(
+            WearIveRunOverlayView(
                 state: state,
                 entry: todays,
-                formattedFeelsLike: viewModel.temperatureUnit.formatFromFahrenheit(todays.feelsLikeF),
+                formattedFeelsLike: (presentedSnapshot?.entry.id == todays.id
+                    ? presentedSnapshot?.formattedFeelsLike : nil)
+                    ?? viewModel.temperatureUnit.formatFromFahrenheit(todays.feelsLikeF),
                 cueCount: collectionModel.cueCount,
                 narrationVersion: collectionModel.narrationVersion,
-                handoffFade: wearHandoffFade,
                 exitProgress: wearDockExitProgress,
                 isDimmedBySheet: anyHomeSheetPresented,
                 // RW-135 §7.0/§7.5: narration derives from the
@@ -1188,125 +1333,93 @@ struct WeatherOutfitView: View {
                 // override is removed outright), and a mid-gesture
                 // settle defers its cross-fade past the gesture.
                 isScrollGestureActive: isScrollGestureActive,
-                onGlideToFooter: { glideToWearFooter() },
-                onOpenCollection: { showCollection = true },
+                // RB-01/R-1: the footer-zone verdict from this
+                // host's real scroll geometry.
+                isAtFooter: wearAtFooter,
+                // §4.7 exit split: the form the surface stands
+                // in, as it reports it (onExpansionChange below).
+                exitFromExpanded: wearSurfaceExpanded,
+                viewportHeight: viewportHeight,
+                // RW-173: the straddle pill's bottom edge at
+                // the current scroll position — the expanded
+                // panel caps its height so its title clears
+                // the pill (the panel yields, as on Android).
+                pillBottomY: pillBottomY,
+                // RW-152 §3: the panel thumbnail resolves through
+                // the one resolver (re-signing half).
+                // RW-159: the RECOVERING resolution — the
+                // session entry itself may be an empty-ref
+                // settle; its panel thumbnail re-links from the
+                // bank and the recovery persists on the entry.
+                heroURLResolver: { entry in
+                    await HeroRefRuntime.loadableURLString(
+                        for: entry, gender: viewModel.genderPreference,
+                        onRecovered: { recovered in
+                            collectionModel.healHeroReference(
+                                entryID: entry.id, durableReference: recovered)
+                        })
+                },
+                onOpenCollection: { requestSheet(.collection) },
+                // RW-158: a PAST entry's tap on the expanded
+                // panel's entry row opens the Share Studio
+                // sheet for that entry (the panel routes via
+                // WearIveRunTapPolicy; today stays collection).
+                onOpenShareEntry: { requestWearShare($0) },
                 onTrash: {
                     // §4.7: the host orchestrates the exit over
                     // a frozen snapshot; the store removal fires
-                    // when the longest exit completes.
+                    // when the exit completes.
                     if let entry = liveEntry {
                         beginWearExit(snapshot: entry, removesData: true)
                     }
-                }
+                },
+                onExpansionChange: { wearSurfaceExpanded = $0 },
+                // RW-170: the presented (mini) height feeds the
+                // host's clearance pricing (ONE BAND).
+                onPresentedMiniHeight: { wearPresentedMiniHeight = $0 }
             )
         }
     }
 
-    /// RW-135 spec §2.2: the footer section — ALWAYS in the
-    /// layout while a session entry exists (or while an exit
-    /// renders its frozen snapshot), as the page's final
-    /// section in every layout. Its frame (in .global) and its
-    /// height are measured here for the §3 handoff and the
-    /// host's glide bookkeeping — never for the dock's paint
-    /// path (RW-86).
-    @ViewBuilder private var wearIveRunFooterSection: some View {
-        let liveEntry = collectionModel.sessionEntry()
-        if let todays = wearExitInProgress ? wearExitEntry : liveEntry {
-            let state = wearExitInProgress
-                ? (wearExitState ?? .preAdd)
-                : WearIveRunMiniBarModel.state(
-                    todaysEntry: todays,
-                    moment: todays.momentReading,
-                    wasUpdatedThisSession: todays.wasUpdatedInSession
-                )
-            WearIveRunFooterSectionView(
-                state: state,
-                entry: todays,
-                formattedFeelsLike: viewModel.temperatureUnit.formatFromFahrenheit(todays.feelsLikeF),
-                narrationVersion: collectionModel.narrationVersion,
-                cueCount: collectionModel.cueCount,
-                presentsCues: wearHandoffFade >= 1,
-                isScrollGestureActive: isScrollGestureActive,
-                // §4.1: grow only when in/near the viewport at
-                // creation — the footer's top within one
-                // viewport below the fold still counts as near.
-                growOnAppear: wearFooterGlobalFrame == .zero
-                    || (wearScrollGlobalFrame.maxY - wearFooterGlobalFrame.minY) > -wearVisibleHeight,
-                exitContentOpacity: wearFooterExitOpacity,
-                exitHeightFraction: wearFooterExitHeightFraction,
-                onOpenCollection: { showCollection = true },
-                onGlideUp: { glideUpFromWearFooter() },
-                onTrash: {
-                    if let entry = liveEntry {
-                        beginWearExit(snapshot: entry, removesData: true)
-                    }
-                }
-            )
-            .onGeometryChange(for: CGRect.self) { proxy in
-                proxy.frame(in: .global)
-            } action: { _, frame in
-                wearFooterGlobalFrame = frame
-            }
-            .onGeometryChange(for: Double.self) { proxy in
-                proxy.size.height
-            } action: { _, height in
-                if height > 0 { wearFooterHeight = height }
-            }
+    /// RW-169 §7E.2: the dock's state — the exit's frozen state
+    /// during an exit, the presented snapshot's own committed
+    /// state while it stands, else the live derivation.
+    private func dockPresentedState(todays: WearIveRunEntry?) -> WearIveRunState {
+        if wearExitInProgress {
+            return wearExitState ?? .preAdd
         }
+        if let presentedSnapshot, let todays,
+           presentedSnapshot.entry.id == todays.id {
+            return presentedSnapshot.state
+        }
+        return WearIveRunMiniBarModel.state(
+            todaysEntry: todays,
+            moment: todays?.momentReading ?? .now,
+            wasUpdatedThisSession: todays?.wasUpdatedInSession ?? false
+        )
     }
 
-    // MARK: - RW-135 spec §4.4 — glides
-
-    /// Tap the dock: glide the page to its end. Duration from
-    /// the remaining distance (§4.4's clamp rule); a user touch
-    /// cancels natively. Reduce Motion: instant jump (§5).
-    private func glideToWearFooter() {
-        let distance = max(0, (wearContentHeight - wearVisibleHeight) - wearContentOffsetY)
-        if reduceMotion {
-            wearScrollPosition.scrollTo(edge: .bottom)
-            return
-        }
-        withAnimation(.timingCurve(
-            0.65, 0, 0.15, 1,
-            duration: WearIveRunMorph.glideDurationSeconds(distancePt: distance)
-        )) {
-            wearScrollPosition.scrollTo(edge: .bottom)
-        }
-    }
-
-    /// The footer's chevron-down: the inverse glide, landing at
-    /// content offset (footerTop − viewportHeight − 24) so the
-    /// dock re-docks through the same handoff function.
-    private func glideUpFromWearFooter() {
-        let target = max(0, wearFooterTopContentY - wearVisibleHeight - 24)
-        if reduceMotion {
-            wearScrollPosition.scrollTo(point: CGPoint(x: 0, y: target))
-            return
-        }
-        withAnimation(.timingCurve(
-            0.65, 0, 0.15, 1,
-            duration: WearIveRunMorph.glideDurationSeconds(
-                distancePt: abs(target - wearContentOffsetY))
-        )) {
-            wearScrollPosition.scrollTo(point: CGPoint(x: 0, y: target))
-        }
-    }
-
-    // MARK: - RW-135 spec §4.7/§4.8 — delete + session-end exits
+    // MARK: - RW-152 §1 exit (§4.7/§4.8 carried into the one surface)
 
     /// Orchestrate the exit over a FROZEN snapshot of the
-    /// record. Footer in the viewport at all → its content
-    /// fades 160 ms, then its height folds to 0 over 400 ms
-    /// fold, the dock (if not handed off) fading + sinking
-    /// concurrently over 300 ms exit. Footer off-screen → dock
-    /// fade+sink 300 ms only; the footer leaves silently with
-    /// the data. The store removal fires when the longest
-    /// running exit completes. Session end (§4.8) runs the
-    /// same choreography with removesData == false (the record
-    /// has already passed to the collection) and no haptic —
-    /// haptics live at the trash tap sites, never here.
-    /// Reduce Motion (§5): dock fade 200 ms no sink; footer
-    /// fade 200 ms then height snaps.
+    /// record. RW-152 §1: there is ONE surface now, so the exit
+    /// is the §4.7 choreography on that surface, driven by
+    /// this one progress value — with the §4.7 split the
+    /// RW-135 rebuild's audit restored (the interim build ran
+    /// one 560 ms fade+fold from BOTH forms): from MINI, a
+    /// fade + 26 pt sink over 300 ms on the exit curve; from
+    /// EXPANDED, the content fades over 160 ms and only then
+    /// the height folds over 400 ms (the split itself is
+    /// WearIveRunExitPolicy's, keyed on the form the surface
+    /// reports standing in). The store removal fires when the
+    /// exit completes. Deleting the live session's entry this
+    /// way does NOT end the session — a later settle
+    /// re-creates the entry, exactly as before. Session end
+    /// (§4.8) runs the same choreography with
+    /// removesData == false (the record has already passed
+    /// to the collection) and no haptic — haptics live at the
+    /// trash tap sites, never here.
+    /// Reduce Motion (§5): a 200 ms fade, no sink, no fold.
     private func beginWearExit(snapshot: WearIveRunEntry, removesData: Bool) {
         guard !wearExitInProgress else { return }
         wearExitEntry = snapshot
@@ -1317,55 +1430,34 @@ struct WeatherOutfitView: View {
         )
         wearExitRemovesData = removesData
         wearExitInProgress = true
-        let footerInViewport = wearFooterGlobalFrame != .zero
-            && wearScrollGlobalFrame != .zero
-            && (wearScrollGlobalFrame.maxY - wearFooterGlobalFrame.minY) > 0
-        let handedOff = wearHandoffFade >= 1
-        // The dock's exit (skipped when already handed off).
-        if !handedOff {
-            withAnimation(.timingCurve(
-                0.5, 0, 0.75, 0, duration: reduceMotion ? 0.2 : 0.3
-            )) {
-                wearDockExitProgress = 1
-            }
+        let fromExpanded = wearSurfaceExpanded
+        let duration = WearIveRunExitPolicy.durationSeconds(
+            fromExpanded: fromExpanded, reduceMotion: reduceMotion)
+        // Exit curve from MINI (cubic-bezier(0.5, 0, 0.75, 0));
+        // fold curve from EXPANDED (cubic-bezier(0.65, 0, 0.35, 1)).
+        withAnimation(fromExpanded
+            ? .timingCurve(0.65, 0, 0.35, 1, duration: duration)
+            : .timingCurve(0.5, 0, 0.75, 0, duration: duration)
+        ) {
+            wearDockExitProgress = 1
         }
-        if footerInViewport {
-            if reduceMotion {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    wearFooterExitOpacity = 0
-                }
-                Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: 220_000_000)
-                    wearFooterExitHeightFraction = 0
-                    finishWearExit()
-                }
-            } else {
-                withAnimation(.easeOut(duration: 0.16)) {
-                    wearFooterExitOpacity = 0
-                }
-                Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: 160_000_000)
-                    withAnimation(.timingCurve(0.65, 0, 0.35, 1, duration: 0.4)) {
-                        wearFooterExitHeightFraction = 0
-                    }
-                    try? await Task.sleep(nanoseconds: 400_000_000)
-                    finishWearExit()
-                }
-            }
-        } else {
-            Task { @MainActor in
-                try? await Task.sleep(nanoseconds: reduceMotion ? 200_000_000 : 300_000_000)
-                finishWearExit()
-            }
+        Task { @MainActor in
+            try? await Task.sleep(
+                nanoseconds: UInt64((duration + 0.02) * 1_000_000_000))
+            finishWearExit()
         }
     }
 
-    /// The longest exit completed: the store removal fires
-    /// (delete only — a session end's record already passed to
-    /// the collection), and the exit state resets.
+    /// The exit completed: the store removal fires (delete
+    /// only — a session end's record already passed to the
+    /// collection), and the exit state resets.
     private func finishWearExit() {
         if wearExitRemovesData {
             collectionModel.removeSessionEntry()
+            // RW-169 §7E: the presented snapshot leaves with
+            // the record it presented.
+            presentedSnapshot = nil
+            settleGate.clearPending()
         }
         wearExitInProgress = false
         wearExitRemovesData = false
@@ -1373,8 +1465,6 @@ struct WeatherOutfitView: View {
         wearExitState = nil
         lastWearEntry = nil
         wearDockExitProgress = 0
-        wearFooterExitOpacity = 1
-        wearFooterExitHeightFraction = 1
     }
 
     /// Automatic entry creation (checklist §C; GEN-3 session
@@ -1484,7 +1574,16 @@ struct WeatherOutfitView: View {
             // current frame, not a foreign stock photo. Y-10's
             // "honestly empty before first resolution" sub-rule is
             // the one element that yields in this merge.
-            heroImageReference: viewModel.currentHeroFlagTarget?.imageUrl ?? viewModel.alwaysAvailableHeroReference() ?? "",
+            // RW-169 §7E.3: a fallback serve is never recorded
+            // as the entry's hero reference — the bundled
+            // always-available fallback the pre-fix line fell
+            // back to is a stock stand-in, not the entry's
+            // photo. Only a REMOTE serve actually on screen
+            // (pool or personal, viewModel.heroImageUrl) is
+            // recorded; before one lands the reference is
+            // honestly empty and the RW-152 §3 recovery path
+            // heals it when the serve arrives.
+            heroImageReference: viewModel.heroImageUrl ?? "",
             sessionID: collectionModel.sessionID,
             momentReading: entryMomentReading,
             lastSavedAt: Date(),
@@ -1497,14 +1596,52 @@ struct WeatherOutfitView: View {
             dayLowF: selectedDayActualRangeF?.low,
             dayHighF: selectedDayActualRangeF?.high
         )
-        collectionModel.recordSettled(entry)
+        // RW-169 §7E.1: the eight call sites of this function
+        // no longer write the record — they OFFER the viewed
+        // frame to the stability gate. The record (and with it
+        // the presented snapshot every surface renders) flips
+        // only when the frame has stood unchanged for the
+        // ≈2 s window, atomically, at scroll rest — see
+        // commitStableSettleIfReady.
+        settleGate.offer(entry, at: Date())
+    }
+
+    /// RW-169 §7E: build the immutable presented snapshot for a
+    /// settled entry — narration state and formatted feels-like
+    /// derived from the entry alone, committed with it.
+    private func makePresentedSnapshot(for entry: WearIveRunEntry) -> WearIveRunPresentedSnapshot {
+        WearIveRunPresentedSnapshot(
+            entry: entry,
+            state: WearIveRunMiniBarModel.state(
+                todaysEntry: entry,
+                moment: entry.momentReading,
+                wasUpdatedThisSession: entry.wasUpdatedInSession),
+            formattedFeelsLike: viewModel.temperatureUnit.formatFromFahrenheit(entry.feelsLikeF))
+    }
+
+    /// RW-169 §7E.1/.4: the gate's commit. Runs on the gate
+    /// clock (250 ms) — a candidate whose frame has been stable
+    /// for the whole window commits ATOMICALLY: the store write
+    /// and the presented-snapshot swap happen together, and
+    /// every surface (mini, expanded, collection TODAY card —
+    /// the last reads the store the same write feeds) flips to
+    /// the same snapshot in the same transaction. While a
+    /// scroll gesture is live the commit defers to scroll rest.
+    private func commitStableSettleIfReady() {
+        guard !isScrollGestureActive else { return }
+        guard let candidate = settleGate.stableCandidate(at: Date()) else { return }
+        settleGate.clearPending()
+        collectionModel.recordSettled(candidate)
+        if let settled = collectionModel.sessionEntry() {
+            presentedSnapshot = makePresentedSnapshot(for: settled)
+        }
     }
 
     /// The outfit column's pinned foot entry (f5): opens the full
     /// weather detail for the current conditions.
     private var fullWeatherEntry: some View {
         Button {
-            selectedWeatherDetail = .condition(viewModel.currentCondition)
+            requestWeatherDetail(.condition(viewModel.currentCondition))
         } label: {
             HStack {
                 Text(AppStrings.viewFullWeatherDetail)
@@ -1580,11 +1717,237 @@ struct WeatherOutfitView: View {
     /// The detail sheet's isPresented face. Presentation itself is
     /// driven by the selection (sheet(item:)); the sheet's own
     /// dismiss writes false here, which clears the selection.
+    /// RW-161: the face is owner-gated like every Home sheet.
     private var weatherDetailPresented: Binding<Bool> {
         Binding(
-            get: { selectedWeatherDetail != nil },
+            get: { selectedWeatherDetail != nil
+                && HomeSheetArbiter.mayPresent(owner: homeSheetOwner, route: .weatherDetail) },
             set: { presented in
-                if !presented { selectedWeatherDetail = nil }
+                if !presented {
+                    selectedWeatherDetail = nil
+                    releaseSheet(.weatherDetail)
+                }
+            }
+        )
+    }
+
+    // MARK: - RW-161: the one sheet owner (arbiter plumbing)
+
+    /// Claim the presentation token for a route (HomeSheetArbiter):
+    /// granted at once when free, queued FIFO while another
+    /// sheet stands. Activation writes the route's backing.
+    private func claimSheet(_ route: HomeSheetRoute) {
+        let result = HomeSheetArbiter.claim(
+            owner: homeSheetOwner, queue: homeSheetQueue, requested: route)
+        homeSheetOwner = result.owner
+        homeSheetQueue = result.queue
+        if result.owner == route { activateSheet(route) }
+    }
+
+    /// Release a route's claim: the owner's release hands the
+    /// token to the oldest queued route, which then activates.
+    private func releaseSheet(_ route: HomeSheetRoute) {
+        let previousOwner = homeSheetOwner
+        let result = HomeSheetArbiter.release(
+            owner: homeSheetOwner, queue: homeSheetQueue, released: route)
+        homeSheetOwner = result.owner
+        homeSheetQueue = result.queue
+        if previousOwner == route, let next = result.owner, next != route {
+            activateSheet(next)
+        }
+    }
+
+    /// Write a route's backing state (the activation half of a
+    /// granted claim). Item routes consume their stashed payload.
+    private func activateSheet(_ route: HomeSheetRoute) {
+        switch route {
+        case .settings: showSettings = true
+        case .datePicker: showDatePicker = true
+        case .timePicker: showTimePicker = true
+        case .locationPicker: showLocationPicker = true
+        case .collection: showCollection = true
+        case .feedback: showFeedbackSheet = true
+        case .heroPaywall: showHeroPillPaywall = true
+        case .looksLibrary: showLooksLibrary = true
+        case .heroViewer: showHeroViewer = true
+        case .weatherDetail:
+            if let detail = pendingWeatherDetail {
+                selectedWeatherDetail = detail
+                pendingWeatherDetail = nil
+            }
+        case .wearShare:
+            if let entry = pendingWearShareEntry {
+                wearShareEntry = entry
+                pendingWearShareEntry = nil
+            }
+        }
+    }
+
+    /// Dismiss a route: clear its backing and release its claim.
+    private func dismissSheet(_ route: HomeSheetRoute) {
+        switch route {
+        case .settings: showSettings = false
+        case .datePicker: showDatePicker = false
+        case .timePicker: showTimePicker = false
+        case .locationPicker: showLocationPicker = false
+        case .collection: showCollection = false
+        case .feedback: showFeedbackSheet = false
+        case .heroPaywall: showHeroPillPaywall = false
+        case .looksLibrary: showLooksLibrary = false
+        case .heroViewer: showHeroViewer = false
+        case .weatherDetail: selectedWeatherDetail = nil
+        case .wearShare: wearShareEntry = nil
+        }
+        releaseSheet(route)
+    }
+
+    /// Request a boolean-backed sheet (the ONLY way user actions
+    /// present one — a direct backing write would bypass the
+    /// owner and either double-present or never present).
+    private func requestSheet(_ route: HomeSheetRoute) {
+        claimSheet(route)
+    }
+
+    /// Request the weather-detail sheet for a payload.
+    private func requestWeatherDetail(_ detail: WeatherDetailType) {
+        pendingWeatherDetail = detail
+        claimSheet(.weatherDetail)
+    }
+
+    /// Request the RW-158 share sheet for an entry.
+    private func requestWearShare(_ entry: WearIveRunEntry) {
+        pendingWearShareEntry = entry
+        claimSheet(.wearShare)
+    }
+
+    // MARK: - RW-168 home share menu
+
+    /// The floating menu card under the hero's top-right
+    /// controls, over a tap-to-dismiss layer.
+    private var shareMenuOverlay: some View {
+        ZStack(alignment: .topTrailing) {
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture { withAnimation { showShareMenu = false } }
+            HomeShareMenuView { entry in
+                handleShareMenuSelection(entry)
+            }
+            .padding(.top, 54)
+            .padding(.trailing, 16)
+        }
+    }
+
+    /// The entry the menu's entry-dependent doors act on —
+    /// the CURRENT day/outfit's record: the session's settled
+    /// entry (the same entry the dock presents; the recording
+    /// settles it from the viewed selection), falling back to
+    /// today's entry by date.
+    private var currentShareEntry: WearIveRunEntry? {
+        collectionModel.sessionEntry() ?? collectionModel.todaysEntry(today: Date())
+    }
+
+    /// A menu selection lands through the SAME doors Home
+    /// already owns — the RW-158 sheet via the one sheet owner
+    /// (requestWearShare), the collection via requestSheet —
+    /// and the direct save below. The menu closes first.
+    private func handleShareMenuSelection(_ entry: HomeShareMenuEntry) {
+        withAnimation { showShareMenu = false }
+        switch HomeShareMenuPolicy.destination(for: entry, hasCurrentEntry: currentShareEntry != nil) {
+        case .shareSheet:
+            if let current = currentShareEntry { requestWearShare(current) }
+        case .collection:
+            requestSheet(.collection)
+        case .saveToPhotos:
+            saveCurrentCardToPhotos()
+        case .none:
+            break
+        }
+    }
+
+    /// "Save to photos": render today's card through the
+    /// Studio's own pipeline (ShareCardRenderer — the
+    /// extraction of the Studio host's pipelines), verify the
+    /// raster at the Studio's own gate (ShareRasterVerifier,
+    /// sampled at the poster's face anchor, as the Studio's
+    /// share door verifies), then write it to the photo
+    /// library directly — one tap, no sheet round-trip. The
+    /// confirmation is the flag toast's surface and timing.
+    private func saveCurrentCardToPhotos() {
+        guard let entry = currentShareEntry else { return }
+        let renderer = ShareCardRenderer(
+            entry: entry,
+            formatTemperature: { viewModel.temperatureUnit.formatFromFahrenheit($0) },
+            genderPreference: viewModel.genderPreference,
+            onHeroRecovered: { collectionModel.healHeroReference(entryID: $0.id, durableReference: $1) },
+            exportContext: ShareExportContext()
+        )
+        let format = HomeShareMenuPolicy.directSaveFormat
+        Task { @MainActor in
+            let image = await renderer.renderImage(kind: HomeShareMenuPolicy.directSaveKind, format: format)
+            var saved = false
+            if let image {
+                let points = [renderer.exportContext.posterAnchorCanvasPoint].compactMap { $0 }
+                let verdict = ShareRasterVerifier.verify(image: image, format: format, samplePoints: points)
+                if verdict.passed {
+                    saved = await ShareCardDirectSave.save(image: image, saver: photoSaver)
+                }
+            }
+            withAnimation {
+                if saved {
+                    showSavedToPhotosThanks = true
+                } else {
+                    showSaveToPhotosFailed = true
+                }
+            }
+        }
+    }
+
+    /// A boolean sheet's owner-gated binding: the sheet presents
+    /// only while its route owns the token; writes funnel
+    /// through the arbiter (true = claim, false = dismiss).
+    private func ownedBinding(_ route: HomeSheetRoute, _ backing: Binding<Bool>) -> Binding<Bool> {
+        Binding(
+            get: { backing.wrappedValue
+                && HomeSheetArbiter.mayPresent(owner: homeSheetOwner, route: route) },
+            set: { newValue in
+                if newValue {
+                    claimSheet(route)
+                } else {
+                    backing.wrappedValue = false
+                    releaseSheet(route)
+                }
+            }
+        )
+    }
+
+    /// The weather-detail sheet's owner-gated item binding.
+    private var weatherDetailSheetItem: Binding<WeatherDetailType?> {
+        Binding(
+            get: { HomeSheetArbiter.mayPresent(owner: homeSheetOwner, route: .weatherDetail)
+                ? selectedWeatherDetail : nil },
+            set: { newValue in
+                if let detail = newValue {
+                    requestWeatherDetail(detail)
+                } else {
+                    selectedWeatherDetail = nil
+                    releaseSheet(.weatherDetail)
+                }
+            }
+        )
+    }
+
+    /// The RW-158 share sheet's owner-gated item binding.
+    private var wearShareSheetItem: Binding<WearIveRunEntry?> {
+        Binding(
+            get: { HomeSheetArbiter.mayPresent(owner: homeSheetOwner, route: .wearShare)
+                ? wearShareEntry : nil },
+            set: { newValue in
+                if let entry = newValue {
+                    requestWearShare(entry)
+                } else {
+                    wearShareEntry = nil
+                    releaseSheet(.wearShare)
+                }
             }
         )
     }
@@ -1655,7 +2018,10 @@ struct WeatherOutfitView: View {
     /// (HeroPillMetrics) — the input the hero's one vertical
     /// layout guarantees the whole stack against, in every
     /// pill state (Ruling 2 / the build-33 weather-line
-    /// defect: the two-line generating pill is the tall one).
+    /// defect: the then-two-line generating pill was the tall
+    /// one; RW-174 / RW-171 makes every state one line, so
+    /// every rendered state now plans at the single-line
+    /// height through this same input).
     private var currentPillHeight: CGFloat {
         HeroPillMetrics.height(for: heroPillState)
     }
@@ -1700,10 +2066,11 @@ struct WeatherOutfitView: View {
             topLuminance: heroLuminance.topLuminance,
             chipLuminance: heroLuminance.chipLuminance,
             footLuminance: heroLuminance.footLuminance,
-            onPlaceTapped: { showLocationPicker = true },
-            onSettingsTapped: { showSettings = true },
-            onDateTapped: { showDatePicker = true },
-            onTimeTapped: { showTimePicker = true },
+            onPlaceTapped: { requestSheet(.locationPicker) },
+            onSettingsTapped: { requestSheet(.settings) },
+            onShareTapped: { withAnimation { showShareMenu.toggle() } },
+            onDateTapped: { requestSheet(.datePicker) },
+            onTimeTapped: { requestSheet(.timePicker) },
             onNowTapped: { viewModel.resetToNow() },
             windMph: viewModel.selectedWeatherSnapshot?.windSpeed ?? weather.currentWeather.windspeed,
             rainPercent: viewModel.selectedWeatherSnapshot?.precipitationProbability ?? 0,
@@ -1750,7 +2117,7 @@ struct WeatherOutfitView: View {
                 // Fix wave 2026-11-07 (RW-133): tapping the
                 // hero opens the stored photograph fitted
                 // full-screen (see HeroPhotoViewer).
-                .onTapGesture { showHeroViewer = true }
+                .onTapGesture { requestSheet(.heroViewer) }
         }
     }
 
@@ -1797,14 +2164,14 @@ struct WeatherOutfitView: View {
             // paint a shorts photo over a COOL outfit.
             fallbackImageUrl: viewModel.fallbackImageUrl ?? "",
             aiImageUrl: viewModel.heroImageUrl,
-            onSettingsTapped: { showSettings = true },
+            onSettingsTapped: { requestSheet(.settings) },
             // No onShareTapped: the hero's top controls are off
             // (showsTopControls below) — and since WS-6 (T-4)
             // there is no home share at all; sharing lives in
             // the collection (Poster / Kit Card).
-            onLocationTapped: { showLocationPicker = true },
-            onDateTapped: { showDatePicker = true },
-            onTimeTapped: { showTimePicker = true },
+            onLocationTapped: { requestSheet(.locationPicker) },
+            onDateTapped: { requestSheet(.datePicker) },
+            onTimeTapped: { requestSheet(.timePicker) },
             onNowTapped: { viewModel.resetToNow() },
             flagTarget: viewModel.currentHeroFlagTarget,
             onFlagHero: { reason in
@@ -1822,11 +2189,15 @@ struct WeatherOutfitView: View {
             // fed by the same heroPillState). HeroImageView's
             // own pill seat is passed .hidden here.
             pillState: .hidden,
-            onPillGetUnlimited: { showHeroPillPaywall = true },
+            onPillGetUnlimited: { requestSheet(.heroPaywall) },
             // RW-111: the failed look's line at the hero, with
             // its retry — the same retry the personal section's
             // button used to fire from the bottom of the page.
-            lookFailed: currentCellLookIsFailed,
+            // RW-161: the failed-look line ("…photos — tap to
+            // try again") is a transient surface on Home's own
+            // layer — it defers while any sheet owns the screen
+            // rather than rendering between stacked sheets.
+            lookFailed: currentCellLookIsFailed && !anyHomeSheetPresented,
             onRetryFailedLook: {
                 if let cell = viewModel.currentPersonalCombination {
                     personalStore.retryLook(for: cell)
@@ -1852,7 +2223,35 @@ struct WeatherOutfitView: View {
     /// the first-look screen, and not in the scroll content under
     /// the photo (X-8). No current cell (not opted in / stock
     /// mode) hides the pill.
+    /// RW-169 §7D (D9): the ONE agreed presentation value for
+    /// the current cell — the straddle pill, the hero, and the
+    /// failure wording all read this and nothing else, so the
+    /// cell can never be FAILED across the hero and MAKING on
+    /// the pill at once. Resolved once from the cell's look
+    /// state and its pill resolution together.
+    private var cellPresentation: PersonalCellPresentation {
+        guard let cell = viewModel.currentPersonalCombination else { return .serving }
+        let lookState = personalStore.lookStates[cell.combinationId] ?? .none
+        return PersonalCellPresentation.resolve(
+            lookState: lookState,
+            pillState: HeroPill.resolve(
+                optedIn: personalStore.isOptedIn,
+                lookState: lookState,
+                personalPhotoDisplayed: viewModel.currentPersonalHeroId != nil,
+                isSubscribed: personalStore.mode == .subscribed,
+                freeGenerationsUsed: personalStore.freeGenerationsUsed,
+                freeAllowance: PersonalHeroStore.freeAllowance,
+                isScaffoldServe: viewModel.currentPersonalServeIsScaffold,
+                isExhaustedCell: personalStore.exhaustedCell == cell.combinationId
+            ))
+    }
+
     private var heroPillState: HeroPillState {
+        // RW-169 §7D: under the agreed FAILED presentation the
+        // straddle pill carries no making/serving claim — the
+        // pill component's failed form at the hero (below) is
+        // the one carrier of the state.
+        guard cellPresentation != .failed else { return .hidden }
         guard let cell = viewModel.currentPersonalCombination else { return .hidden }
         return HeroPill.resolve(
             optedIn: personalStore.isOptedIn,
@@ -1874,9 +2273,11 @@ struct WeatherOutfitView: View {
     /// RW-111: whether the current cell's look stands failed —
     /// the hero's failure-line input (the line itself renders in
     /// HeroImageView, in the pill's eye line over the stock hero).
+    /// RW-169 §7D: this reads the ONE agreed presentation value
+    /// (cellPresentation) — the same value the pill reads — not
+    /// a second derivation from the look state.
     private var currentCellLookIsFailed: Bool {
-        guard let cell = viewModel.currentPersonalCombination else { return false }
-        return (personalStore.lookStates[cell.combinationId] ?? .none).isFailed
+        cellPresentation == .failed
     }
 
     // MARK: - RW-14 Personal Section
@@ -1923,7 +2324,7 @@ struct WeatherOutfitView: View {
                 // the failed cell is encountered (frame 20's door
                 // wording, RW-61).
                 Button(AppStrings.viewSeeAllLooks) {
-                    showLooksLibrary = true
+                    requestSheet(.looksLibrary)
                 }
                 .font(.appSecondary.weight(.semibold))
                 .foregroundColor(AppTheme.inkPrimary)
@@ -2284,24 +2685,5 @@ extension View {
             .background(
                 Capsule().fill(isSelected ? AppTheme.primaryColor.opacity(0.25) : AppTheme.cardOnSheet)
             )
-    }
-}
-
-// MARK: - RW-135 scroll metrics (host bookkeeping)
-
-/// One geometry sample from a footer-bearing scroll view:
-/// content height, visible height, and the raw content
-/// offset. Feeds the §4.4 glide targets and the §3 handoff's
-/// bookkeeping in WeatherOutfitView. Equatable so it can ride
-/// `onScrollGeometryChange`.
-struct WearScrollMetrics: Equatable {
-    var contentHeight: Double
-    var visibleHeight: Double
-    var offsetY: Double
-
-    init(_ geometry: ScrollGeometry) {
-        contentHeight = geometry.contentSize.height
-        visibleHeight = geometry.visibleRect.height
-        offsetY = geometry.contentOffset.y
     }
 }

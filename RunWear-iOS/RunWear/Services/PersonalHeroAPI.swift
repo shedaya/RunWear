@@ -18,6 +18,26 @@ actor PersonalHeroAPI {
 
     private let auth = SupabaseAuthService.shared
 
+    /// RW-137 test seam: when set, replaces URLSession as the
+    /// transport for every request this client makes, so tests
+    /// drive the real client code against mocked backend
+    /// responses (fixtures only — no production contact).
+    /// Production never sets it. Internal, not public: the seam
+    /// exists for the test target's dual membership of this file.
+    typealias Transport = @Sendable (URLRequest) async throws -> (Data, URLResponse)
+    private var transportOverride: Transport?
+
+    func installTransportOverride(_ transport: Transport?) {
+        transportOverride = transport
+    }
+
+    private func perform(_ request: URLRequest) async throws -> (Data, URLResponse) {
+        if let transportOverride {
+            return try await transportOverride(request)
+        }
+        return try await URLSession.shared.data(for: request)
+    }
+
     private init() {}
 
     /// The current session's user id, if a session exists.
@@ -53,7 +73,7 @@ actor PersonalHeroAPI {
         request.addValue("image/jpeg", forHTTPHeaderField: "Content-Type")
         request.addValue("true", forHTTPHeaderField: "x-upsert")
         request.httpBody = jpegData
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await perform(request)
         guard let http = response as? HTTPURLResponse else {
             throw PersonalHeroAPIError.server(message: "invalid response")
         }
@@ -157,6 +177,51 @@ actor PersonalHeroAPI {
         return rows.contains { nonTerminal.contains($0.status) }
     }
 
+    /// RW-151 §5: the caller's terminally-FAILED generation-job
+    /// cells — the failed set the coverage arithmetic subtracts
+    /// from outstanding (RW-126's failed-settle, preserved: a
+    /// failed cell is settled, never silently outstanding
+    /// forever). Owner-read, same table as the job-state fold.
+    /// Nil when no read landed.
+    func fetchFailedCells() async -> Set<String>? {
+        guard let session = try? await requireSession() else { return nil }
+        let path = "/rest/v1/personal_generation_jobs?select=combination_id,status&user_id=eq.\(session.userId)"
+        guard let data = try? await authedGet(path: path, session: session) else { return nil }
+        struct Row: Decodable { let combinationId: String; let status: String
+            enum CodingKeys: String, CodingKey { case combinationId = "combination_id"; case status } }
+        guard let rows = try? JSONDecoder().decode([Row].self, from: data) else { return nil }
+        let failed: Set<String> = ["FAILED", "failed"]
+        return Set(rows.filter { failed.contains($0.status) }.map { $0.combinationId })
+    }
+
+    /// RW-159/RW-160 (device verdict, Nov 10, 2026): the bank as
+    /// combination_id → storage_path, WITHOUT signing — the
+    /// re-link recovery's lookup table (HeroRecovery). The same
+    /// owner-read table fetchBankHeroes reads; the first row per
+    /// cell wins, as there. Nil on any failure — recovery then
+    /// simply does not happen and the entry stays honestly empty.
+    func fetchBankHeroPaths() async -> [String: String]? {
+        guard let session = try? await requireSession() else { return nil }
+        let path = "/rest/v1/personal_heroes?select=combination_id,storage_path&user_id=eq.\(session.userId)&order=combination_id.asc"
+        guard let data = try? await authedGet(path: path, session: session) else { return nil }
+        struct Row: Decodable {
+            let combinationId: String
+            let storagePath: String?
+            enum CodingKeys: String, CodingKey {
+                case combinationId = "combination_id"
+                case storagePath = "storage_path"
+            }
+        }
+        guard let rows = try? JSONDecoder().decode([Row].self, from: data) else { return nil }
+        var paths: [String: String] = [:]
+        for row in rows {
+            if paths[row.combinationId] == nil, let storagePath = row.storagePath, !storagePath.isEmpty {
+                paths[row.combinationId] = storagePath
+            }
+        }
+        return paths
+    }
+
     /// RW-16.12 Lane B backstop: ask the server to reconcile this
     /// user's entitlement against RevenueCat. The client asserts
     /// NOTHING — it sends an empty body under the user's own JWT;
@@ -166,8 +231,33 @@ actor PersonalHeroAPI {
     /// idempotent: any failure (offline, no session yet) is
     /// swallowed — the next bootstrap or entitlement change asks
     /// again.
-    func reconcileEntitlement() async {
-        _ = try? await functionPost("reconcile-personal-entitlement", body: [:])
+    ///
+    /// RW-137 (DESIGN §4.4.2): the call now RETURNS its decoded
+    /// response — the caller (PersonalHeroStore) reads
+    /// `adoption_available` off it and requests the identity
+    /// adoption when RevenueCat proof links this entitled
+    /// identity to a prior uid. Nil on any failure, exactly as
+    /// silent as before.
+    @discardableResult
+    func reconcileEntitlement() async -> ReconcileEntitlementResponse? {
+        guard let data = try? await functionPost("reconcile-personal-entitlement", body: [:]) else {
+            return nil
+        }
+        return ReconcileEntitlementResponse.decode(from: data)
+    }
+
+    /// RW-137 (DESIGN §4.4.2/§4.4.3): ask the server to re-key
+    /// the hinted source identity's personal layer into the
+    /// caller's. The endpoint re-verifies the RevenueCat proof
+    /// server-side — the client's hint is never trusted — so
+    /// every failure here is swallowed: a wrong or stale hint is
+    /// a silent no-op by design, and the next reconcile asks
+    /// again.
+    func requestIdentityAdoption(sourceUserId: String) async {
+        _ = try? await functionPost(
+            "request-identity-adoption",
+            body: PersonalHeroRequests.identityAdoptionBody(sourceUserId: sourceUserId)
+        )
     }
 
     /// Subscriber matrix fill. The server gates this on its OWN
@@ -260,7 +350,7 @@ actor PersonalHeroAPI {
         request.addValue(anonKey, forHTTPHeaderField: "apikey")
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: ["expiresIn": 3600])
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await perform(request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { return nil }
         struct SignResponse: Decodable { let signedURL: String }
         guard let decoded = try? JSONDecoder().decode(SignResponse.self, from: data) else { return nil }
@@ -290,7 +380,7 @@ actor PersonalHeroAPI {
         request.addValue(anonKey, forHTTPHeaderField: "apikey")
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await perform(request)
         guard let http = response as? HTTPURLResponse else {
             throw PersonalHeroAPIError.server(message: "invalid response")
         }
@@ -312,7 +402,7 @@ actor PersonalHeroAPI {
         request.httpMethod = "GET"
         request.addValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
         request.addValue(anonKey, forHTTPHeaderField: "apikey")
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await perform(request)
         guard let http = response as? HTTPURLResponse else {
             throw PersonalHeroAPIError.server(message: "invalid response")
         }
@@ -334,3 +424,85 @@ actor PersonalHeroAPI {
 // RW-16: the "Your photos" loader's seam is exactly this client's
 // path list + per-path signing.
 extension PersonalHeroAPI: ReferencePhotoFetching {}
+
+// MARK: - RW-152 §3: the resolver's async half
+
+/// The ONE entry → loadable-URL resolution every Wear I've Run
+/// surface loads through (chapter banner, entry cards, TODAY
+/// pin, day view, viewer, poster, expanded panel). The pure
+/// classification lives in HeroRefResolver (RW26CollectionModels);
+/// this is its signing half: a stored storage path re-signs
+/// through the client's existing signing path
+/// (`signedReferenceURL`, the same one reference photos use),
+/// cached for most of the signed hour so a collection scroll
+/// does not re-sign per card. A relaunch more than an hour after
+/// settle resolves the same photo again — the durable path, not
+/// the dead display URL, is what gets signed.
+@MainActor
+enum HeroRefRuntime {
+    private static var signedCache: [String: (url: String, expiresAt: Date)] = [:]
+
+    /// The loadable URL string for an entry, or nil when the
+    /// entry is honestly empty (or signing failed — the surface
+    /// then renders its placeholder, never a substitute photo).
+    static func loadableURLString(for entry: WearIveRunEntry) async -> String? {
+        if let stable = HeroRefResolver.stableDisplayReference(for: entry) {
+            return stable
+        }
+        guard let path = HeroRefResolver.storagePath(for: entry) else { return nil }
+        return await signedURLString(forPath: path)
+    }
+
+    private static func signedURLString(forPath path: String) async -> String? {
+        if let hit = signedCache[path], hit.expiresAt > Date() {
+            return hit.url
+        }
+        guard let signed = try? await PersonalHeroAPI.shared.signedReferenceURL(path: path)
+        else { return nil }
+        signedCache[path] = (signed.absoluteString, Date().addingTimeInterval(50 * 60))
+        return signed.absoluteString
+    }
+
+    // MARK: RW-159/RW-160: bank re-link recovery
+
+    private static var bankPathsCache: (paths: [String: String], fetchedAt: Date)?
+
+    /// The recovering resolution: the entry's own reference
+    /// first (exactly the resolution above); when the entry
+    /// carries NO loadable reference — the empty-settle shape
+    /// the Nov 10, 2026 device verdict caught (New York's cover
+    /// and its Nov 9 Postcard) — the bank re-link
+    /// (HeroRecovery) looks the entry's own outfit cell up in
+    /// the user's bank, and a hit is reported through
+    /// `onRecovered` (the caller persists it on the entry, so
+    /// the recovery happens once) and re-signed here. No hit →
+    /// nil: the entry is honestly photo-less and every surface
+    /// keeps its placeholder.
+    static func loadableURLString(
+        for entry: WearIveRunEntry,
+        gender: GenderPreference,
+        onRecovered: ((String) -> Void)? = nil
+    ) async -> String? {
+        if let own = await loadableURLString(for: entry) {
+            return own
+        }
+        guard !HeroRefResolver.hasLoadableReference(entry) else { return nil }
+        let bankPaths: [String: String]
+        if let cache = bankPathsCache,
+           Date().timeIntervalSince(cache.fetchedAt) < 5 * 60 {
+            bankPaths = cache.paths
+        } else if let fetched = await PersonalHeroAPI.shared.fetchBankHeroPaths() {
+            bankPaths = fetched
+            bankPathsCache = (fetched, Date())
+        } else {
+            return nil
+        }
+        guard let recovered = HeroRecovery.recoveredDurableReference(
+            for: entry,
+            genderSegment: PersonalCombination.genderSegment(for: gender),
+            bankPaths: bankPaths
+        ) else { return nil }
+        onRecovered?(recovered)
+        return await signedURLString(forPath: recovered)
+    }
+}

@@ -67,7 +67,13 @@ final class Gen3TrainDeltaTests: XCTestCase {
         // the (now hidden) nav bar's principal item to the
         // hero's place pill; the Y-16 substance — one tap,
         // straight to the picker — is unchanged.
-        XCTAssertTrue(home.contains("onPlaceTapped: { showLocationPicker = true }"),
+        // RW-161 RE-PIN (device verdict, Nov 10, 2026): the
+        // pill's tap now claims the ONE sheet owner
+        // (requestSheet(.locationPicker)) instead of writing the
+        // picker's backing directly — Y-16's substance (one tap,
+        // straight to the picker, no menu) is unchanged; only
+        // the presentation plumbing is owner-gated.
+        XCTAssertTrue(home.contains("onPlaceTapped: { requestSheet(.locationPicker) }"),
                       "the location is the hero place pill, bound straight to the picker")
         // The button's action is the picker presentation itself:
         // the first tap opens the sheet directly — no menu, no
@@ -88,7 +94,9 @@ final class Gen3TrainDeltaTests: XCTestCase {
         // version of this pin demanded [.large] only and
         // contradicted the discipline pin — the gate caught it,
         // run 41944552163.)
-        let sheetIdx = try XCTUnwrap(home.range(of: ".sheet(isPresented: $showLocationPicker)"))
+        // RW-161 RE-PIN (Nov 10, 2026): the picker's sheet
+        // binding is the owner-gated form.
+        let sheetIdx = try XCTUnwrap(home.range(of: ".sheet(isPresented: ownedBinding(.locationPicker, $showLocationPicker)"))
         let sheetBlock = home[sheetIdx.lowerBound...].prefix(1600)
         XCTAssertTrue(sheetBlock.contains(".presentationDetents([.medium, .large])"),
                       "Y-16: the directly-opened picker rests at the settled detents")
@@ -169,14 +177,14 @@ final class Gen3TrainDeltaTests: XCTestCase {
         // mid-generation: the shared store still reports the
         // requested cell as making, no personal photo is on
         // screen yet, and the hero pill resolves to the
-        // generating pill over the fallback photo. GEN-5
-        // (C-4 AMENDED, Nov 5): for this FREE user the
-        // generating state is .makingWithUpsell — script +
-        // spinner + "Making this you…" + the one small green
-        // "Get it instantly next time" line; a subscriber's
-        // generating pill stays the clean .making.
+        // generating pill over the fallback photo. RW-174 /
+        // RW-171 SUPERSEDES the GEN-5 C-4 pin that stood here
+        // (for this FREE user the generating state was the
+        // two-line upsell state): the pill is ONE line in
+        // every state — script + spinner + "Making this you…"
+        // — on both tiers.
         XCTAssertEqual(
-            .makingWithUpsell,
+            .making,
             HeroPill.resolve(optedIn: true, lookState: .making, personalPhotoDisplayed: false,
                              isSubscribed: false, freeGenerationsUsed: 0, freeAllowance: 5),
             "leaving mid-generation must land on home with the generating pill active")

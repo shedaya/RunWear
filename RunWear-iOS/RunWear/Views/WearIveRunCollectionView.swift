@@ -6,8 +6,9 @@ import Vision
 // MARK: - "Wear I've Run" Collection (RW-26, checklist §C; notes §8-K)
 //
 // Chapters BY LOCATION (within a location, the entries are
-// sessions — GEN-3). Cover = most recent card + day count +
-// date span + feels-like range, all computed. Multi-stay chapters
+// sessions — GEN-3). Cover = the newest entry WITH a loadable
+// hero reference (RW-153) + day count + date span + feels-like
+// range, all computed. Multi-stay chapters
 // count stays and name the last stay — never a false-contiguity
 // span. Hometown-scale chapters group by year → month rows. The
 // weather filter lives at the collection level AND inside
@@ -24,6 +25,21 @@ struct WearIveRunCollectionView: View {
     let genderPreference: GenderPreference
 
     @State private var filter: WearIveRunWeatherFilter = .all
+    /// RW-152 §4 (J1): the past entry awaiting its delete
+    /// confirmation — the confirmation names its place and date
+    /// (WearIveRunDeletePolicy). Today's entry never lands
+    /// here: it deletes in one tap.
+    @State private var pendingDelete: WearIveRunEntry?
+
+    /// RW-152 §4 (J1): route a delete request — a PAST entry
+    /// asks first (confirmation), today's entry deletes at once.
+    private func requestDelete(_ entry: WearIveRunEntry) {
+        if WearIveRunDeletePolicy.requiresConfirmation(for: entry) {
+            pendingDelete = entry
+        } else {
+            model.removeEntry(id: entry.id)
+        }
+    }
 
     /// The pinned entry (GEN-3 session rule): the CURRENT
     /// session's entry — the same entry the home dock presents.
@@ -85,8 +101,14 @@ struct WearIveRunCollectionView: View {
                                 Spacer()
                                 // RW-122 (iOS half): the pinned
                                 // entry deletes from here too.
+                                // RW-152 §4 (J1): routed through
+                                // the delete policy — the pinned
+                                // entry is the session's (today's,
+                                // or a future plan), so it stays
+                                // one-tap; the confirmation path
+                                // stands if that ever changes.
                                 Button {
-                                    model.removeEntry(id: today.id)
+                                    requestDelete(today)
                                 } label: {
                                     Image(systemName: "trash")
                                         .font(.appFootnote.weight(.semibold))
@@ -99,7 +121,9 @@ struct WearIveRunCollectionView: View {
                                 WearIveRunDayView(
                                     entry: today,
                                     formatTemperature: formatTemperature,
-                                    genderPreference: genderPreference
+                                    genderPreference: genderPreference,
+                                    onDelete: { model.removeEntry(id: today.id) },
+                                    onHeroRecovered: { model.healHeroReference(entryID: $0.id, durableReference: $1) }
                                 )
                             } label: {
                                 entryCard(today)
@@ -109,17 +133,39 @@ struct WearIveRunCollectionView: View {
                     }
 
                     ForEach(chapters, id: \.placeName) { chapter in
-                        NavigationLink {
-                            WearIveRunChapterView(
-                                model: model,
-                                placeName: chapter.placeName,
-                                formatTemperature: formatTemperature,
-                                genderPreference: genderPreference
-                            )
-                        } label: {
-                            chapterCover(chapter)
+                        // RW-152 §4: the chapter cover carries
+                        // its own trash, bound to the cover's
+                        // REPRESENTATIVE entry only (ruling J2 —
+                        // never the whole place group; whole-place
+                        // removal stays in the chapter view). It
+                        // sits OUTSIDE the navigation link so the
+                        // tap can never be read as navigation.
+                        ZStack(alignment: .topTrailing) {
+                            NavigationLink {
+                                WearIveRunChapterView(
+                                    model: model,
+                                    placeName: chapter.placeName,
+                                    formatTemperature: formatTemperature,
+                                    genderPreference: genderPreference
+                                )
+                            } label: {
+                                chapterCover(chapter)
+                            }
+                            .buttonStyle(.plain)
+                            Button {
+                                requestDelete(chapter.cover)
+                            } label: {
+                                Image(systemName: "trash")
+                                    .font(.appFootnote.weight(.semibold))
+                                    .foregroundColor(AppTheme.inkPrimary)
+                                    .frame(width: 32, height: 32)
+                                    .background(Circle().fill(AppTheme.sheet.opacity(0.92)))
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.top, 23)
+                            .padding(.trailing, 23)
+                            .accessibilityLabel("Delete the cover entry for \(chapter.placeName)")
                         }
-                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -131,6 +177,10 @@ struct WearIveRunCollectionView: View {
         // header (design-spec §8.2; Android's header is the
         // script alone). Build 25 printed the name twice.
         .navigationBarTitleDisplayMode(.inline)
+        // RW-152 §4 (J1): the past-entry delete confirmation.
+        .modifier(WearIveRunDeleteConfirmation(
+            pending: $pendingDelete,
+            onConfirm: { model.removeEntry(id: $0.id) }))
     }
 
     private var filterRow: some View {
@@ -220,14 +270,49 @@ struct WearIveRunCollectionView: View {
 
     @ViewBuilder
     private func entryImage(_ entry: WearIveRunEntry) -> some View {
-        // GEN-5 (RW-28 sharing fix + addendum 2): a missing or
-        // unresolved reference renders the designed treatment — a
-        // card-fill placeholder with the photo glyph — never a
-        // blank, never a crash; a resolved photo renders through
-        // HeroPhoto's TOP-anchored crop, so a thumbnail can never
-        // present the runner headless the way a center fill did.
+        // RW-152 §3: every collection surface loads through the
+        // ONE resolver (ResolvedHeroImage) — the chapter banner
+        // and the entry cards alike.
+        // RW-159 (device verdict, Nov 10, 2026): the resolver is
+        // the RECOVERING one — an entry that settled with an
+        // empty reference re-links from the bank, and the
+        // recovery is persisted on the entry through the model.
+        ResolvedHeroImage(
+            entry: entry,
+            genderPreference: genderPreference,
+            onRecovered: { model.healHeroReference(entryID: $0.id, durableReference: $1) })
+    }
+}
+
+/// RW-152 §3: an entry's hero, loaded through the one resolver.
+/// A stable reference (pool/curated URL, asset reference) passes
+/// through synchronously; a storage path (personal hero) is
+/// re-signed through HeroRefRuntime — the client's existing
+/// signing path — so the photo that settled shows again on a
+/// relaunch past the signed URL's one-hour life. An entry with
+/// no loadable reference renders the designed treatment — a
+/// card-fill placeholder with the photo glyph (GEN-5, RW-28) —
+/// never a substituted photo, never a crash; a resolved photo
+/// renders through HeroPhoto's TOP-anchored crop, so a
+/// thumbnail can never present the runner headless the way a
+/// center fill did.
+struct ResolvedHeroImage: View {
+    let entry: WearIveRunEntry
+    /// RW-159: the recovering resolution's inputs — the user's
+    /// gender segment keys the bank lookup, and a recovery is
+    /// reported for persistence on the entry. Defaulted so
+    /// seats without a model keep the plain resolver.
+    var genderPreference: GenderPreference = .unisex
+    var onRecovered: ((WearIveRunEntry, String) -> Void)?
+    @State private var resolvedURLString: String?
+
+    private var urlString: String? {
+        HeroRefResolver.stableDisplayReference(for: entry) ?? resolvedURLString
+    }
+
+    var body: some View {
         GeometryReader { geo in
-            AsyncImage(url: URL(string: entry.heroImageReference)) { phase in
+            AsyncImage(url: urlString.flatMap { URL(string: $0) }) { phase in
                 switch phase {
                 case .success(let image):
                     HeroPhoto(image: image, width: geo.size.width, height: geo.size.height)
@@ -239,6 +324,44 @@ struct WearIveRunCollectionView: View {
                     }
                 }
             }
+        }
+        .task(id: entry.id) {
+            if HeroRefResolver.stableDisplayReference(for: entry) == nil {
+                resolvedURLString = await HeroRefRuntime.loadableURLString(
+                    for: entry, gender: genderPreference,
+                    onRecovered: { recovered in
+                        onRecovered?(entry, recovered)
+                    })
+            }
+        }
+    }
+}
+
+/// RW-152 §4 (J1): the past-entry delete confirmation, shared
+/// by every collection surface. The title and message come
+/// from WearIveRunDeletePolicy — the confirmation NAMES the
+/// place and the date and states plainly that entries live
+/// only on this device and deletion cannot be undone.
+struct WearIveRunDeleteConfirmation: ViewModifier {
+    @Binding var pending: WearIveRunEntry?
+    let onConfirm: (WearIveRunEntry) -> Void
+
+    func body(content: Content) -> some View {
+        content.alert(
+            pending.map { WearIveRunDeletePolicy.confirmationTitle(for: $0) }
+                ?? "Delete this entry?",
+            isPresented: Binding(
+                get: { pending != nil },
+                set: { if !$0 { pending = nil } }),
+            presenting: pending
+        ) { entry in
+            Button("Delete", role: .destructive) {
+                onConfirm(entry)
+                pending = nil
+            }
+            Button("Cancel", role: .cancel) { pending = nil }
+        } message: { entry in
+            Text(WearIveRunDeletePolicy.confirmationMessage(for: entry))
         }
     }
 }
@@ -252,6 +375,24 @@ struct WearIveRunChapterView: View {
     let genderPreference: GenderPreference
 
     @State private var filter: WearIveRunWeatherFilter = .all
+    /// RW-152 §4 (J1): the past entry awaiting its delete
+    /// confirmation on this surface.
+    @State private var pendingDelete: WearIveRunEntry?
+    /// RW-158 (user ruling, Nov 10, 2026): the PAST entry whose
+    /// tap opened the Share Studio sheet directly
+    /// (WearIveRunTapPolicy.chapterEntryDestination).
+    @State private var shareEntry: WearIveRunEntry?
+
+    /// RW-152 §4 (J1): route a per-entry delete — a PAST entry
+    /// asks first (the confirmation names place and date);
+    /// today's entry deletes in one tap.
+    private func requestDelete(_ entry: WearIveRunEntry) {
+        if WearIveRunDeletePolicy.requiresConfirmation(for: entry) {
+            pendingDelete = entry
+        } else {
+            model.removeEntry(id: entry.id)
+        }
+    }
 
     /// The chapter recomputed under THIS view's filter — summaries,
     /// stays, and groups all derive from the admitted entries.
@@ -317,6 +458,23 @@ struct WearIveRunChapterView: View {
         .background(AppTheme.background.ignoresSafeArea())
         .navigationTitle(placeName)
         .navigationBarTitleDisplayMode(.inline)
+        // RW-152 §4 (J1): the past-entry delete confirmation.
+        .modifier(WearIveRunDeleteConfirmation(
+            pending: $pendingDelete,
+            onConfirm: { model.removeEntry(id: $0.id) }))
+        // RW-158: a past entry's tap presents the Share Studio
+        // sheet for that entry directly. Opening is viewing —
+        // nothing is shared until the Studio's Share button.
+        .sheet(item: $shareEntry) { entry in
+            WearIveRunShareStudioHost(
+                entry: entry,
+                formatTemperature: formatTemperature,
+                genderPreference: genderPreference,
+                onHeroRecovered: { model.healHeroReference(entryID: $0.id, durableReference: $1) }
+            )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
     }
 
     private var filterRow: some View {
@@ -374,41 +532,67 @@ struct WearIveRunChapterView: View {
         return AppEnglish.wirSummarySingle(days, rangeText)
     }
 
+    /// One day row's label — shared by the row's two tap
+    /// routes (RW-158): the share-sheet button for a past
+    /// entry and the day-view navigation link for
+    /// today/future render the identical row.
+    private func dayRowLabel(_ entry: WearIveRunEntry) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(WearIveRunDateFormatting.dayLabel(entry.dayStart))
+                    .font(.appItemName)
+                    .foregroundColor(AppTheme.inkPrimary)
+                Text(AppEnglish.collectionEntryHead(formatTemperature(entry.feelsLikeF), entry.condition) + AppEnglish.mimFirstLookWeatherItems(entry.itemNames.count))
+                    .font(.appFootnote)
+                    .foregroundColor(AppTheme.inkSecondary)
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.appFootnote.weight(.semibold))
+                .foregroundColor(AppTheme.inkMuted)
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 14).fill(AppTheme.sheet))
+    }
+
     private func dayList(_ entries: [WearIveRunEntry]) -> some View {
         VStack(spacing: 10) {
             ForEach(entries) { entry in
                 HStack(spacing: 8) {
-                    NavigationLink {
-                        WearIveRunDayView(
-                            entry: entry,
-                            formatTemperature: formatTemperature,
-                            genderPreference: genderPreference
-                        )
-                    } label: {
-                        HStack(spacing: 12) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(WearIveRunDateFormatting.dayLabel(entry.dayStart))
-                                    .font(.appItemName)
-                                    .foregroundColor(AppTheme.inkPrimary)
-                                Text(AppEnglish.collectionEntryHead(formatTemperature(entry.feelsLikeF), entry.condition) + AppEnglish.mimFirstLookWeatherItems(entry.itemNames.count))
-                                    .font(.appFootnote)
-                                    .foregroundColor(AppTheme.inkSecondary)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.appFootnote.weight(.semibold))
-                                .foregroundColor(AppTheme.inkMuted)
+                    // RW-158 (user ruling, Nov 10, 2026): the
+                    // tap route is the pure policy's decision —
+                    // a PAST entry opens the Share Studio sheet
+                    // directly; today's (or a future planned)
+                    // entry keeps its day view, unchanged.
+                    if WearIveRunTapPolicy.chapterEntryDestination(for: entry) == .shareSheet {
+                        Button {
+                            shareEntry = entry
+                        } label: {
+                            dayRowLabel(entry)
                         }
-                        .padding(12)
-                        .background(RoundedRectangle(cornerRadius: 14).fill(AppTheme.sheet))
+                        .buttonStyle(.plain)
+                    } else {
+                        NavigationLink {
+                            WearIveRunDayView(
+                                entry: entry,
+                                formatTemperature: formatTemperature,
+                                genderPreference: genderPreference,
+                                onDelete: { model.removeEntry(id: entry.id) },
+                                onHeroRecovered: { model.healHeroReference(entryID: $0.id, durableReference: $1) }
+                            )
+                        } label: {
+                            dayRowLabel(entry)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                     // Fix wave 2026-11-07 (RW-122, iOS half):
                     // per-entry delete in the collection — the
                     // row's own trash, beside (never inside) the
-                    // navigation target.
+                    // navigation target. RW-152 §4 (J1): routed
+                    // through the delete policy — past entries
+                    // confirm first, today's deletes in one tap.
                     Button {
-                        model.removeEntry(id: entry.id)
+                        requestDelete(entry)
                     } label: {
                         Image(systemName: "trash")
                             .font(.appFootnote.weight(.semibold))
@@ -429,6 +613,25 @@ struct WearIveRunDayView: View {
     let entry: WearIveRunEntry
     let formatTemperature: (Double) -> String
     let genderPreference: GenderPreference
+    /// RW-152 §4: the day view's own delete affordance — the
+    /// host (collection / chapter) binds it to
+    /// `WearIveRunCollection.removing(id:)` for this entry.
+    /// Nil in seats that only present the day (no delete).
+    var onDelete: (() -> Void)? = nil
+    /// RW-159/RW-160: a bank re-link recovery for this entry is
+    /// persisted through here (the host's collection model).
+    var onHeroRecovered: ((WearIveRunEntry, String) -> Void)? = nil
+
+    @Environment(\.dismiss) private var dismiss
+    /// RW-152 §4 (J1): this (past) entry awaiting its delete
+    /// confirmation.
+    @State private var pendingDelete: WearIveRunEntry?
+    /// RW-152 §3: the entry's hero URL, resolved through the
+    /// one resolver (a storage path re-signs on appearance).
+    @State private var resolvedHeroURL: String?
+    private var heroURLString: String? {
+        resolvedHeroURL ?? HeroRefResolver.stableDisplayReference(for: entry)
+    }
 
     /// GEN-6 (RW-31 Wave B): sharing opens ONE Share Studio —
     /// the chapter page's two plain text buttons and the
@@ -437,6 +640,174 @@ struct WearIveRunDayView: View {
     /// Fix wave 2026-11-07 (RW-133): the entry's photograph,
     /// tapped, opens fitted full-screen.
     @State private var showPhotoViewer = false
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                // GEN-6 (DA-05, iOS instance): the day-view hero
+                // renders through the protected HeroPhoto crop
+                // (top-anchored, face-preserving) like every other
+                // hero surface — the bare centre fill here was the
+                // one hero-class surface still centre-cropping.
+                GeometryReader { geo in
+                    AsyncImage(url: heroURLString.flatMap { URL(string: $0) }) { phase in
+                        switch phase {
+                        case .success(let image):
+                            HeroPhoto(image: image, width: geo.size.width, height: geo.size.height)
+                        default:
+                            Rectangle().fill(AppTheme.cardOnSheet)
+                        }
+                    }
+                }
+                .frame(height: 300)
+                .clipped()
+                .cornerRadius(16)
+                // RW-133: the entry's photograph opens fitted
+                // full-screen, stored frame as-is.
+                .onTapGesture { showPhotoViewer = true }
+                .fullScreenCover(isPresented: $showPhotoViewer) {
+                    HeroPhotoViewer(
+                        imageURL: heroURLString,
+                        caption: entry.itemNames.joined(separator: " · ")
+                    )
+                }
+
+                Text("\(formatTemperature(entry.feelsLikeF)) feels like · \(entry.condition)")
+                    .font(.appSectionTitle)
+                    .foregroundColor(AppTheme.inkPrimary)
+                Text("Actual \(formatTemperature(entry.actualF)) · \(entry.placeDisplayName)")
+                    .font(.appSecondary)
+                    .foregroundColor(AppTheme.inkSecondary)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(entry.itemNames, id: \.self) { name in
+                        Text(name)
+                            .font(.appSecondary)
+                            .foregroundColor(AppTheme.inkPrimary)
+                    }
+                }
+
+                // GEN-6 (RW-31 §4.1): ONE full-width row opens
+                // the Share Studio — card choice with live
+                // previews, the size control, the caption
+                // choice, and the one pine Share button.
+                Button {
+                    showStudio = true
+                } label: {
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Share this day")
+                                .font(.appItemName)
+                                .foregroundColor(AppTheme.inkPrimary)
+                            Text("Postcard or Kit Card, with the day's caption.")
+                                .font(.appFootnote)
+                                .foregroundColor(AppTheme.inkSecondary)
+                        }
+                        Spacer()
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.appItemName)
+                            .foregroundColor(AppTheme.pinePayload)
+                    }
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: 16).fill(AppTheme.sheet))
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 8)
+
+                // RW-152 §4: the day view's own trash — every
+                // entry card carries the affordance. J1: a PAST
+                // entry confirms first (the confirmation names
+                // the place and the date); today's entry deletes
+                // in one tap. Either way the view dismisses —
+                // the entry it presented is gone.
+                if let onDelete {
+                    Button(role: .destructive) {
+                        if WearIveRunDeletePolicy.requiresConfirmation(for: entry) {
+                            pendingDelete = entry
+                        } else {
+                            onDelete()
+                            dismiss()
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "trash")
+                            Text("Delete this entry")
+                        }
+                        .font(.appSecondary.weight(.semibold))
+                    }
+                    .padding(.top, 4)
+                }
+            }
+            .padding(16)
+        }
+        .background(AppTheme.background.ignoresSafeArea())
+        .navigationTitle(WearIveRunDateFormatting.dayLabel(entry.dayStart))
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showStudio) {
+            // RW-158: the day view's Share row presents the
+            // same Share Studio host the chapter rows and the
+            // expanded panel present directly for past entries.
+            WearIveRunShareStudioHost(
+                entry: entry,
+                formatTemperature: formatTemperature,
+                genderPreference: genderPreference,
+                onHeroRecovered: onHeroRecovered
+            )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
+        // RW-152 §3: resolve the hero through the one resolver
+        // (a personal hero's storage path re-signs here).
+        // RW-159: the RECOVERING resolution — an empty-ref entry
+        // re-links from the bank so the day view's hero (and its
+        // full-photo tap) heal with the cover.
+        .task {
+            resolvedHeroURL = await HeroRefRuntime.loadableURLString(
+                for: entry, gender: genderPreference,
+                onRecovered: { recovered in
+                    onHeroRecovered?(entry, recovered)
+                })
+        }
+        // RW-152 §4 (J1): the past-entry delete confirmation —
+        // confirming deletes and leaves the day view.
+        .modifier(WearIveRunDeleteConfirmation(
+            pending: $pendingDelete,
+            onConfirm: { _ in
+                onDelete?()
+                dismiss()
+            }))
+    }
+
+}
+
+// MARK: - Share Studio host (GEN-6 machinery; RW-158 direct entry)
+//
+// The Share Studio's owning view: the two render slots, the
+// export-format state, the caption input, and the two render
+// pipelines (moved verbatim from WearIveRunDayView, where this
+// machinery previously lived). RW-158 (user ruling, Nov 10,
+// 2026): a PAST entry's tap opens this sheet DIRECTLY from the
+// chapter's day rows and from the expanded panel's entry row —
+// the day view's "Share this day" row presents this same host,
+// so every door leads to the one designed share interface.
+// Opening the sheet shares nothing: the Studio's own Share
+// button is the only path to the system share sheet. The
+// poster pipeline loads its base through the ONE resolver
+// (HeroRefRuntime.loadableURLString — RW-152 §3), so an OLD
+// entry whose stored display reference is an EXPIRED signed
+// URL still renders its poster via its durable reference.
+
+struct WearIveRunShareStudioHost: View {
+    let entry: WearIveRunEntry
+    let formatTemperature: (Double) -> String
+    let genderPreference: GenderPreference
+    /// RW-160 (device verdict, Nov 10, 2026): a bank re-link
+    /// recovery for this entry, reported by the poster pipeline
+    /// for persistence on the entry (the host's model heals it,
+    /// so the recovery happens once).
+    var onHeroRecovered: ((WearIveRunEntry, String) -> Void)? = nil
+
     /// The Studio's chosen export format. The render slots'
     /// keys carry it, so each (card, format) pair renders at
     /// most once and is cached process-wide.
@@ -508,111 +879,30 @@ struct WearIveRunDayView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                // GEN-6 (DA-05, iOS instance): the day-view hero
-                // renders through the protected HeroPhoto crop
-                // (top-anchored, face-preserving) like every other
-                // hero surface — the bare centre fill here was the
-                // one hero-class surface still centre-cropping.
-                GeometryReader { geo in
-                    AsyncImage(url: URL(string: entry.heroImageReference)) { phase in
-                        switch phase {
-                        case .success(let image):
-                            HeroPhoto(image: image, width: geo.size.width, height: geo.size.height)
-                        default:
-                            Rectangle().fill(AppTheme.cardOnSheet)
-                        }
-                    }
-                }
-                .frame(height: 300)
-                .clipped()
-                .cornerRadius(16)
-                // RW-133: the entry's photograph opens fitted
-                // full-screen, stored frame as-is.
-                .onTapGesture { showPhotoViewer = true }
-                .fullScreenCover(isPresented: $showPhotoViewer) {
-                    HeroPhotoViewer(
-                        imageURL: entry.heroImageReference,
-                        caption: entry.itemNames.joined(separator: AppStrings.wirSubtitleJoin)
-                    )
-                }
-
-                Text(AppEnglish.collectionEntryHead(formatTemperature(entry.feelsLikeF), entry.condition))
-                    .font(.appSectionTitle)
-                    .foregroundColor(AppTheme.inkPrimary)
-                Text(AppStrings.collectionEntryActual(formatTemperature(entry.actualF), entry.placeDisplayName))
-                    .font(.appSecondary)
-                    .foregroundColor(AppTheme.inkSecondary)
-
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(entry.itemNames, id: \.self) { name in
-                        Text(name)
-                            .font(.appSecondary)
-                            .foregroundColor(AppTheme.inkPrimary)
-                    }
-                }
-
-                // GEN-6 (RW-31 §4.1): ONE full-width row opens
-                // the Share Studio — card choice with live
-                // previews, the size control, the caption
-                // choice, and the one pine Share button.
-                Button {
-                    showStudio = true
-                } label: {
-                    HStack(spacing: 12) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(AppStrings.collectionShareDay)
-                                .font(.appItemName)
-                                .foregroundColor(AppTheme.inkPrimary)
-                            Text(AppStrings.collectionShareDaySub)
-                                .font(.appFootnote)
-                                .foregroundColor(AppTheme.inkSecondary)
-                        }
-                        Spacer()
-                        Image(systemName: "square.and.arrow.up")
-                            .font(.appItemName)
-                            .foregroundColor(AppTheme.pinePayload)
-                    }
-                    .padding(14)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(RoundedRectangle(cornerRadius: 16).fill(AppTheme.sheet))
-                }
-                .buttonStyle(.plain)
-                .padding(.top, 8)
-            }
-            .padding(16)
-        }
-        .background(AppTheme.background.ignoresSafeArea())
-        .navigationTitle(WearIveRunDateFormatting.dayLabel(entry.dayStart))
-        .navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $showStudio) {
-            ShareStudioView(
-                entry: entry,
-                captionInput: captionInput,
-                posterMoment: moments.poster,
-                formatTemperature: formatTemperature,
-                genderPreference: genderPreference,
-                posterSlot: posterSlot,
-                kitSlot: kitSlot,
-                exportContext: exportContext,
-                format: $shareFormat,
-                excludedKitKeys: excludedKitKeys,
-                onFormatChanged: {
-                    requestPoster()
-                    requestKit()
-                },
-                onRetry: { kind in
-                    if kind == .poster { requestPoster(force: true) } else { requestKit(force: true) }
-                },
-                onRemoveGarment: { key in
-                    excludedKitKeys.insert(key)
-                    requestKit(force: true)
-                }
-            )
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
-        }
+        ShareStudioView(
+            entry: entry,
+            captionInput: captionInput,
+            posterMoment: moments.poster,
+            formatTemperature: formatTemperature,
+            genderPreference: genderPreference,
+            posterSlot: posterSlot,
+            kitSlot: kitSlot,
+            exportContext: exportContext,
+            format: $shareFormat,
+            excludedKitKeys: excludedKitKeys,
+            onFormatChanged: {
+                requestPoster()
+                requestKit()
+            },
+            onRetry: { kind in
+                if kind == .poster { requestPoster(force: true) } else { requestKit(force: true) }
+            },
+            onRemoveGarment: { key in
+                excludedKitKeys.insert(key)
+                requestKit(force: true)
+            },
+            onHeroRecovered: onHeroRecovered
+        )
         // Pre-warm BOTH cards on appearance, as two independent
         // pipelines — neither waits for the other, and each slot
         // renders at most once per (entry, format) key.
@@ -622,27 +912,85 @@ struct WearIveRunDayView: View {
 
     // MARK: Render requests (slot-deduped, keyed by format)
 
+    /// RW-168 (Nov 11, 2026): the ONE card-render pipeline,
+    /// shared with the home menu's direct save — this host's
+    /// slots render through it, and "Save to photos" renders
+    /// through it, so both doors produce the identical card.
+    private var cardRenderer: ShareCardRenderer {
+        ShareCardRenderer(
+            entry: entry,
+            formatTemperature: formatTemperature,
+            genderPreference: genderPreference,
+            onHeroRecovered: onHeroRecovered,
+            exportContext: exportContext,
+            excludedKitKeys: excludedKitKeys
+        )
+    }
+
     @MainActor
     private func requestPoster(force: Bool = false) {
         let format = shareFormat
+        let renderer = cardRenderer
         if force {
-            posterSlot.forceRequest(key: posterKey(format: format)) { await renderPosterImage(format: format) }
+            posterSlot.forceRequest(key: posterKey(format: format)) { await renderer.renderPosterImage(format: format) }
         } else {
-            posterSlot.request(key: posterKey(format: format)) { await renderPosterImage(format: format) }
+            posterSlot.request(key: posterKey(format: format)) { await renderer.renderPosterImage(format: format) }
         }
     }
 
     @MainActor
     private func requestKit(force: Bool = false) {
         let format = shareFormat
+        let renderer = cardRenderer
         if force {
-            kitSlot.forceRequest(key: kitKey(format: format)) { await renderKitImage(format: format) }
+            kitSlot.forceRequest(key: kitKey(format: format)) { await renderer.renderKitImage(format: format) }
         } else {
-            kitSlot.request(key: kitKey(format: format)) { await renderKitImage(format: format) }
+            kitSlot.request(key: kitKey(format: format)) { await renderer.renderKitImage(format: format) }
         }
     }
 
-    // MARK: Render pipelines
+}
+
+
+// MARK: - Share card renderer (RW-168 extraction, Nov 11, 2026)
+//
+// The Studio host's two render pipelines, extracted VERBATIM
+// (RW-158/RW-160 behaviour unchanged) into a standalone value
+// so the home menu's "Save to photos" renders today's card
+// through the SAME pipeline the Studio uses — one composition,
+// one export render, identical artifacts from both doors. The
+// host above drives it through its slots; the home save drives
+// it directly and writes the result to the photo library.
+
+struct ShareCardRenderer {
+    let entry: WearIveRunEntry
+    let formatTemperature: (Double) -> String
+    let genderPreference: GenderPreference
+    var onHeroRecovered: ((WearIveRunEntry, String) -> Void)? = nil
+    let exportContext: ShareExportContext
+    var excludedKitKeys: Set<String> = []
+
+    /// The day's moment in its poster form (the host computes
+    /// the same forms for its captions via ShareMomentResolver).
+    private var moments: (caption: String, poster: String, isPastChapter: Bool) {
+        ShareMomentResolver.forms(
+            momentReading: entry.momentReading,
+            dayStart: entry.dayStart,
+            lastSavedAt: entry.lastSavedAt,
+            now: Date()
+        )
+    }
+
+    /// Render one card of `kind` at `format` — the direct-save
+    /// door (the host uses the per-kind pipelines through its
+    /// slots instead).
+    func renderImage(kind: ShareCardKind, format: ShareExportFormat) async -> UIImage? {
+        switch kind {
+        case .poster: return await renderPosterImage(format: format)
+        case .kit: return await renderKitImage(format: format)
+        }
+    }
+
 
     /// Poster pipeline: hero download → poster-size downscale
     /// (off the main actor) → face-anchor resolution (stored →
@@ -651,7 +999,7 @@ struct WearIveRunDayView: View {
     /// load FAILS the slot (GEN-5 FA-25) — never a photo-less
     /// dark rectangle — and a composition that would clip the
     /// face cannot be produced (§4.3.3).
-    private func renderPosterImage(format: ShareExportFormat) async -> UIImage? {
+    func renderPosterImage(format: ShareExportFormat) async -> UIImage? {
         guard let base = await loadHeroBase() else { return nil }
         let anchor = base.anchor
         let hero = base.image
@@ -686,7 +1034,7 @@ struct WearIveRunDayView: View {
     /// load is recorded on the export context and FAILS the
     /// slot — the Studio holds the share in its labeled error
     /// state until retry or removal (RW-31 §7.2).
-    private func renderKitImage(format: ShareExportFormat) async -> UIImage? {
+    func renderKitImage(format: ShareExportFormat) async -> UIImage? {
         let thumbnails = await loadKitThumbnails()
         let included = Array(ShareKitCardModel.orderedItems(names: entry.itemNames, keys: entry.itemKeys)
             .filter { !excludedKitKeys.contains($0.key) }
@@ -740,8 +1088,23 @@ struct WearIveRunDayView: View {
     /// anchor: the day record's stored anchor when one exists,
     /// else on-device Vision face detection, else the default
     /// upper-middle composition point (never the centre).
-    private func loadHeroBase() async -> (image: UIImage, anchor: ShareFaceAnchor)? {
-        guard let url = URL(string: entry.heroImageReference),
+    func loadHeroBase() async -> (image: UIImage, anchor: ShareFaceAnchor)? {
+        // RW-152 §3: the poster pipeline loads through the one
+        // resolver too — the stored display URL's signed hour
+        // may be long past; the durable reference re-signs.
+        // RW-160 (device verdict, Nov 10, 2026): the RECOVERING
+        // resolution — build 27's New York Nov 9 Postcard failed
+        // ("Your Postcard couldn't be made") while its Kit Card
+        // rendered, because the entry settled with an EMPTY
+        // reference: the plain resolver had nothing to re-sign,
+        // this load returned nil, and the poster slot failed.
+        // The entry's bank hero exists; the re-link finds it.
+        guard let urlString = await HeroRefRuntime.loadableURLString(
+                for: entry, gender: genderPreference,
+                onRecovered: { recovered in
+                    onHeroRecovered?(entry, recovered)
+                }),
+              let url = URL(string: urlString),
               let (data, _) = try? await Self.heroFetchSession.data(from: url),
               let image = UIImage(data: data) else { return nil }
         let downscaled = await Task.detached(priority: .userInitiated) {
@@ -770,8 +1133,7 @@ struct WearIveRunDayView: View {
         else { return nil }
         let box = face.boundingBox // Vision space: y-up
         return CGRect(x: box.minX, y: 1 - box.maxY, width: box.width, height: box.height)
-    }
-}
+    }}
 
 // MARK: - Share export context (GEN-6, RW-31 §7)
 //
@@ -818,6 +1180,9 @@ struct ShareStudioView: View {
     var onFormatChanged: () -> Void
     var onRetry: (ShareCardKind) -> Void
     var onRemoveGarment: (String) -> Void
+    /// RW-160: forwarded from the host — the preview's photo
+    /// resolution recovers (and persists) like the poster's.
+    var onHeroRecovered: ((WearIveRunEntry, String) -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
@@ -828,6 +1193,17 @@ struct ShareStudioView: View {
     @State private var editorDraft = ""
     @State private var verifyFailed = false
     @State private var activityPresented = false
+    /// RW-158: the poster preview, tapped, opens the entry's
+    /// full-screen photograph (RW-133) — the full-photo
+    /// affordance stays reachable from inside the sheet
+    /// (WearIveRunTapPolicy.sharePreviewDestination). The URL
+    /// resolves through the ONE resolver (RW-152 §3), so an
+    /// old entry's expired signed reference re-signs here too.
+    @State private var showPreviewPhoto = false
+    @State private var previewHeroURL: String?
+    private var previewHeroURLString: String? {
+        previewHeroURL ?? HeroRefResolver.stableDisplayReference(for: entry)
+    }
 
     private var orderedCaptions: [(template: ShareCaptionTemplate, text: String)] {
         ShareCaptionComposer.orderedCaptions(for: captionInput)
@@ -920,14 +1296,33 @@ struct ShareStudioView: View {
                 .ignoresSafeArea()
             }
         }
+        // RW-158: the poster preview's full-screen photo
+        // (RW-133) — the stored frame fitted whole, one quiet
+        // caption line, exactly as the day view presents it.
+        .fullScreenCover(isPresented: $showPreviewPhoto) {
+            HeroPhotoViewer(
+                imageURL: previewHeroURLString,
+                caption: entry.itemNames.joined(separator: " · ")
+            )
+        }
+        // RW-158 / RW-152 §3: resolve the preview photo's URL
+        // through the one resolver (a storage path re-signs).
+        // RW-160: the recovering form, like the poster pipeline.
+        .task {
+            previewHeroURL = await HeroRefRuntime.loadableURLString(
+                for: entry, gender: genderPreference,
+                onRecovered: { recovered in
+                    onHeroRecovered?(entry, recovered)
+                })
+        }
     }
 
     // MARK: First movement — the card
 
     private var formatChoice: some View {
         HStack(alignment: .top, spacing: 12) {
-            formatCard(kind: .poster, name: AppStrings.collectionPoster, slot: posterSlot)
-            formatCard(kind: .kit, name: AppStrings.collectionKitCard, slot: kitSlot)
+            formatCard(kind: .poster, name: "Postcard", slot: posterSlot)
+            formatCard(kind: .kit, name: "Kit Card", slot: kitSlot)
         }
     }
 
@@ -1013,6 +1408,18 @@ struct ShareStudioView: View {
                 .frame(maxWidth: .infinity)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
                 .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
+                // RW-158: the POSTER preview is tappable — it
+                // opens the entry's photograph full-screen
+                // (RW-133's hero rule), so routing past entries
+                // straight to this sheet did not retire the
+                // full-photo affordance. (The Kit Card preview
+                // carries no photograph to open.)
+                .onTapGesture {
+                    if selectedKind == .poster,
+                       WearIveRunTapPolicy.sharePreviewDestination == .fullPhoto {
+                        showPreviewPhoto = true
+                    }
+                }
         }
     }
 

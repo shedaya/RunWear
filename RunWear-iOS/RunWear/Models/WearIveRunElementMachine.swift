@@ -355,3 +355,154 @@ enum WearIveRunElementDimming {
         !sheetPresented
     }
 }
+
+// MARK: - RB-01 / R-1 (RW-135 rebuild, Nov 12, 2026) — the footer zone
+//
+// R-1 RULING (Sol, Nov 12, 2026, via the Phase 1 conformance
+// map): reaching the page end presents the expanded form;
+// scrolling away from the page end re-docks it to MINI. The
+// A′ handoff trigger was retired with the in-flow footer and
+// nothing replaced it in 1.2.34/build 30 — the element machine
+// above carries `scrolledToEnd` in its vocabulary, but no host
+// ever fed it. This zone + the expansion policy below are the
+// replacement trigger, fed from WeatherOutfitView's real
+// scroll geometry (ScrollGeometry: content size, container
+// size, content offset, content insets).
+
+enum WearIveRunFooterZone {
+    /// The remaining scroll distance to the content's end,
+    /// from a scroll view's geometry values: how far the
+    /// current offset sits above the maximum offset. Negative
+    /// when the scroll rests past the end (rubber-banding /
+    /// a content height that shrank under the offset).
+    static func distanceToEnd(
+        contentHeight: Double, contentInsetsBottom: Double,
+        containerHeight: Double, contentOffsetY: Double
+    ) -> Double {
+        contentHeight + contentInsetsBottom - containerHeight - contentOffsetY
+    }
+
+    /// The footer zone: the content end is within ~one
+    /// viewport of the scroll's bottom edge (the task's
+    /// definition, from the actual geometry values). Content
+    /// that does not fill a viewport is at its end already.
+    static func isAtFooter(distanceToEnd: Double, viewportHeight: Double) -> Bool {
+        guard viewportHeight > 0 else { return distanceToEnd <= 0 }
+        return distanceToEnd <= viewportHeight
+    }
+}
+
+// MARK: - RB-01 / R-1 — the expansion decision (pure)
+//
+// expanded = userSummoned || (atFooter && !footerSuppressed)
+//
+// - A tap-summoned expansion persists until an explicit
+//   collapse (chevron / glide-up): scroll events never clear
+//   `userSummoned`.
+// - A footer-presented expansion re-docks to MINI when the
+//   scroll leaves the footer zone.
+// - An explicit collapse WHILE at the footer sets
+//   `footerSuppressed`, so the still-standing footer does not
+//   instantly re-present the panel; the suppression clears
+//   the moment the scroll leaves the footer zone, so the
+//   next arrival presents it again.
+struct WearIveRunExpansionPolicy: Equatable {
+    /// The user summoned the expanded form by tap (body or
+    /// toggle control — the same action).
+    private(set) var userSummoned = false
+    /// The scroll currently stands in the footer zone.
+    private(set) var atFooter = false
+    /// An explicit collapse happened while at the footer;
+    /// the footer must not re-present until the scroll has
+    /// left the zone.
+    private(set) var footerSuppressed = false
+
+    /// The R-1 decision, verbatim.
+    var isExpanded: Bool {
+        userSummoned || (atFooter && !footerSuppressed)
+    }
+
+    /// Tap on the bar body or the toggle control: the SAME
+    /// action from either target. From expanded it is the
+    /// explicit collapse; from mini it summons.
+    mutating func userToggled() {
+        if isExpanded {
+            userCollapsed()
+        } else {
+            userSummoned = true
+        }
+    }
+
+    /// Explicit collapse (chevron / glide-up). Clears the
+    /// summon; while at the footer it also suppresses the
+    /// footer's presentation until the scroll leaves.
+    mutating func userCollapsed() {
+        userSummoned = false
+        if atFooter { footerSuppressed = true }
+    }
+
+    /// The scroll geometry's footer-zone verdict changed.
+    /// Entering the zone presents (unless suppressed);
+    /// leaving it re-docks a footer-presented form, clears
+    /// any suppression, and never touches a tap summon.
+    mutating func scrollChanged(atFooter newValue: Bool) {
+        atFooter = newValue
+        if !newValue { footerSuppressed = false }
+    }
+}
+
+// MARK: - Audit sweep (RW-135 rebuild) — the §4.7 exit split
+//
+// One host progress value (0 = at rest, 1 = fully exited)
+// drives the delete/session-end exit, but its MEANING splits
+// by the form the exit starts from (spec §4.7):
+// - from MINI: fade + 26 pt sink over the 300 ms exit — the
+//   height is released when the surface leaves, not folded;
+// - from EXPANDED: the content fades over the first 160 ms,
+//   THEN the height folds over the remaining 400 ms
+//   (560 ms total), with no sink.
+// Reduced Motion (§5): a 200 ms fade, no sink, height snaps
+// (the scale stays 1 — the snap is the surface's removal).
+enum WearIveRunExitPolicy {
+    /// Total exit length from MINI (300 ms exit curve).
+    static let miniDurationSeconds: Double = 0.30
+    /// The expanded exit's content-fade segment (160 ms).
+    static let expandedFadeSeconds: Double = 0.16
+    /// Total exit length from EXPANDED (160 fade + 400 fold).
+    static let expandedDurationSeconds: Double = 0.56
+    /// Reduced Motion: a 200 ms fade.
+    static let reducedMotionDurationSeconds: Double = 0.20
+    /// The MINI exit's sink (§4.7: 26 pt).
+    static let sinkPoints: Double = 26
+
+    static func durationSeconds(fromExpanded: Bool, reduceMotion: Bool) -> Double {
+        if reduceMotion { return reducedMotionDurationSeconds }
+        return fromExpanded ? expandedDurationSeconds : miniDurationSeconds
+    }
+
+    /// Content opacity at host progress `q`.
+    static func opacity(progress q: Double, fromExpanded: Bool, reduceMotion: Bool) -> Double {
+        let q = min(1, max(0, q))
+        if reduceMotion || !fromExpanded { return 1 - q }
+        // Expanded: the fade completes inside its 160 ms
+        // segment of the 560 ms total.
+        let fadeFraction = expandedFadeSeconds / expandedDurationSeconds
+        return 1 - min(1, q / fadeFraction)
+    }
+
+    /// Height scale at host progress `q` (1 = no fold).
+    static func heightScale(progress q: Double, fromExpanded: Bool, reduceMotion: Bool) -> Double {
+        let q = min(1, max(0, q))
+        if reduceMotion || !fromExpanded { return 1 }
+        // Expanded: the fold starts only after the fade.
+        let fadeFraction = expandedFadeSeconds / expandedDurationSeconds
+        guard q > fadeFraction else { return 1 }
+        return 1 - (q - fadeFraction) / (1 - fadeFraction)
+    }
+
+    /// Vertical sink at host progress `q` (MINI only).
+    static func sink(progress q: Double, fromExpanded: Bool, reduceMotion: Bool) -> Double {
+        if reduceMotion || fromExpanded { return 0 }
+        return sinkPoints * min(1, max(0, q))
+    }
+}
