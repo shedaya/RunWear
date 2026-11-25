@@ -322,31 +322,48 @@ serve(async (req) => {
       }
     }
 
-    // Sequential single-row inserts, in forecast order: the worker
-    // claims by (priority, requested_at) and a multi-row insert
-    // stamps one transaction timestamp on every row, which would
-    // scramble the forecast order.
-    let enqueued = 0
-    let enqueuedCurrentCell = false
+    // RW-179b (ported from the deployed fix, 2026-11-25): enqueue
+    // through the atomic dedupe RPC (enqueue_personal_look_jobs).
+    // The haveHero/haveJob pre-filter stays (it keeps this cheap),
+    // but the RPC is the guarantee: it re-checks under a per-account
+    // advisory lock and stamps requested_at in array order, so two
+    // fills racing each other — the 2026-11-25 incident produced
+    // 96 jobs for ~52 cells, most cells holding two active
+    // duplicates ~20 ms apart — can no longer both insert the same
+    // cell. (The RPC's per-position requested_at stamps supersede
+    // the old sequential-single-row-insert discipline, which
+    // existed only to keep forecast order in requested_at: the
+    // worker claims by (priority, requested_at) and a plain
+    // multi-row insert would stamp one transaction timestamp on
+    // every row.)
+    const rowsToInsert: Record<string, unknown>[] = []
+    let headWanted = false
     for (let idx = 0; idx < wanted.length; idx++) {
       const c = wanted[idx]
       const combinationId = c.combination_id as string
       if (haveHero.has(combinationId) || haveJob.has(combinationId)) continue
       const { core: _core, ...cell } = c
       const isCurrentCell = idx === 0
-      const { error: insertError } = await sb
-        .from('personal_generation_jobs')
-        .insert({
-          ...cell,
-          user_id: userId,
-          kind: 'subscriber_fill',
-          priority: isCurrentCell ? PRIORITY_CURRENT_CELL : PRIORITY_FORECAST,
-          epoch,
-          status: 'QUEUED'
-        })
-      if (insertError) throw insertError
-      enqueued++
-      if (isCurrentCell) enqueuedCurrentCell = true
+      if (isCurrentCell) headWanted = true
+      rowsToInsert.push({
+        ...cell,
+        kind: 'subscriber_fill',
+        priority: isCurrentCell ? PRIORITY_CURRENT_CELL : PRIORITY_FORECAST,
+        epoch
+      })
+    }
+    let enqueued = 0
+    let enqueuedCurrentCell = false
+    if (rowsToInsert.length > 0) {
+      const { data: enqueueResult, error: enqueueError } = await sb.rpc(
+        'enqueue_personal_look_jobs', { p_user_id: userId, p_jobs: rowsToInsert })
+      if (enqueueError) throw enqueueError
+      enqueued = (enqueueResult?.inserted as number | undefined) ?? 0
+      const skippedCells = new Set(
+        ((enqueueResult?.skipped ?? []) as { combination_id: string }[])
+          .map(s => s.combination_id))
+      enqueuedCurrentCell = headWanted &&
+        !skippedCells.has(wanted[0].combination_id as string)
     }
 
     if (enqueued > 0 || currentCellPromoted) {

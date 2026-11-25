@@ -571,25 +571,42 @@ serve(async (req) => {
         }, 403)
       }
 
-      const { data: job, error: jobError } = await sb
-        .from('personal_generation_jobs')
-        .insert({
-          user_id: user.id,
-          combination_id: cell.combinationId,
-          gender: cell.gender,
-          weather: cell.weather,
-          temp_bracket: cell.tempBracket,
-          time_of_day: cell.timeOfDay,
-          outfit_signature: cell.signature,
-          outfit_items: itemKeys,
-          // prompt is built by the worker from the canonical template
-          kind: isRegeneration ? 'regeneration' : 'free_on_demand',
-          priority: isRegeneration ? PRIORITY_REGENERATION : PRIORITY_FREE_ON_DEMAND,
-          status: 'QUEUED'
+      // RW-179b (ported from the deployed fix, 2026-11-25): enqueue
+      // through the atomic dedupe RPC (enqueue_personal_look_jobs).
+      // The active-job pre-check above stays (it drives the
+      // already_queued response), but the RPC re-checks under a
+      // per-account advisory lock, so a request racing another
+      // enqueue for the same cell cannot create a second active job.
+      const { data: enqueueResult, error: jobError } = await sb.rpc(
+        'enqueue_personal_look_jobs', {
+          p_user_id: user.id,
+          p_jobs: [{
+            combination_id: cell.combinationId,
+            gender: cell.gender,
+            weather: cell.weather,
+            temp_bracket: cell.tempBracket,
+            time_of_day: cell.timeOfDay,
+            outfit_signature: cell.signature,
+            outfit_items: itemKeys,
+            // prompt is built by the worker from the canonical template
+            kind: isRegeneration ? 'regeneration' : 'free_on_demand',
+            priority: isRegeneration ? PRIORITY_REGENERATION : PRIORITY_FREE_ON_DEMAND,
+            epoch: (profile.photo_epoch as number | undefined) ?? 0
+          }]
         })
-        .select('id')
-        .single()
       if (jobError) throw jobError
+      const insertedJobId = (enqueueResult?.inserted_ids as string[] | undefined)?.[0]
+      if (!insertedJobId) {
+        // A racing enqueue won the cell between the pre-check and
+        // this call; its active job covers the request.
+        const existingJobId =
+          (enqueueResult?.skipped as { job_id: string }[] | undefined)?.[0]?.job_id ?? null
+        return jsonResponse({
+          status: 'already_queued', job_id: existingJobId,
+          combination_id: cell.combinationId
+        })
+      }
+      const job = { id: insertedJobId }
 
       // RW-16.12 Lane C: a request that retries a 'failed' cell puts
       // its cycle back in flight ('pending'); regen_error is kept
@@ -681,24 +698,27 @@ serve(async (req) => {
       let jobId: string | null = null
       if (!active || active.length === 0) {
         const parts = (hero.combination_id as string).split('_')
-        const { data: job, error: jobError } = await sb
-          .from('personal_generation_jobs')
-          .insert({
-            user_id: user.id,
-            combination_id: hero.combination_id,
-            gender: parts[0], weather: parts[1],
-            temp_bracket: parts[2], time_of_day: parts[3],
-            outfit_signature: parts[4],
-            outfit_items: hero.outfit_items,
-            kind: 'regeneration',
-            priority: PRIORITY_REGENERATION,
-            status: 'QUEUED'
+        // RW-179b (ported from the deployed fix, 2026-11-25):
+        // enqueue through the atomic dedupe RPC (see the request
+        // action above) — the pre-check stays, the RPC is the
+        // race-proof guarantee.
+        const { data: enqueueResult, error: jobError } = await sb.rpc(
+          'enqueue_personal_look_jobs', {
+            p_user_id: user.id,
+            p_jobs: [{
+              combination_id: hero.combination_id,
+              gender: parts[0], weather: parts[1],
+              temp_bracket: parts[2], time_of_day: parts[3],
+              outfit_signature: parts[4],
+              outfit_items: hero.outfit_items,
+              kind: 'regeneration',
+              priority: PRIORITY_REGENERATION,
+              epoch: (profile.photo_epoch as number | undefined) ?? 0
+            }]
           })
-          .select('id')
-          .single()
         if (jobError) throw jobError
-        jobId = job.id
-        kickWorker()
+        jobId = (enqueueResult?.inserted_ids as string[] | undefined)?.[0] ?? null
+        if (jobId !== null) kickWorker()
       }
 
       return jsonResponse({
