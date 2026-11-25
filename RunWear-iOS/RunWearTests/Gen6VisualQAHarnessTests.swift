@@ -546,13 +546,15 @@ final class Gen6VisualQAHarnessTests: XCTestCase {
         }
         host.view.setNeedsLayout()
         host.view.layoutIfNeeded()
-        // Force the layer tree to actually DISPLAY before it is
-        // rasterised: a hosting view commits its SwiftUI content
-        // to its layers on the display pass, and a tree that has
-        // only been laid out can rasterise empty (the hero's tree
-        // did exactly this in run 45686630707 — fully transparent
-        // captures while the mini bar's already-displayed tree
-        // rasterised with content).
+        // Force a display pass before rasterising, so the layer
+        // tree is in its displayed state when it is read. (This
+        // step is retained as the correct order of operations,
+        // but run 45691400685 proved it is NOT what the hero
+        // captures were missing: HeroImageView's tree rasterises
+        // fully transparent in-process with or without it, while
+        // every other hosted family rasterises with content.
+        // That hero-specific emptiness is an open harness item —
+        // see the debut-failures report of Nov 25, 2026.)
         host.view.setNeedsDisplay()
         host.view.layer.displayIfNeeded()
         CATransaction.flush()
