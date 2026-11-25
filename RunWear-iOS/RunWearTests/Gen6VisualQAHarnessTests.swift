@@ -523,23 +523,34 @@ final class Gen6VisualQAHarnessTests: XCTestCase {
     // bar likewise measures its own heights through appear/layout
     // cycles a static snapshot never runs, and rendered blank.
     // Both surfaces are therefore re-rendered hosted in a real
-    // window with layout + a run-loop settle, then captured via
-    // drawHierarchy — the device compositing path.
+    // window with layout + a run-loop settle, then captured by
+    // rasterising the hosted layer tree in-process (the render-
+    // server snapshot path, drawHierarchy, is refused for every
+    // view in the CI test process — see writeHostedRender).
 
     @MainActor
     private func writeHostedRender<Content: View>(_ content: Content, size: CGSize, name: String) throws {
         let host = UIHostingController(rootView: content.frame(width: size.width, height: size.height))
-        // The window MUST belong to a window scene. A scene-less
-        // UIWindow(frame:) never composites on iOS 26: the render
-        // server refuses the snapshot ("Render server returned
-        // error for view") and drawHierarchy returns a pure-black
-        // bitmap. That vehicle failure — not the surfaces — is
-        // what failed every hosted test on the Nov 15 build-34
-        // gate and the Nov 25 train gate (every hosted capture in
-        // run 45674432273 errored identically; the same views
-        // render with content through ImageRenderer, and the
-        // hosted-only PNGs on both gates are single-colour).
-        // Root-caused and fixed Nov 25, 2026.
+        // Two vehicle requirements, both root-caused Nov 25, 2026
+        // from the gate xcresults (runs 43744102330, 45674432273,
+        // 45682261272) — the surfaces were never the problem: the
+        // same views render with content through ImageRenderer,
+        // and every hosted-only PNG on those gates is pure black.
+        //
+        // 1. The window must belong to a window scene, so the
+        //    hosted view gets real traits and layout. (A scene-less
+        //    UIWindow(frame:) was the original construction.)
+        // 2. The capture must NOT go through drawHierarchy: in the
+        //    CI test process the render server refuses every such
+        //    snapshot ("Render server returned error for view" for
+        //    every hosted capture, scene attached or not — the
+        //    scene fix alone changed nothing in run 45682261272).
+        //    The layer tree is therefore rasterised in-process.
+        //    Known fidelity limit of the in-process path: backdrop
+        //    sampling (the iOS 26 glass pill's live blur of what
+        //    sits behind it) is not composited — the pill's own
+        //    shape, tint and content are. Glass-on-device proof
+        //    remains a device item, as it was before this harness.
         let frame = CGRect(origin: .zero, size: size)
         let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
         let window: UIWindow
@@ -562,8 +573,8 @@ final class Gen6VisualQAHarnessTests: XCTestCase {
         host.view.layoutIfNeeded()
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = 2
-        let image = UIGraphicsImageRenderer(size: size, format: format).image { _ in
-            host.view.drawHierarchy(in: CGRect(origin: .zero, size: size), afterScreenUpdates: true)
+        let image = UIGraphicsImageRenderer(size: size, format: format).image { context in
+            host.view.layer.render(in: context.cgContext)
         }
         XCTAssertTrue(imageHasContent(image), "\(name) rendered blank (hosted)")
         let dir = artefactsDirectory()
