@@ -65,7 +65,7 @@
     <string name="mim_s18_photos_load_failed">내 사진을 불러올 수 없습니다</string>
     <string name="mim_s19_try_again">다시 시도</string>
     <string name="mim_s7_replace_note">사진을 교체하면 오늘의 룩이 바로 다시 만들어집니다. 다른 룩은 다시 만들어질 때 업데이트됩니다.</string>
-    <string name="mim_s20_epoch_rule">새 사진은 앞으로의 룩을 다시 만듭니다. Wear I\\'ve Run 컬렉션에 이미 있는 아웃핏은 절대 바뀌지 않습니다.</string>
+    <string name="mim_s20_epoch_rule">새 사진은 앞으로의 룩을 다시 만듭니다. Wear I\'ve Run 컬렉션에 이미 있는 아웃핏은 절대 바뀌지 않습니다.</string>
     <string name="mim_s8_state_b_subscribe_row">모든 아웃핏, 즉시</string>
     <string name="mim_s9_manage_subscription">구독 관리</string>
     <string name="mim_s10_delete_row">내 사진 삭제</string>

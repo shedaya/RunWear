@@ -71,8 +71,18 @@ kotlin {
             // the models are platform-neutral). `api`: :shared and the app
             // modules convert at their edges against it.
             api(libs.kotlinx.datetime)
-            // LOC-1 WP-3: localized copy resources (MR) + Compose accessor.
+            // LOC-1 WP-3: localized copy resources (MR).
             api(libs.moko.resources)
+        }
+        androidMain.dependencies {
+            // The Compose accessor (stringResource) is consumed by the
+            // Android app's Compose UI via this api exposure. It must NOT
+            // sit in commonMain: moko resources-compose 0.24.3 publishes
+            // no watchos variant, so a commonMain declaration makes every
+            // watchos compilation of :engine unresolvable (first fired
+            // in the iOS gate on train/rw-next-2026-11-25; latent since
+            // WP-3, whose CI was Android-only). Apple targets consume the
+            // core resources artifact + StringDesc, never the Compose API.
             api(libs.moko.resources.compose)
         }
     }

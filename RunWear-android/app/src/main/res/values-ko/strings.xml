@@ -31,12 +31,12 @@
     <string name="feedback_send">피드백 보내기</string>
     <string name="feedback_rate">RunWear 평가하기</string>
     <string name="permission_gps_help_title">위치를 켜는 데 문제가 있나요?</string>
-    <string name="wir_expand">Wear I\\'ve Run 펼치기</string>
-    <string name="wir_collapse">Wear I\\'ve Run 접기</string>
-    <string name="wir_remove">Wear I\\'ve Run에서 제거</string>
+    <string name="wir_expand">Wear I\'ve Run 펼치기</string>
+    <string name="wir_collapse">Wear I\'ve Run 접기</string>
+    <string name="wir_remove">Wear I\'ve Run에서 제거</string>
     <string name="wir_open_collection">컬렉션 열기 ›</string>
     <string name="wir_view_collection">컬렉션 보기</string>
-    <string name="wir_view_collection_full">Wear I\\'ve Run 컬렉션 전체 보기</string>
+    <string name="wir_view_collection_full">Wear I\'ve Run 컬렉션 전체 보기</string>
     <string name="wir_view_chapter">%1$s 챕터 보기</string>
     <string name="onb_headline">날씨와 상관없이, 러닝.</string>
     <string name="onb_promise_1_headline">날씨에 맞는 올바른 아웃핏</string>
@@ -183,7 +183,7 @@
     <string name="wir_entry_line_head">%1$s · %2$s</string>
     <string name="wir_entry_line_moment">\" · %1$s\"</string>
     <string name="wir_entry_line_tail">\" — %1$s 체감 온도\"</string>
-    <string name="wir_wordmark">Wear I\\'ve Run</string>
+    <string name="wir_wordmark">Wear I\'ve Run</string>
     <string name="wir_day_today">오늘</string>
     <string name="wir_day_tomorrow">내일</string>
     <string name="wir_summary_multi">%1$s · %2$s · 마지막 숙박 · %3$s</string>
