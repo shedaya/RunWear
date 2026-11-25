@@ -1,6 +1,11 @@
 package com.runwear.shared.domain.model
 
 import com.runwear.engine.MR
+// moko 0.27 generates the per-key MR.strings accessors as extension
+// properties on MR.strings in the resources package (on 0.24 they were
+// members of the object), so consumers need this wildcard import —
+// the same pattern JetGuide's shared module uses on 0.27.1.
+import com.runwear.engine.*
 import dev.icerock.moko.resources.StringResource
 import dev.icerock.moko.resources.desc.StringDesc
 import dev.icerock.moko.resources.desc.desc

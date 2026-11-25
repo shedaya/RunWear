@@ -1,6 +1,7 @@
 package com.runwear.app.makeitme
 
 import com.runwear.engine.MR
+import com.runwear.engine.*
 import dev.icerock.moko.resources.compose.stringResource
 
 import android.content.pm.PackageManager
