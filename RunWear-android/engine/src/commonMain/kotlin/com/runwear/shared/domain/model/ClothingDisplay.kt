@@ -5,7 +5,7 @@ import dev.icerock.moko.resources.StringResource
 import dev.icerock.moko.resources.desc.StringDesc
 import dev.icerock.moko.resources.desc.desc
 
-/** moko 0.24 shape: a [StringResource] becomes a [StringDesc] via [desc]. */
+/** moko shape (0.24 through 0.27.1): a [StringResource] becomes a [StringDesc] via [desc]. */
 private fun res(resource: StringResource): StringDesc = resource.desc()
 
 /**

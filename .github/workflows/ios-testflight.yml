@@ -7,7 +7,7 @@
 #   secrets step. Since Stage 2 (2026-10-29) the app DOES link a
 #   Kotlin framework — the shared :engine module as
 #   RunWearEngine.xcframework — built by this workflow's `engine` job
-#   on macos-15 (Xcode 16, the toolchain Kotlin 2.0.21 supports) and
+#   on macos-15 (Xcode 16, the toolchain Kotlin 2.2.21 supports) and
 #   handed over as an artifact, because this archive job must stay on
 #   the current SDK (see Toolchain below).
 # - Three provisioning profiles (GEN-5 added the widget target):

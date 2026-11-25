@@ -6,7 +6,7 @@
 # Stage 2 (2026-10-29): the decision layer is a shared Kotlin module
 # (:engine in RunWear-android) consumed as the RunWearEngine
 # XCFramework. The `engine` job builds it on macos-15 (Xcode 16 — the
-# toolchain Kotlin 2.0.21 supports) and hands it to the test job as an
+# toolchain Kotlin 2.2.21 supports) and hands it to the test job as an
 # artifact; the framework directory is gitignored and never committed.
 #
 # Triggers: workflow_dispatch only. During Stage 1/2 verification
