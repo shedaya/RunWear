@@ -380,24 +380,44 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
+                    // RW-177: while the moment is up, the cell's own
+                    // generic resolution is owed whenever the
+                    // personal photo is not the displayed one — the
+                    // moment must not depend on the home scene's
+                    // resolution having landed (the 2026-11-25
+                    // blank first-look screen).
+                    androidx.compose.runtime.LaunchedEffect(showFirstLookMoment) {
+                        if (showFirstLookMoment) viewModel.ensureFirstLookPhoto()
+                    }
+
                     // Frame 34 first-look moment (once; never a modal again).
                     if (showFirstLookMoment) {
                         com.runwear.app.makeitme.FirstLookMoment(
                             // GEN-3 A-HERO (WS-B, X-1/X-2): the moment
-                            // is state-driven — its photo is the scene's
-                            // one resolution (the personal photo when
-                            // it is the one displayed; the fallback
-                            // while it is being made), and its claims
-                            // resolve from the look status for THIS
-                            // cell: finished copy only when the
-                            // generated photo is actually displayed.
+                            // is state-driven — its claims resolve from
+                            // the look status for THIS cell: finished
+                            // copy only when the generated photo is
+                            // actually displayed.
+                            // RW-177: its photo resolves by
+                            // FirstLookPhotoPolicy — the personal
+                            // photo when displayed; else the first-
+                            // look cell's own approved generic; else
+                            // the scene's resolution.
                             state = com.runwear.app.makeitme.FirstLookPresentation.resolve(
                                 lookStatus = uiState.personalLookStatus,
                                 personalPhotoDisplayed = uiState.heroIsPersonal &&
                                     uiState.personalHeroImageUrl != null &&
                                     uiState.heroImageUrl == uiState.personalHeroImageUrl
                             ),
-                            photoUrl = uiState.effectiveHeroUrl,
+                            photoUrl = com.runwear.app.makeitme.FirstLookPhotoPolicy.photoToShow(
+                                personalPhotoUrl = if (
+                                    uiState.heroIsPersonal &&
+                                    uiState.personalHeroImageUrl != null &&
+                                    uiState.heroImageUrl == uiState.personalHeroImageUrl
+                                ) uiState.personalHeroImageUrl else null,
+                                genericPhotoUrl = uiState.firstLookGenericUrl,
+                                scenePhotoUrl = uiState.effectiveHeroUrl
+                            ),
                             simplePlace = uiState.simplePlace?.city,
                             weatherLine = uiState.weather?.let { weather ->
                                 val items = uiState.outfit?.allItems?.size ?: 0

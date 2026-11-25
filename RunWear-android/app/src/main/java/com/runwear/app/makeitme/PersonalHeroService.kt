@@ -388,15 +388,60 @@ class PersonalHeroService @Inject constructor(
      * and enqueues nothing, so the fill trigger of record is the
      * client's own startPersonalFill call with forecast cells
      * (Defect 1). Silent and idempotent by design (the function
-     * writes only on a real transition). True when the call
-     * completed; the caller re-reads the profile afterwards to
-     * mirror any change.
+     * writes only on a real transition). The outcome reports
+     * whether the call completed and any adoptable prior identity
+     * it named; the caller requests the adoption when one is
+     * named and re-reads the profile afterwards to mirror any
+     * change.
      */
-    suspend fun reconcileEntitlement(): Boolean =
+    /**
+     * RW-137 (DESIGN §4.4.2) + RW-179c: the reconcile's outcome —
+     * whether the call completed, and the prior identity the
+     * response names as adoptable (`adoption_available`), when
+     * RevenueCat proof links this entitled identity to a previous
+     * uid. Additive and optional by contract: an absent field is
+     * the pre-RW-137 response and means "no adoption", never an
+     * error. (Before RW-179c this method returned only a Boolean
+     * and discarded the body — the adoption the response offered
+     * was never requested, and a restored subscription's bank
+     * stayed keyed to the previous install's uid.)
+     */
+    data class ReconcileOutcome(
+        val completed: Boolean,
+        val adoptionSourceUserId: String?
+    )
+
+    suspend fun reconcileEntitlement(): ReconcileOutcome {
         // GEN-5 (RW-28 Addendum 8, Item 4a): name this client's
         // platform so the function's RevenueCat lookup queries the
         // matching storefront view instead of a hard-coded one.
-        callFunction("reconcile-personal-entitlement", "{\"platform\":\"android\"}") is FunctionResult.Ok
+        val result = callFunction(
+            "reconcile-personal-entitlement", "{\"platform\":\"android\"}"
+        )
+        val body = (result as? FunctionResult.Ok)?.body
+            ?: return ReconcileOutcome(completed = false, adoptionSourceUserId = null)
+        return ReconcileOutcome(
+            completed = true,
+            adoptionSourceUserId = body["adoption_available"]?.jsonPrimitive?.contentOrNull
+        )
+    }
+
+    /**
+     * RW-137 (DESIGN §4.4.2/§4.4.3): ask the server to re-key the
+     * hinted source identity's personal layer into the caller's.
+     * The endpoint re-verifies the RevenueCat proof server-side —
+     * the client's hint is never trusted — so every failure here
+     * is swallowed by the caller: a wrong or stale hint is a
+     * silent no-op by design, and the next reconcile asks again.
+     * The source uid travels as `source_user_id` — the deployed
+     * function's field name (the wire contract; see the iOS
+     * PersonalHeroRequests.identityAdoptionBody mirror).
+     */
+    suspend fun requestIdentityAdoption(sourceUserId: String): Boolean =
+        callFunction(
+            "request-identity-adoption",
+            "{\"source_user_id\":\"$sourceUserId\"}"
+        ) is FunctionResult.Ok
 
     data class DeleteOutcome(val storageRemoved: Int, val totalRowsRemoved: Int)
 

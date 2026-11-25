@@ -95,7 +95,10 @@ class PersonalHeroRepository @Inject constructor(
      *     the caller's state against RevenueCat and flips the
      *     `entitled` flag (kicking the matrix fill on a grant) without
      *     trusting anything the client claims;
-     *  3. if the reconcile call completed, re-read the profile so the
+     *  3. if the reconcile names a RevenueCat-proven prior identity,
+     *     request its adoption (RW-137/RW-179c) so a restored
+     *     subscription's bank follows the account to this uid;
+     *  4. if the reconcile call completed, re-read the profile so the
      *     local mirror reflects any transition.
      * Silent and idempotent: no session, a failed link, or a failed
      * reconcile leaves local state exactly as it was.
@@ -104,7 +107,31 @@ class PersonalHeroRepository @Inject constructor(
         if (!service.ensureSession()) return
         val uid = service.currentUserId() ?: return
         runCatching { billing.logIn(uid) }
-        if (service.reconcileEntitlement()) refreshFromServer()
+        val outcome = service.reconcileEntitlement()
+        if (outcome.completed) {
+            // RW-137 (DESIGN §4.4) + RW-179c (2026-11-25): the same
+            // reconcile carries the adoption check — when it names
+            // a RevenueCat-proven prior identity, request the
+            // adoption so the restored subscription's bank re-keys
+            // onto THIS uid before the profile read renders it.
+            // This is the step whose absence stranded Sol's bank on
+            // his previous install uid after the Nov 25 reset: the
+            // entitlement reconciled, the looks did not follow.
+            // Adoption is automatic (a standing Premium property —
+            // no opt-in), the endpoint re-verifies the proof
+            // server-side, and an unprovable hint is a silent
+            // no-op; the iOS store's reconcileWithAdoption is the
+            // mirror. Sync points: bootstrap, entitlement change,
+            // purchase, Restore Purchases — all of them run through
+            // this method.
+            val source = IdentityAdoptionPolicy.sourceToAdopt(
+                outcome.adoptionSourceUserId, uid
+            )
+            if (source != null) {
+                runCatching { service.requestIdentityAdoption(source) }
+            }
+            refreshFromServer()
+        }
     }
 
     /** Re-read the profile + reference count from the server. */

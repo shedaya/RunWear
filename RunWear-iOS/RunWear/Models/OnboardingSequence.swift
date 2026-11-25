@@ -216,6 +216,30 @@ enum FirstLookPhase: Equatable {
     case failed
 }
 
+/// RW-177 (2026-11-25): WHICH photo URL the first-look card
+/// loads. The card's photo is the preview's resolved hero — the
+/// cell's approved generic image while the personal photo is
+/// pending (the WeatherViewModel's cascade serve), the personal
+/// photo once the overlay swaps it in — over the bundled
+/// fallback. The fallback slot can carry an EMPTY STRING (the
+/// chain resolution's no-asset encoding), which `URL(string:)`
+/// reads as nil and the card renders as its blank phase: the
+/// empty string must therefore resolve as "no URL", so a real
+/// hero URL is never shadowed by it and the blank phase means
+/// genuinely nothing to show. (Android's mirror is
+/// FirstLookPhotoPolicy in FirstLookPresentation.kt.)
+enum FirstLookPhotoURL {
+    static func resolve(heroUrl: String?, fallbackUrl: String?) -> URL? {
+        for candidate in [heroUrl, fallbackUrl] {
+            guard let raw = candidate?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !raw.isEmpty,
+                  let url = URL(string: raw) else { continue }
+            return url
+        }
+        return nil
+    }
+}
+
 struct FirstLookPresentation: Equatable {
     let phase: FirstLookPhase
     /// The processing title rendered ON the photo (making only) —

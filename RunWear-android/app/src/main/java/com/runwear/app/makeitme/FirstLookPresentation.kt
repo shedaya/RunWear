@@ -52,6 +52,47 @@ object FirstLookPresentation {
 }
 
 /**
+ * RW-177 (2026-11-25): WHICH photo the first-look moment paints.
+ *
+ * The moment's copy promises the generating state sits on the
+ * cell's standard photo ("the photo currently serving"). As built,
+ * the moment inherited the HOME SCENE's resolution
+ * (MainUiState.effectiveHeroUrl) — and in the 2026-11-25 incident
+ * that resolution was empty when the moment was raised from the
+ * onboarding upload flow (no scene had committed conditions yet,
+ * and refreshHeroAfterPersonalChange no-ops without them), so the
+ * first-look screen stood blank for the whole making phase.
+ *
+ * The rule now: the moment resolves the CELL'S OWN approved
+ * generic image (the shared hero cascade for the first-look cell)
+ * while the personal photo is pending, and paints by this order —
+ * the personal photo when it is the one displayed; else the
+ * cell's generic; else the scene's resolution as the last resort
+ * (it may be the bundled floor). A photo therefore stands under
+ * the making state whenever ANY approved photo for the cell
+ * exists, which is the promise the surface makes.
+ */
+object FirstLookPhotoPolicy {
+
+    /** The photo the moment paints, by the order above. Null only
+     * when no photo exists at any tier. */
+    fun photoToShow(
+        personalPhotoUrl: String?,
+        genericPhotoUrl: String?,
+        scenePhotoUrl: String?
+    ): String? = personalPhotoUrl ?: genericPhotoUrl ?: scenePhotoUrl
+
+    /** A generic resolution for the moment is owed when the
+     * personal photo is not the displayed one and no generic has
+     * been resolved for THIS cell yet. */
+    fun shouldResolveGeneric(
+        personalPhotoDisplayed: Boolean,
+        genericPhotoCell: String?,
+        currentCell: String
+    ): Boolean = !personalPhotoDisplayed && genericPhotoCell != currentCell
+}
+
+/**
  * GEN-6 WAVE A (DA-03) — the reveal choreography's gating, ported
  * from the iOS gen-5 FirstLookView: the success sequence runs only
  * when the presentation is READY *and* the personal photo has
