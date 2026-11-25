@@ -34,7 +34,13 @@ kotlin {
     androidTarget {
         publishLibraryVariants("release", "debug")
         compilations.all {
-            kotlinOptions { jvmTarget = "17" }
+            // compilerOptions DSL (JetGuide shared precedent): the KMP
+            // compilations' kotlinOptions block is a hard error on
+            // Kotlin 2.2, unlike the AGP android{} kotlinOptions the
+            // app modules still use.
+            compilerOptions.configure {
+                jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+            }
         }
     }
 
