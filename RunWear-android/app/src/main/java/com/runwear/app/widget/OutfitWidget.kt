@@ -278,7 +278,7 @@ private fun RefreshAffordance(refreshing: Boolean) {
     } else {
         Image(
             provider = ImageProvider(R.drawable.ic_widget_refresh),
-            contentDescription = "Refresh",
+            contentDescription = androidx.compose.ui.res.stringResource(com.runwear.app.R.string.widget_refresh),
             modifier = GlanceModifier
                 .size(15.dp)
                 .clickable(actionRunCallback<RefreshWidgetAction>()),
@@ -295,18 +295,18 @@ private fun RefreshAffordance(refreshing: Boolean) {
  */
 private fun footerSegments(state: WidgetState.Success, full: Boolean): List<String> {
     val w = state.weather
-    val feels = "Feels like ${formatTemperature(w.feelsLike, state.temperatureUnit)}"
+    val feels = com.runwear.app.i18n.AppEnglish.WIDGET_FEELS_LIKE_TEMPLATE.format(formatTemperature(w.feelsLike, state.temperatureUnit))
     if (!full) return listOf(feels, w.weatherCode.description)
     return listOf(
         feels,
-        "Actual ${formatTemperature(w.temperature, state.temperatureUnit)}",
-        "Wind ${formatWind(w, state.temperatureUnit)}",
+        com.runwear.app.i18n.AppEnglish.WIDGET_ACTUAL_TEMPLATE.format(formatTemperature(w.temperature, state.temperatureUnit)),
+        com.runwear.app.i18n.AppEnglish.WIDGET_WIND_TEMPLATE.format(formatWind(w, state.temperatureUnit)),
         w.weatherCode.description
     )
 }
 
 private fun actualSegment(state: WidgetState.Success): String =
-    "Actual ${formatTemperature(state.weather.temperature, state.temperatureUnit)}"
+    com.runwear.app.i18n.AppEnglish.WIDGET_ACTUAL_TEMPLATE.format(formatTemperature(state.weather.temperature, state.temperatureUnit))
 
 /**
  * One garment row: the item's garment emoji as its marker + name (Sol,
@@ -498,7 +498,7 @@ private fun HeroBlock(state: WidgetState.Success, plan: WidgetLayout.SlotPlan) {
     Column(modifier = GlanceModifier.fillMaxWidth()) {
         if (plan.showTempLabel) {
             Text(
-                text = "FEELS LIKE",
+                text = androidx.compose.ui.res.stringResource(com.runwear.app.R.string.widget_feels_like_caps),
                 style = TextStyle(
                     color = ColorProvider(WidgetTextSecondary),
                     fontSize = WidgetLayout.Sizes.TEMP_LABEL.sp,
@@ -661,7 +661,7 @@ private fun HorizontalWidgetContent(
             )
             if (plan.showWind) {
                 Text(
-                    text = "Wind ${formatWind(state.weather, state.temperatureUnit)}",
+                    text = com.runwear.app.i18n.AppEnglish.WIDGET_WIND_TEMPLATE.format(formatWind(state.weather, state.temperatureUnit)),
                     style = TextStyle(
                         color = ColorProvider(WidgetTextMuted),
                         fontSize = WidgetLayout.Sizes.HORIZ_WIND.sp
@@ -760,20 +760,20 @@ private fun OutfitItemChip(item: ClothingItem) {
 @Composable
 private fun LoadingContent(kind: WidgetLayout.Kind) {
     when (kind) {
-        WidgetLayout.Kind.SMALL -> CenteredStateText("RunWear", "Loading…")
-        WidgetLayout.Kind.HORIZONTAL -> StripStateText("RunWear · Loading…")
+        WidgetLayout.Kind.SMALL -> CenteredStateText("RunWear", androidx.compose.ui.res.stringResource(com.runwear.app.R.string.widget_loading))
+        WidgetLayout.Kind.HORIZONTAL -> StripStateText(androidx.compose.ui.res.stringResource(com.runwear.app.R.string.widget_loading_strip))
         WidgetLayout.Kind.MEDIUM_SQUARE, WidgetLayout.Kind.LARGE ->
-            AnchoredStateText("Loading your outfit…", null)
+            AnchoredStateText(androidx.compose.ui.res.stringResource(com.runwear.app.R.string.widget_loading_outfit), null)
     }
 }
 
 @Composable
 private fun NoPermissionContent(kind: WidgetLayout.Kind) {
     when (kind) {
-        WidgetLayout.Kind.SMALL -> CenteredStateText("Location needed", "Tap to enable")
-        WidgetLayout.Kind.HORIZONTAL -> StripStateText("Location needed · Tap to enable")
+        WidgetLayout.Kind.SMALL -> CenteredStateText(androidx.compose.ui.res.stringResource(com.runwear.app.R.string.widget_location_needed), androidx.compose.ui.res.stringResource(com.runwear.app.R.string.widget_tap_to_enable))
+        WidgetLayout.Kind.HORIZONTAL -> StripStateText(androidx.compose.ui.res.stringResource(com.runwear.app.R.string.widget_location_strip))
         WidgetLayout.Kind.MEDIUM_SQUARE, WidgetLayout.Kind.LARGE ->
-            AnchoredStateText("Location needed", "Tap to enable location")
+            AnchoredStateText(androidx.compose.ui.res.stringResource(com.runwear.app.R.string.widget_location_needed), androidx.compose.ui.res.stringResource(com.runwear.app.R.string.widget_tap_enable_location))
     }
 }
 
@@ -971,7 +971,7 @@ private fun RetryRow() {
         )
         Spacer(modifier = GlanceModifier.width(5.dp))
         Text(
-            text = "Retry",
+            text = androidx.compose.ui.res.stringResource(com.runwear.app.R.string.widget_retry),
             style = TextStyle(
                 color = ColorProvider(WidgetPrimary),
                 fontSize = 12.sp,

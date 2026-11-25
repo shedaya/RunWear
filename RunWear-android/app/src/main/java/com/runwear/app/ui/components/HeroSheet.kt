@@ -60,7 +60,7 @@ import java.util.Locale
 object HeroSheetFormat {
 
     /** RW-26 settled header stack, step (i): the small label. */
-    const val FEELS_LIKE_LABEL = "Feels like"
+    const val FEELS_LIKE_LABEL: String = com.runwear.app.i18n.AppEnglish.HERO_FEELS_LIKE_LABEL
 
     /**
      * RW-26 settled header stack, step (ii): the location line
@@ -114,21 +114,21 @@ object HeroSheetFormat {
      */
     fun dateSegmentText(selectedDateTime: LocalDateTime, locationNow: LocalDateTime): String =
         when {
-            selectedDateTime.toLocalDate() == locationNow.toLocalDate() -> "Today"
-            selectedDateTime.toLocalDate() == locationNow.toLocalDate().plusDays(1) -> "Tomorrow"
-            else -> selectedDateTime.format(DateTimeFormatter.ofPattern("EEE, MMM d"))
+            selectedDateTime.toLocalDate() == locationNow.toLocalDate() -> com.runwear.app.i18n.AppStringsPure.dayToday()
+            selectedDateTime.toLocalDate() == locationNow.toLocalDate().plusDays(1) -> com.runwear.app.i18n.AppStringsPure.dayTomorrow()
+            else -> com.runwear.shared.i18n.LocaleFormats.dateWeekdayMonthDay(selectedDateTime)
         }
 
     /** The headline moment's TIME segment text ("7:00 AM"). */
     fun timeSegmentText(selectedDateTime: LocalDateTime): String =
-        selectedDateTime.format(DateTimeFormatter.ofPattern("h:mm a"))
+        com.runwear.shared.i18n.LocaleFormats.timeShort(selectedDateTime)
 
     fun momentLabel(selectedDateTime: LocalDateTime, locationNow: LocalDateTime): String {
-        val timeText = selectedDateTime.format(DateTimeFormatter.ofPattern("h:mm a"))
+        val timeText = com.runwear.shared.i18n.LocaleFormats.timeShort(selectedDateTime)
         return when {
             selectedDateTime.toLocalDate() == locationNow.toLocalDate() -> timeText
-            selectedDateTime.toLocalDate() == locationNow.toLocalDate().plusDays(1) -> "Tomorrow, $timeText"
-            else -> "${selectedDateTime.format(DateTimeFormatter.ofPattern("EEE, MMM d"))}, $timeText"
+            selectedDateTime.toLocalDate() == locationNow.toLocalDate().plusDays(1) -> "${com.runwear.app.i18n.AppStringsPure.dayTomorrow()}, $timeText"
+            else -> "${com.runwear.shared.i18n.LocaleFormats.dateWeekdayMonthDay(selectedDateTime)}, $timeText"
         }
     }
 

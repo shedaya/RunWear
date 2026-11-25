@@ -208,7 +208,7 @@ internal fun ShareRenderErrorNotice(
                 color = RunWearColors.TextPrimary,
                 modifier = Modifier.weight(1f)
             )
-            TextButton(onClick = onClose) { Text("Close") }
+            TextButton(onClick = onClose) { Text(com.runwear.app.i18n.AppStrings.close()) }
         }
     }
 }
@@ -582,7 +582,7 @@ fun KitCard(
                             }
                             if (tile.hasShopLink) {
                                 Text(
-                                    text = "Shop ›",
+                                    text = com.runwear.app.i18n.AppStrings.shopRowDoor(),
                                     fontSize = 12.5.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = KitCardPalette.Pine,
@@ -904,14 +904,14 @@ fun ShareStudioSheet(
                 .padding(bottom = 32.dp)
         ) {
             Text(
-                text = "Share this day",
+                text = androidx.compose.ui.res.stringResource(com.runwear.app.R.string.share_this_day),
                 fontSize = 18.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = RunWearColors.TextPrimary,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
             Text(
-                text = "Choose the card for ${entry.place} — ${dayTitle(entry, today)}.",
+                text = androidx.compose.ui.res.stringResource(com.runwear.app.R.string.share_choose_card, entry.place, dayTitle(entry, today)),
                 style = MaterialTheme.typography.bodyMedium,
                 color = RunWearColors.TextSecondary,
                 modifier = Modifier.padding(bottom = 12.dp)
@@ -925,7 +925,7 @@ fun ShareStudioSheet(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     StudioThumbnailChoice(
-                        label = "Morning Poster",
+                        label = androidx.compose.ui.res.stringResource(com.runwear.app.R.string.share_card_morning_poster),
                         render = posterRender,
                         rendering = posterRendering,
                         failed = posterRenderFailed,
@@ -934,7 +934,7 @@ fun ShareStudioSheet(
                         onClick = { kind = ShareArtifactKind.MORNING_POSTER }
                     )
                     StudioThumbnailChoice(
-                        label = "Kit Card",
+                        label = androidx.compose.ui.res.stringResource(com.runwear.app.R.string.share_kit_card),
                         render = kitRender,
                         rendering = kitRendering,
                         failed = kitRenderFailed,
@@ -945,7 +945,7 @@ fun ShareStudioSheet(
                 }
                 if (posterRendering || kitRendering) {
                     ShareRenderProgressPill(
-                        label = "Rendering previews…",
+                        label = androidx.compose.ui.res.stringResource(com.runwear.app.R.string.share_rendering),
                         modifier = Modifier.align(Alignment.TopCenter)
                             .padding(top = 12.dp)
                     )
@@ -995,7 +995,7 @@ fun ShareStudioSheet(
                 }
                 if (shareFailed) {
                     ShareRenderErrorNotice(
-                        label = "Couldn't share this card — try again.",
+                        label = androidx.compose.ui.res.stringResource(com.runwear.app.R.string.share_couldnt_share),
                         onClose = onDismiss,
                         modifier = Modifier.align(Alignment.TopCenter)
                             .padding(top = 12.dp, start = 16.dp, end = 16.dp)
@@ -1003,11 +1003,11 @@ fun ShareStudioSheet(
                 } else if (currentRenderFailed) {
                     ShareRenderErrorNotice(
                         label = if (currentRenderTimedOut) {
-                            "Couldn't render this card — it took too long."
+                            androidx.compose.ui.res.stringResource(com.runwear.app.R.string.share_render_timeout)
                         } else if (kind == ShareArtifactKind.MORNING_POSTER && heroFailed) {
-                            "Couldn't render this card — its photo couldn't be loaded."
+                            androidx.compose.ui.res.stringResource(com.runwear.app.R.string.share_render_photo_fail)
                         } else {
-                            "Couldn't render this card — try again."
+                            androidx.compose.ui.res.stringResource(com.runwear.app.R.string.share_render_retry)
                         },
                         onClose = onDismiss,
                         modifier = Modifier.align(Alignment.TopCenter)
@@ -1017,9 +1017,9 @@ fun ShareStudioSheet(
                     ShareRenderProgressPill(
                         label = "Rendering ${
                             if (kind == ShareArtifactKind.MORNING_POSTER) {
-                                "Morning Poster"
+                                androidx.compose.ui.res.stringResource(com.runwear.app.R.string.share_card_morning_poster)
                             } else {
-                                "Kit Card"
+                                androidx.compose.ui.res.stringResource(com.runwear.app.R.string.share_kit_card)
                             }
                         }…",
                         modifier = Modifier.align(Alignment.TopCenter)
@@ -1033,7 +1033,7 @@ fun ShareStudioSheet(
             if (heroFailed) {
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    text = "This day's photo couldn't load — the Morning Poster can't be shared until it does.",
+                    text = androidx.compose.ui.res.stringResource(com.runwear.app.R.string.share_photo_blocked),
                     style = MaterialTheme.typography.bodyMedium,
                     color = RunWearColors.TextPrimary
                 )
@@ -1059,11 +1059,11 @@ fun ShareStudioSheet(
                             )
                             TextButton(
                                 onClick = { excludedKeys = excludedKeys + garment.key }
-                            ) { Text("Remove from card") }
+                            ) { Text(com.runwear.app.i18n.AppStrings.removeFromCard()) }
                         }
                     }
                     TextButton(onClick = { garmentRetryNonce++ }) {
-                        Text("Try again")
+                        Text(com.runwear.app.i18n.AppStrings.tryAgain())
                     }
                 }
                 val shoppable = kitSkeleton.filter {
@@ -1093,7 +1093,7 @@ fun ShareStudioSheet(
                                             Intent(Intent.ACTION_VIEW, Uri.parse(url))
                                         )
                                     }
-                                ) { Text("Shop ›") }
+                                ) { Text(com.runwear.app.i18n.AppStrings.shopArrow()) }
                             }
                         }
                     }
@@ -1108,14 +1108,14 @@ fun ShareStudioSheet(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = "Caption",
+                    text = androidx.compose.ui.res.stringResource(com.runwear.app.R.string.share_caption_label),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = RunWearColors.TextPrimary,
                     modifier = Modifier.weight(1f)
                 )
                 TextButton(onClick = { editingCaption = !editingCaption }) {
-                    Text("Edit")
+                    Text(com.runwear.app.i18n.AppStrings.edit())
                 }
             }
             captions.forEach { (template, text) ->
@@ -1164,13 +1164,13 @@ fun ShareStudioSheet(
             if (verifyFailed) {
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    text = "This card didn't render cleanly — try again",
+                    text = androidx.compose.ui.res.stringResource(com.runwear.app.R.string.share_render_dirty),
                     style = MaterialTheme.typography.bodyMedium,
                     color = RunWearColors.TextPrimary
                 )
                 TextButton(
                     onClick = { renderNonce++ }
-                ) { Text("Try again") }
+                ) { Text(com.runwear.app.i18n.AppStrings.tryAgain()) }
             }
 
             Spacer(Modifier.height(16.dp))
@@ -1178,7 +1178,7 @@ fun ShareStudioSheet(
             // Third movement — the door: ONE pine Share button,
             // enabled only on a settled, VERIFIED render.
             Row(modifier = Modifier.fillMaxWidth()) {
-                TextButton(onClick = onDismiss) { Text("Close") }
+                TextButton(onClick = onDismiss) { Text(com.runwear.app.i18n.AppStrings.close()) }
                 Spacer(Modifier.weight(1f))
                 Button(
                     enabled = !shareHeld,
@@ -1199,7 +1199,7 @@ fun ShareStudioSheet(
                         }
                     }
                 ) {
-                    Text("Share")
+                    Text(com.runwear.app.i18n.AppStrings.share())
                 }
             }
         }
@@ -1245,14 +1245,14 @@ private fun StudioThumbnailChoice(
                     modifier = Modifier.fillMaxSize()
                 )
                 failed -> Text(
-                    text = "Your $label couldn't be made.",
+                    text = androidx.compose.ui.res.stringResource(com.runwear.app.R.string.share_look_failed, label),
                     style = MaterialTheme.typography.bodySmall,
                     color = RunWearColors.TextPrimary,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(8.dp)
                 )
                 else -> Text(
-                    text = "Making your $label…",
+                    text = androidx.compose.ui.res.stringResource(com.runwear.app.R.string.share_look_making, label),
                     style = MaterialTheme.typography.bodySmall,
                     color = RunWearColors.TextSecondary,
                     textAlign = TextAlign.Center,

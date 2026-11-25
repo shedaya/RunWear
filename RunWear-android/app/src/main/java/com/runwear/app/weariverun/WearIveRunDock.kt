@@ -533,7 +533,7 @@ fun WearIveRunDock(
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Fullscreen,
-                        contentDescription = "Expand Wear I've Run",
+                        contentDescription = com.runwear.app.i18n.AppStrings.expandWir(),
                         tint = RunWearColors.TextSecondary,
                         modifier = Modifier.size(18.dp)
                     )
@@ -547,7 +547,7 @@ fun WearIveRunDock(
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Delete,
-                        contentDescription = "Remove from Wear I've Run",
+                        contentDescription = com.runwear.app.i18n.AppStrings.removeWir(),
                         tint = RunWearColors.TextSecondary,
                         modifier = Modifier.size(18.dp)
                     )
@@ -816,7 +816,7 @@ fun WearIveRunFooterSection(
                                     IconButton(onClick = onCollapse) {
                                         Icon(
                                             imageVector = Icons.Outlined.ExpandMore,
-                                            contentDescription = "Collapse Wear I've Run",
+                                            contentDescription = com.runwear.app.i18n.AppStrings.collapseWir(),
                                             tint = RunWearColors.TextPrimary,
                                             modifier = Modifier.size(20.dp)
                                         )
@@ -827,7 +827,7 @@ fun WearIveRunFooterSection(
                                     }) {
                                         Icon(
                                             imageVector = Icons.Outlined.Delete,
-                                            contentDescription = "Remove from Wear I've Run",
+                                            contentDescription = com.runwear.app.i18n.AppStrings.removeWir(),
                                             tint = RunWearColors.TextPrimary,
                                             modifier = Modifier.size(20.dp)
                                         )
@@ -925,7 +925,7 @@ fun WearIveRunFooterSection(
                         }
                         Spacer(Modifier.height(10.dp))
                         Text(
-                            text = "Open the collection ›",
+                            text = com.runwear.app.i18n.AppStrings.openCollection(),
                             fontSize = 15.5.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = RunWearColors.PineAccent,

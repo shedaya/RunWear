@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- LOC-1 WP-R2 sweep: narration count forms (CLDR one/other for en). -->
+    <plurals name="wir_items_count">
+        <item quantity="one">%1$d item</item>
+        <item quantity="other">%1$d items</item>
+    </plurals>
+    <plurals name="wir_days_count">
+        <item quantity="one">%1$d day</item>
+        <item quantity="other">%1$d days</item>
+    </plurals>
+    <plurals name="wir_stays_count">
+        <item quantity="one">%1$d stay</item>
+        <item quantity="other">%1$d stays</item>
+    </plurals>
+    <plurals name="wir_last_saved_minutes">
+        <item quantity="one">Last saved %1$d min ago</item>
+        <item quantity="other">Last saved %1$d min ago</item>
+    </plurals>
+    <plurals name="wir_last_saved_hours">
+        <item quantity="one">Last saved %1$d hr ago</item>
+        <item quantity="other">Last saved %1$d hr ago</item>
+    </plurals>
+</resources>

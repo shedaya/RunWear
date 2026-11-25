@@ -157,7 +157,7 @@ fun WearIveRunCollectionScreen(
                 ) {
                     if (openChapter != null) {
                         IconButton(onClick = { openChapter = null }) {
-                            Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back", tint = RunWearColors.TextPrimary)
+                            Icon(Icons.AutoMirrored.Outlined.ArrowBack, androidx.compose.ui.res.stringResource(com.runwear.app.R.string.collection_back), tint = RunWearColors.TextPrimary)
                         }
                     }
                     Text(
@@ -168,7 +168,7 @@ fun WearIveRunCollectionScreen(
                         modifier = Modifier.weight(1f).padding(start = 8.dp)
                     )
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Outlined.Close, "Close", tint = RunWearColors.TextPrimary)
+                        Icon(Icons.Outlined.Close, androidx.compose.ui.res.stringResource(com.runwear.app.R.string.collection_close), tint = RunWearColors.TextPrimary)
                     }
                 }
 
@@ -200,7 +200,7 @@ fun WearIveRunCollectionScreen(
                             item(key = "today") {
                                 Column {
                                     Text(
-                                        text = "TODAY",
+                                        text = androidx.compose.ui.res.stringResource(com.runwear.app.R.string.collection_today_badge),
                                         style = MaterialTheme.typography.labelMedium,
                                         color = RunWearColors.TextSecondary
                                     )
@@ -273,11 +273,11 @@ fun WearIveRunCollectionScreen(
 @Composable
 private fun FilterRow(filter: WearWeatherFilter, onFilter: (WearWeatherFilter) -> Unit) {
     val labels = listOf(
-        WearWeatherFilter.ALL to "All",
-        WearWeatherFilter.COLD to "Cold",
-        WearWeatherFilter.SNOW to "Snow",
-        WearWeatherFilter.RAIN to "Rain",
-        WearWeatherFilter.HEAT to "Heat"
+        WearWeatherFilter.ALL to androidx.compose.ui.res.stringResource(com.runwear.app.R.string.filter_all),
+        WearWeatherFilter.COLD to androidx.compose.ui.res.stringResource(com.runwear.app.R.string.filter_cold),
+        WearWeatherFilter.SNOW to androidx.compose.ui.res.stringResource(com.runwear.app.R.string.filter_snow),
+        WearWeatherFilter.RAIN to androidx.compose.ui.res.stringResource(com.runwear.app.R.string.filter_rain),
+        WearWeatherFilter.HEAT to androidx.compose.ui.res.stringResource(com.runwear.app.R.string.filter_heat)
     )
     LazyRow(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
@@ -303,13 +303,13 @@ private fun HonestEmptyState(modifier: Modifier = Modifier) {
                 // (an invented placeholder line) and spoke of sessions where
                 // the frame speaks of days, and it dropped the
                 // no-backfill statement entirely.
-                text = "Your scrapbook starts with today's run",
+                text = androidx.compose.ui.res.stringResource(com.runwear.app.R.string.collection_empty_title),
                 style = MaterialTheme.typography.titleMedium,
                 color = RunWearColors.TextPrimary
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "Each day's outfit is saved here automatically — one card per day, in the places you run. Days before today aren't backfilled; the collection grows from here.",
+                text = androidx.compose.ui.res.stringResource(com.runwear.app.R.string.collection_empty_body),
                 style = MaterialTheme.typography.bodyMedium,
                 color = RunWearColors.TextSecondary
             )
@@ -448,7 +448,7 @@ internal fun ChapterCover(
             IconButton(onClick = onClick) {
                 Icon(
                     Icons.Outlined.Visibility,
-                    contentDescription = "View ${chapter.place} chapter",
+                    contentDescription = com.runwear.app.i18n.AppStrings.viewChapter(chapter.place),
                     tint = RunWearColors.TextSecondary
                 )
             }
@@ -456,15 +456,22 @@ internal fun ChapterCover(
             // make plain WHICH day it shares — the gen-4 bare icon
             // read as sharing the chapter while silently selecting
             // its most recent day. The door now names that day.
+            // LOC-1 WP-R2: the share-door labels resolve HERE, in
+            // composition — stringResource cannot run inside the
+            // semantics DSL block below (not a @Composable context).
+            val shareDayLabel = chapter.cover?.let {
+                androidx.compose.ui.res.stringResource(
+                    com.runwear.app.R.string.collection_share_day,
+                    WearIveRunCollectionLogic.spanLabel(it.date, it.date),
+                    chapter.place
+                )
+            }
+            val shareLabel = androidx.compose.ui.res.stringResource(com.runwear.app.R.string.collection_share)
             TextButton(
                 onClick = { chapter.cover?.let { onShare(it) } },
                 enabled = chapter.cover != null,
                 modifier = Modifier.semantics {
-                    contentDescription = chapter.cover?.let {
-                        "Share ${
-                            WearIveRunCollectionLogic.spanLabel(it.date, it.date)
-                        } from ${chapter.place}"
-                    } ?: "Share"
+                    contentDescription = shareDayLabel ?: shareLabel
                 }
             ) {
                 Icon(
@@ -477,7 +484,7 @@ internal fun ChapterCover(
                 Text(
                     text = chapter.cover?.let {
                         WearIveRunCollectionLogic.spanLabel(it.date, it.date)
-                    } ?: "Share",
+                    } ?: androidx.compose.ui.res.stringResource(com.runwear.app.R.string.collection_share),
                     fontSize = 12.sp,
                     color = RunWearColors.TextSecondary
                 )
@@ -521,7 +528,7 @@ internal fun ChapterDetail(
                 if (onDeletePlace != null) {
                     TextButton(onClick = { onDeletePlace(chapter.place) }) {
                         Text(
-                            text = "Remove all ${chapter.place} entries",
+                            text = androidx.compose.ui.res.stringResource(com.runwear.app.R.string.collection_remove_all, chapter.place),
                             color = RunWearColors.TextSecondary
                         )
                     }
@@ -531,7 +538,7 @@ internal fun ChapterDetail(
         if (chapter.days.isEmpty()) {
             item {
                 Text(
-                    text = "No days match this filter here.",
+                    text = androidx.compose.ui.res.stringResource(com.runwear.app.R.string.collection_no_match),
                     style = MaterialTheme.typography.bodyMedium,
                     color = RunWearColors.TextSecondary
                 )
@@ -554,8 +561,8 @@ internal fun ChapterDetail(
                     Surface(shape = RoundedCornerShape(12.dp), color = RunWearColors.BgCard) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text(
-                                text = "${group.label()} · ${group.count} days" +
-                                    (group.rangeLabel()?.let { " · $it" } ?: ""),
+                                text = group.label() + com.runwear.app.i18n.AppEnglish.WIR_MONTH_COUNT_SUFFIX.format(com.runwear.app.i18n.AppEnglish.WIR_YEAR_COUNT.format(group.count)) +
+                                    (group.rangeLabel()?.let { com.runwear.app.i18n.AppEnglish.WIR_MONTH_COUNT_SUFFIX.format(it) } ?: ""),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = RunWearColors.TextPrimary
                             )
@@ -637,7 +644,7 @@ private fun DayRow(
                 // "1 item" / "N items" rule WearIveRunSubtitle
                 // already applies (the card read "1 items").
                 text = "${entry.feelsLikeF.toInt()}° feels like · ${entry.conditionLabel} · " +
-                    if (entry.items.size == 1) "1 item" else "${entry.items.size} items",
+                    androidx.compose.ui.res.pluralStringResource(com.runwear.app.R.plurals.wir_items_count, entry.items.size, entry.items.size),
                 style = MaterialTheme.typography.bodySmall,
                 color = RunWearColors.TextSecondary
             )
@@ -646,13 +653,13 @@ private fun DayRow(
             IconButton(onClick = onView) {
                 Icon(
                     Icons.Outlined.Visibility,
-                    "View ${entry.place} chapter",
+                    androidx.compose.ui.res.stringResource(com.runwear.app.R.string.collection_view_chapter, entry.place),
                     tint = RunWearColors.TextSecondary
                 )
             }
         }
         IconButton(onClick = onShare) {
-            Icon(Icons.Outlined.Share, "Share this day", tint = RunWearColors.TextSecondary)
+            Icon(Icons.Outlined.Share, androidx.compose.ui.res.stringResource(com.runwear.app.R.string.collection_share_this_day), tint = RunWearColors.TextSecondary)
         }
         if (onDelete != null) {
             IconButton(onClick = onDelete) {
@@ -750,8 +757,8 @@ internal fun DayCard(
 }
 
 internal fun dayTitle(entry: WearIveRunDayEntry, today: LocalDate): String {
-    val dow = entry.date.format(DateTimeFormatter.ofPattern("EEE, MMM d", Locale.US))
-    return if (entry.date == today) "Today · $dow" else dow
+    val dow = com.runwear.shared.i18n.LocaleFormats.dateWeekdayMonthDay(entry.date)
+    return if (entry.date == today) com.runwear.app.i18n.AppEnglish.COLLECTION_DAY_TITLE_TODAY.format(dow) else dow
 }
 
 /** The engine item behind an entry's display name, when it is one. */

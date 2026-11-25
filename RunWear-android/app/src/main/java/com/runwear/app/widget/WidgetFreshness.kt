@@ -1,8 +1,6 @@
 package com.runwear.app.widget
 
 import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 /**
  * Pure freshness/age reckoning for the widget (spec §B.3: data freshness is
@@ -33,10 +31,10 @@ object WidgetFreshness {
     fun ageShortUpper(ageMs: Long): String {
         val minutes = ageMs / 60_000
         return when {
-            minutes < 1 -> "JUST NOW"
-            minutes < 60 -> "${minutes}M AGO"
-            minutes < 60 * 24 -> "${minutes / 60}H AGO"
-            else -> "${minutes / (60 * 24)}D AGO"
+            minutes < 1 -> com.runwear.app.i18n.AppEnglish.WIDGET_JUST_NOW
+            minutes < 60 -> com.runwear.app.i18n.AppEnglish.WIDGET_AGE_MIN_UPPER.format(minutes)
+            minutes < 60 * 24 -> com.runwear.app.i18n.AppEnglish.WIDGET_AGE_HR_UPPER.format(minutes / 60)
+            else -> com.runwear.app.i18n.AppEnglish.WIDGET_AGE_DAY_UPPER.format(minutes / (60 * 24))
         }
     }
 
@@ -44,31 +42,31 @@ object WidgetFreshness {
     fun ageWords(ageMs: Long): String {
         val minutes = ageMs / 60_000
         return when {
-            minutes < 1 -> "just now"
-            minutes < 60 -> "$minutes min ago"
-            minutes < 60 * 24 -> "${minutes / 60}h ago"
-            else -> "${minutes / (60 * 24)}d ago"
+            minutes < 1 -> com.runwear.app.i18n.AppEnglish.WIDGET_AGE_JUST_NOW_LOWER
+            minutes < 60 -> com.runwear.app.i18n.AppEnglish.WIDGET_AGE_MIN_LOWER.format(minutes)
+            minutes < 60 * 24 -> com.runwear.app.i18n.AppEnglish.WIDGET_AGE_HR_LOWER.format(minutes / 60)
+            else -> com.runwear.app.i18n.AppEnglish.WIDGET_AGE_DAY_LOWER.format(minutes / (60 * 24))
         }
     }
 
-    private val TIME_FORMAT = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
+    // LOC-1 WP-R2: the freshness clock renders via LocaleFormats.timeShort (device locale).
 
     /** Large brand-strip freshness: a clock time while recent, an age once it's old. */
     fun updatedLabel(savedAtLocal: LocalDateTime, savedAtEpochMs: Long, nowEpochMs: Long): String {
         val age = ageMs(savedAtEpochMs, nowEpochMs)
         return if (age < LARGE_AGE_FORM_MS) {
-            "Updated ${savedAtLocal.format(TIME_FORMAT)}"
+            com.runwear.app.i18n.AppEnglish.WIDGET_UPDATED.format(com.runwear.shared.i18n.LocaleFormats.timeShort(savedAtLocal))
         } else {
-            "Updated ${ageWords(age)}"
+            com.runwear.app.i18n.AppEnglish.WIDGET_UPDATED.format(ageWords(age))
         }
     }
 
     /** Small/Horizontal eyebrow: clean while fresh, age appended only when stale (spec §B.3.4). */
     fun forNowEyebrow(savedAtEpochMs: Long, nowEpochMs: Long): String {
         return if (isStale(savedAtEpochMs, nowEpochMs)) {
-            "FOR NOW · ${ageShortUpper(ageMs(savedAtEpochMs, nowEpochMs))}"
+            com.runwear.app.i18n.AppEnglish.WIDGET_FOR_NOW_AGE.format(ageShortUpper(ageMs(savedAtEpochMs, nowEpochMs)))
         } else {
-            "FOR NOW"
+            com.runwear.app.i18n.AppEnglish.WIDGET_FOR_NOW
         }
     }
 
@@ -79,9 +77,9 @@ object WidgetFreshness {
      */
     fun smallEyebrow(savedAtLocal: LocalDateTime, savedAtEpochMs: Long, nowEpochMs: Long): String {
         return if (isStale(savedAtEpochMs, nowEpochMs)) {
-            "FOR NOW · ${ageShortUpper(ageMs(savedAtEpochMs, nowEpochMs))}"
+            com.runwear.app.i18n.AppEnglish.WIDGET_FOR_NOW_AGE.format(ageShortUpper(ageMs(savedAtEpochMs, nowEpochMs)))
         } else {
-            "FOR NOW · ${savedAtLocal.format(TIME_FORMAT)}"
+            com.runwear.app.i18n.AppEnglish.WIDGET_FOR_NOW_AGE.format(com.runwear.shared.i18n.LocaleFormats.timeShort(savedAtLocal))
         }
     }
 
@@ -98,11 +96,11 @@ object WidgetFreshness {
  */
 enum class WidgetErrorCategory(val headline: String, val reason: String) {
     LOCATION(
-        headline = "Couldn't load weather",
-        reason = "Location isn't available to the widget"
+        headline = com.runwear.app.i18n.AppEnglish.WIDGET_COULDNT_LOAD,
+        reason = com.runwear.app.i18n.AppEnglish.WIDGET_LOCATION_UNAVAILABLE
     ),
     WEATHER(
-        headline = "Couldn't load weather",
-        reason = "Couldn't reach the weather service"
+        headline = com.runwear.app.i18n.AppEnglish.WIDGET_COULDNT_LOAD,
+        reason = com.runwear.app.i18n.AppEnglish.WIDGET_COULDNT_REACH
     )
 }

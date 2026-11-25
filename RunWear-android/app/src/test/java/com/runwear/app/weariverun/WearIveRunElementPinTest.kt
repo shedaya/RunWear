@@ -229,9 +229,11 @@ class WearIveRunElementPinTest {
         // GEN-2: the morph's ONE shared trash control serves both
         // states (identical by construction), so its content
         // description appears exactly once in the unified surface.
+        // WP-R2 re-pin: the description is the wir_remove
+        // resource, resolved through its accessor at the site.
         assertEquals(
             1,
-            bar.split("\"Remove from Wear I've Run\"").size - 1
+            bar.split("AppStrings.removeWir()").size - 1
         )
         // No broken-image placeholder icon in the thumbnail slot; the
         // photo paints on decode success only.

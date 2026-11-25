@@ -159,7 +159,7 @@ class OutfitComplicationService : SuspendingComplicationDataSourceService() {
 
         return ShortTextComplicationData.Builder(
             text = PlainComplicationText.Builder(tempText).build(),
-            contentDescription = PlainComplicationText.Builder("Feels like $tempText, actual $actualText").build()
+            contentDescription = PlainComplicationText.Builder(getString(com.runwear.wear.R.string.wear_complication_feels, tempText, actualText)).build()
         )
             .setMonochromaticImage(complicationIcon())
             .setTapAction(createTapAction())
@@ -219,14 +219,14 @@ class OutfitComplicationService : SuspendingComplicationDataSourceService() {
         return when (type) {
             ComplicationType.SHORT_TEXT -> ShortTextComplicationData.Builder(
                 text = PlainComplicationText.Builder("--°").build(),
-                contentDescription = PlainComplicationText.Builder("No data").build()
+                contentDescription = PlainComplicationText.Builder(getString(com.runwear.wear.R.string.wear_no_data)).build()
             )
                 .setMonochromaticImage(complicationIcon())
                 .setTapAction(createTapAction())
                 .build()
 
             ComplicationType.LONG_TEXT -> LongTextComplicationData.Builder(
-                text = PlainComplicationText.Builder("Tap to load").build(),
+                text = PlainComplicationText.Builder(getString(com.runwear.wear.R.string.wear_tap_to_load)).build(),
                 contentDescription = PlainComplicationText.Builder("No data available").build()
             )
                 .setTitle(PlainComplicationText.Builder("RunWear").build())
@@ -237,7 +237,7 @@ class OutfitComplicationService : SuspendingComplicationDataSourceService() {
                 value = 50f,
                 min = 10f,
                 max = 100f,
-                contentDescription = PlainComplicationText.Builder("No data").build()
+                contentDescription = PlainComplicationText.Builder(getString(com.runwear.wear.R.string.wear_no_data)).build()
             )
                 .setText(PlainComplicationText.Builder("--°").build())
                 .setTapAction(createTapAction())
@@ -259,7 +259,7 @@ class OutfitComplicationService : SuspendingComplicationDataSourceService() {
     private fun createPreviewLongText(): LongTextComplicationData {
         return LongTextComplicationData.Builder(
             text = PlainComplicationText.Builder("Shorts, Tank Top, Cap").build(),
-            contentDescription = PlainComplicationText.Builder("Outfit preview").build()
+            contentDescription = PlainComplicationText.Builder(getString(com.runwear.wear.R.string.wear_outfit_preview)).build()
         )
             .setTitle(PlainComplicationText.Builder("72°F").build())
             .build()

@@ -11,8 +11,6 @@ import com.runwear.shared.domain.usecase.GetOutfitRecommendationUseCase
 import kotlinx.datetime.toJavaLocalDateTime
 import kotlinx.datetime.toKotlinLocalDateTime
 import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 /**
  * The Large widget's "Later today" line (spec §B.3.4). The outfit the user
@@ -23,7 +21,7 @@ import java.util.Locale
  */
 object LaterTodayLine {
 
-    private val TIME_FORMAT = DateTimeFormatter.ofPattern("h a", Locale.US)
+    // LOC-1 WP-R2: the later-today clock renders via LocaleFormats.timeHour (device locale).
     private const val RAIN_MENTION_THRESHOLD = 30
 
     /**
@@ -72,7 +70,7 @@ object LaterTodayLine {
     ): String? {
         val clauses = outfitDeltaClauses(current, later)
         if (clauses.isEmpty()) return null
-        val parts = mutableListOf("By ${targetTime.format(TIME_FORMAT)}: ${clauses.joinToString(" · ")}")
+        val parts = mutableListOf(com.runwear.app.i18n.AppEnglish.WIDGET_BY_LINE.format(com.runwear.shared.i18n.LocaleFormats.timeHour(targetTime), clauses.joinToString(" · ")))
         if (laterWeather.precipitationProbability >= RAIN_MENTION_THRESHOLD) {
             parts += "rain ${laterWeather.precipitationProbability}%"
         }
@@ -94,7 +92,7 @@ object LaterTodayLine {
         } else {
             "feels like ${displayUnit.displayValue(min)}–${displayUnit.formatTemperature(max)}"
         }
-        val parts = mutableListOf("Later today: $range")
+        val parts = mutableListOf(com.runwear.app.i18n.AppEnglish.WIDGET_LATER_TODAY_RANGE.format(range))
         if (peakRain >= RAIN_MENTION_THRESHOLD) parts += "rain up to $peakRain%"
         return parts.joinToString(" · ")
     }

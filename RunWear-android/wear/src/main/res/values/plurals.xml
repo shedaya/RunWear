@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- LOC-1 WP-R2: the swipe line's count form. The shipped build
+         rendered "Swipe for 1 items" (audit 5.2's known plural bug);
+         the plurals form yields "1 item" — the sweep's one deliberate
+         micro-correction, flagged in the WP-R2 report. -->
+    <plurals name="wear_swipe_items">
+        <item quantity="one">Swipe for %1$d item →</item>
+        <item quantity="other">Swipe for %1$d items →</item>
+    </plurals>
+</resources>

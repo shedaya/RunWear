@@ -292,7 +292,7 @@ class OutfitTileService : SuspendingTileService() {
                     )
                     .addContent(
                         Text.Builder()
-                            .setText("Tap for details")
+                            .setText(getString(com.runwear.wear.R.string.wear_tap_for_details))
                             .setFontStyle(
                                 LayoutElementBuilders.FontStyle.Builder()
                                     .setSize(sp(10f))
@@ -450,7 +450,7 @@ class OutfitTileService : SuspendingTileService() {
                     .setHorizontalAlignment(LayoutElementBuilders.HORIZONTAL_ALIGN_CENTER)
                     .addContent(
                         Text.Builder()
-                            .setText("Couldn't load weather")
+                            .setText(getString(com.runwear.wear.R.string.wear_couldnt_load))
                             .setFontStyle(
                                 LayoutElementBuilders.FontStyle.Builder()
                                     .setSize(sp(13f))
@@ -464,7 +464,7 @@ class OutfitTileService : SuspendingTileService() {
                     )
                     .addContent(
                         Text.Builder()
-                            .setText("Tap to retry")
+                            .setText(getString(com.runwear.wear.R.string.wear_tap_to_retry))
                             .setFontStyle(
                                 LayoutElementBuilders.FontStyle.Builder()
                                     .setSize(sp(14f))
@@ -509,7 +509,7 @@ class OutfitTileService : SuspendingTileService() {
                     .setHorizontalAlignment(LayoutElementBuilders.HORIZONTAL_ALIGN_CENTER)
                     .addContent(
                         Text.Builder()
-                            .setText("Location needed")
+                            .setText(getString(com.runwear.wear.R.string.wear_location_needed))
                             .setFontStyle(
                                 LayoutElementBuilders.FontStyle.Builder()
                                     .setSize(sp(14f))
@@ -523,7 +523,7 @@ class OutfitTileService : SuspendingTileService() {
                     )
                     .addContent(
                         Text.Builder()
-                            .setText("Tap to enable")
+                            .setText(getString(com.runwear.wear.R.string.wear_tap_to_enable))
                             .setFontStyle(
                                 LayoutElementBuilders.FontStyle.Builder()
                                     .setSize(sp(12f))

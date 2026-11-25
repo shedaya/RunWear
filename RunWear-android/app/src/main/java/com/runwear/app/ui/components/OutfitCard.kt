@@ -253,7 +253,7 @@ fun OutfitCard(
             // External link icon (matching PWA v3.12 - direct affiliate link)
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = "Shop item",
+                contentDescription = com.runwear.app.i18n.AppStrings.shopItem(),
                 tint = RunWearColors.TextSecondary,
                 modifier = Modifier.size(18.dp)
             )
@@ -431,7 +431,7 @@ fun TipsSection(
                 Spacer(Modifier.weight(1f))
                 Icon(
                     imageVector = if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-                    contentDescription = if (expanded) "Show less" else "Show more",
+                    contentDescription = if (expanded) com.runwear.app.i18n.AppStrings.showLess() else com.runwear.app.i18n.AppStrings.showMore(),
                     tint = RunWearColors.TextSecondary,
                     modifier = Modifier.size(18.dp)
                 )
@@ -469,6 +469,6 @@ fun TipsSection(
  * "N items for your run" (design-spec §5). Every rendered header
  * resolves through here. */
 object OutfitHeaderCopy {
-    fun header(itemCount: Int): String = "$itemCount items for your run"
+    fun header(itemCount: Int): String = com.runwear.app.i18n.AppEnglish.OUTFIT_HEADER_ITEMS_TEMPLATE.format(itemCount)
 }
 

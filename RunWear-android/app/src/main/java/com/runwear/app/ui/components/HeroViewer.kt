@@ -110,7 +110,7 @@ internal fun HeroViewerContent(
         ) {
             AsyncImage(
                 model = imageRef,
-                contentDescription = "Outfit photo, full screen",
+                contentDescription = com.runwear.app.i18n.AppStrings.outfitPhotoFull(),
                 contentScale = ContentScale.Fit,
                 modifier = Modifier
                     .fillMaxSize()

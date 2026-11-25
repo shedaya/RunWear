@@ -28,7 +28,10 @@ class Gen5FurtherAuditTest {
     private fun source(path: String): String = listOf(
         "src/main/java/$path",
         "app/src/main/java/$path",
-        "../RunWear-android/app/src/main/java/$path"
+        "../RunWear-android/app/src/main/java/$path",
+        // LOC-1 WP-R2: resource files live under res/, not java/.
+        "src/main/$path",
+        "app/src/main/$path"
     ).map { File(it) }.first { it.exists() }.readText()
 
     // ── FA-6: the first-look count line composes from the meter ──
@@ -169,8 +172,15 @@ class Gen5FurtherAuditTest {
     fun `FA-16 - the empty collection speaks the settled frame`() {
         val screen = source("com/runwear/app/weariverun/WearIveRunCollectionScreen.kt")
         assertFalse(screen.contains("Nothing here yet"))
-        assertTrue(screen.contains("Your scrapbook starts with today's run"))
-        assertTrue(screen.contains("aren't backfilled"))
+        // WP-R2 re-pin: the empty-state copy is the
+        // collection_empty_title / collection_empty_body resources;
+        // the screen references them and the resources carry the
+        // settled sentences verbatim.
+        assertTrue(screen.contains("R.string.collection_empty_title"))
+        assertTrue(screen.contains("R.string.collection_empty_body"))
+        val res = source("res/values/strings.xml")
+        assertTrue(res.contains("Your scrapbook starts with today"))
+        assertTrue(res.contains("aren\\'t backfilled"))
     }
 
     @Test
@@ -185,7 +195,9 @@ class Gen5FurtherAuditTest {
         assertTrue(studio.contains("withTimeoutOrNull(20_000)"))
         assertTrue(studio.contains("RenderTimedOut"))
         assertTrue(studio.contains("shareFailed"))
-        assertTrue(studio.contains("Couldn't share this card — try again."))
+        // WP-R2 re-pin: the failure label is the
+        // share_couldnt_share resource at the site.
+        assertTrue(studio.contains("R.string.share_couldnt_share"))
     }
 
     @Test

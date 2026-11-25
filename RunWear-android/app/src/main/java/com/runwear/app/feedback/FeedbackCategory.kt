@@ -7,11 +7,11 @@ package com.runwear.app.feedback
  * wrong is never asked to rate in the same visit.
  */
 enum class FeedbackCategory(val label: String, val id: String, val isNegative: Boolean) {
-    SOMETHING_WRONG("Something's wrong", "something_wrong", true),
-    RECOMMENDATION_OFF("The recommendation seems off", "recommendation_off", true),
-    CONFUSING("Confusing", "confusing", false),
-    IDEA("Idea", "idea", false),
-    OTHER("Other", "other", false)
+    SOMETHING_WRONG(com.runwear.app.i18n.AppEnglish.FEEDBACK_CAT_SOMETHING_WRONG, "something_wrong", true),
+    RECOMMENDATION_OFF(com.runwear.app.i18n.AppEnglish.FEEDBACK_CAT_RECOMMENDATION_OFF, "recommendation_off", true),
+    CONFUSING(com.runwear.app.i18n.AppEnglish.FEEDBACK_CAT_CONFUSING, "confusing", false),
+    IDEA(com.runwear.app.i18n.AppEnglish.FEEDBACK_CAT_IDEA, "idea", false),
+    OTHER(com.runwear.app.i18n.AppEnglish.FEEDBACK_CAT_OTHER, "other", false)
 }
 
 /**

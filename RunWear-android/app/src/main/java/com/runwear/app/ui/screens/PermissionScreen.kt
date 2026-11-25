@@ -38,13 +38,7 @@ import com.runwear.app.ui.theme.RunWearColors
  * halves and must not come back.
  */
 object PermissionCopy {
-    const val LOCATION_PRIVACY_LINE =
-        "Your location fetches your weather and names your place. Your most " +
-            "recent location is saved on this phone so RunWear reopens where " +
-            "you left off. Weather lookups send your coordinates, rounded to " +
-            "a rough area, to Open-Meteo; place-name lookups send them to " +
-            "OpenStreetMap (Nominatim). Your location is never sold or used " +
-            "for advertising."
+    const val LOCATION_PRIVACY_LINE: String = com.runwear.app.i18n.AppEnglish.PERMISSION_LOCATION_PRIVACY
 }
 
 /**
@@ -159,7 +153,7 @@ fun PermissionScreen(
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(Modifier.width(8.dp))
-                Text("Trouble enabling location?")
+                Text(com.runwear.app.i18n.AppStrings.gpsHelpTitle())
                 Spacer(Modifier.width(4.dp))
                 Icon(
                     imageVector = if (showGpsHelp) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,

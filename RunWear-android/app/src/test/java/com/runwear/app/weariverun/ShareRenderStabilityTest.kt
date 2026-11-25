@@ -185,16 +185,21 @@ class ShareRenderStabilityTest {
         val studio = source!!
         // Progress is the labelled overlay pill in BOTH stages.
         assertTrue(studio.contains("ShareRenderProgressPill("))
-        assertTrue(studio.contains("Rendering previews…"))
+        // WP-R2 re-pin: the progress line is the share_rendering resource.
+        assertTrue(studio.contains("R.string.share_rendering"))
         // A render that neither succeeds nor errors lands on the
         // honest failure surface after the timeout.
         assertTrue(studio.contains("withTimeoutOrNull(20_000)"))
-        assertTrue(studio.contains("Couldn't render this card"))
+        // WP-R2 re-pin: the render-failure lines are the
+        // share_render_* resources at their sites.
+        assertTrue(studio.contains("R.string.share_render_timeout"))
+        assertTrue(studio.contains("R.string.share_render_retry"))
         // The verify gate: the raster is inspected before the
         // share, its failure line is the settled §7 wording, and
         // Share is held unless the verdict is Valid.
         assertTrue(studio.contains("ShareRasterVerifier.verify"))
-        assertTrue(studio.contains("This card didn't render cleanly — try again"))
+        // WP-R2 re-pin: the §7 line is the share_render_dirty resource.
+        assertTrue(studio.contains("R.string.share_render_dirty"))
         assertTrue(studio.contains("ShareRasterResult.Valid"))
     }
 }

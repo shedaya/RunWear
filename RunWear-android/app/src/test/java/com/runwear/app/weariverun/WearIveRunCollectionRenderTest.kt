@@ -149,17 +149,20 @@ class WearIveRunCollectionRenderTest : WearElementHarness() {
         val studio = source(
             "app/src/main/java/com/runwear/app/weariverun/ShareStudioComponents.kt"
         )
-        assertTrue(studio.contains("Share this day"))
-        assertTrue(studio.contains("Morning Poster"))
-        assertTrue(studio.contains("Kit Card"))
+        // WP-R2 re-pin: the studio's door labels are resources.
+        assertTrue(studio.contains("R.string.share_this_day"))
+        assertTrue(studio.contains("R.string.share_card_morning_poster"))
+        assertTrue(studio.contains("R.string.share_kit_card"))
         assertTrue(
             "poster choice is a rendered thumbnail, not a bare text row",
-            studio.contains("\"Morning Poster\"") &&
+            studio.contains("R.string.share_card_morning_poster") &&
                 studio.contains("thumbnail")
         )
         assertTrue(
             "kit choice is a rendered thumbnail, not a bare text row",
-            studio.contains("\"Kit Card\"")
+            // WP-R2 re-pin: the kit label is the share_kit_card resource.
+            studio.contains("R.string.share_kit_card") &&
+                studio.contains("thumbnail")
         )
     }
 }
