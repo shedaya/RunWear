@@ -119,13 +119,37 @@ const QUALITY_SUFFIX =
   `arms bent at the elbows and swinging naturally beside the torso, hands relaxed ` +
   `at the runner's sides — never reaching across the back or touching the shoulders; ` +
   `each hand with five correct fingers; legs in a natural mid-stride gait with knees ` +
-  `and feet pointing in the direction of travel; if the runner is seen from behind, ` +
-  `arms, legs and hands must remain anatomically coherent from the back view. ` +
+  `and feet pointing in the direction of travel. ` +
   `Photorealistic, shot on a full-frame camera. Avoid: distorted or merged limbs, ` +
   `extra fingers, hands or limbs, warped joints, backwards-bending arms.`
 
 function ensureQualitySuffix(prompt: string): string {
   return prompt.includes(QUALITY_MARKER) ? prompt : prompt + QUALITY_SUFFIX
+}
+
+// Facing-camera composition (2026-11-25, plan step 5 — step-back diagnosis
+// §(d)). Until now the prompt stack never specified a facing direction, and
+// the quality suffix above even licensed the opposite ("if the runner is
+// seen from behind, arms, legs and hands must remain anatomically coherent
+// from the back view" — removed in this change): the recipe drew runners
+// from behind at a high rate, and the census rubric (v1) had no
+// face-presence or orientation criterion to catch them, so back views were
+// judged PASS and swapped into the approved pool (31 of 100 pilot wave-1
+// draws; the canonical generic for MALE_CLOUDY_COOL_DUSK_84c10525 is one).
+// Rubric v2 (census/RUBRIC-v2.md) now fails them; this clause stops making
+// them. Hardened HERE, server-side, for the same reason as the clauses
+// above: every queued job is covered regardless of which client or script
+// queued it. PREPARED 2026-11-25 under the RW-176 freeze — deploys only
+// with the replacement programme's resumption.
+const FACING_MARKER = 'FACING:'
+const FACING_CLAUSE =
+  ` ${FACING_MARKER} the runner faces the camera — photographed from the ` +
+  `front, running toward the camera, face fully visible and turned toward ` +
+  `the camera with eyes, nose and mouth clearly seen; never photographed ` +
+  `from behind, never a back view.`
+
+function ensureFacingClause(prompt: string): string {
+  return prompt.includes(FACING_MARKER) ? prompt : prompt + FACING_CLAUSE
 }
 
 // Ear-warmer placement (RW-176, 2026-11-16). Generic prompts are assembled
@@ -821,7 +845,7 @@ async function processJob(job: Record<string, unknown> & { id: unknown, combinat
       }
     }
 
-    const prompt = ensureBeanieClause(ensureEarWarmerClause(ensureQualitySuffix(job.prompt)))
+    const prompt = ensureFacingClause(ensureBeanieClause(ensureEarWarmerClause(ensureQualitySuffix(job.prompt))))
 
     // Ear-warmer and beanie jobs take the two-stage hybrid route (see
     // stripEarWarmer / stripBeanie): stage 1 generates the runner
