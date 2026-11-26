@@ -1027,7 +1027,6 @@ internal fun MakeItMeUploadFlow(
     }
 }
 
-@Composable
 /**
  * RW-180 (Nov 26, 2026): the reference-photo EXAMPLE card on the
  * capture step. The slot is wired for the bundled asset
@@ -1102,6 +1101,7 @@ private fun ReferenceExampleCard() {
     }
 }
 
+@Composable
 private fun PickedPhotoRow(picked: PickedPhoto, onRemove: () -> Unit) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
