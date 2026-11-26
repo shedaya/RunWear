@@ -84,16 +84,46 @@ class ForkBandNonEmptyTest {
     }
 
     @Test
-    fun `the first-look moment is fed by the same resolution and resolved state`() {
+    fun `the first-look moment is fed by the RW-177 photo policy and resolved state`() {
+        // RW-177 (ruling 2026-11-25): this pin previously asserted
+        // the moment's photo WAS uiState.effectiveHeroUrl — the
+        // home scene's resolution. That wiring IS the diagnosed
+        // RW-177 defect: raised from the onboarding upload flow,
+        // the moment inherited a scene resolution that had not
+        // landed, and the first-look screen stood blank for the
+        // whole making phase (2026-11-25 incident). The pin now
+        // asserts the RW-177 policy instead: the moment's photo
+        // resolves through FirstLookPhotoPolicy.photoToShow — the
+        // personal photo when displayed, else the first-look
+        // cell's OWN approved generic, else the scene's resolution
+        // as the last resort — and effectiveHeroUrl must never
+        // feed the moment directly again. Do not restore the old
+        // assertion: the served-result harness verified the policy
+        // behaviour against the live pool (step 4: never-blank
+        // PASS, first-look PASS).
         val mainActivity = sourceFile(
             "app/src/main/java/com/runwear/app/MainActivity.kt"
         ).readText()
         val momentCall = mainActivity.indexOf("FirstLookMoment(")
         assertTrue("first-look call site exists", momentCall >= 0)
-        val momentArgs = mainActivity.substring(momentCall, momentCall + 1600)
+        val momentArgs = mainActivity.substring(momentCall, momentCall + 2200)
         assertTrue(
-            "the moment's photo must be uiState.effectiveHeroUrl",
-            momentArgs.contains("photoUrl = uiState.effectiveHeroUrl")
+            "the moment's photo must resolve through FirstLookPhotoPolicy",
+            momentArgs.contains(
+                "photoUrl = com.runwear.app.makeitme.FirstLookPhotoPolicy.photoToShow("
+            )
+        )
+        assertTrue(
+            "the policy's generic tier must be the first-look cell's own approved generic",
+            momentArgs.contains("genericPhotoUrl = uiState.firstLookGenericUrl")
+        )
+        assertTrue(
+            "the scene resolution may appear only as the policy's last-resort tier",
+            momentArgs.contains("scenePhotoUrl = uiState.effectiveHeroUrl")
+        )
+        assertTrue(
+            "RW-177: effectiveHeroUrl must NOT feed the moment directly",
+            !momentArgs.contains("photoUrl = uiState.effectiveHeroUrl")
         )
         assertTrue(
             "the moment's claims must resolve through FirstLookPresentation",
