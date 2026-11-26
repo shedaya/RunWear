@@ -75,7 +75,7 @@
 // the cell is current again.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!
@@ -168,6 +168,25 @@ async function retirePriorHeroes(
   }
 }
 
+// RW-137 subscription-as-identity: the uid whose rows hold the
+// caller's bank. reconcile-personal-entitlement maintains
+// personal_profiles.bank_user_id from the caller's verified
+// subscription; until it resolves (or for free/lapsed users) the
+// bank is the caller themself. All personal-data reads/writes in
+// this function key on the resolved uid; only entitlement checks
+// key on the authenticated uid.
+async function resolveBankUserId(
+  sb: SupabaseClient<any, any, any>, userId: string,
+): Promise<string> {
+  const { data } = await sb
+    .from('personal_profiles')
+    .select('bank_user_id')
+    .eq('user_id', userId)
+    .maybeSingle()
+  const bank = (data as { bank_user_id?: string | null } | null)?.bank_user_id
+  return typeof bank === 'string' && bank !== '' ? bank : userId
+}
+
 serve(async (req) => {
   try {
     if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405)
@@ -178,7 +197,7 @@ serve(async (req) => {
     })
     const { data: userData, error: userError } = await userClient.auth.getUser()
     if (userError || !userData.user) return jsonResponse({ error: 'Unauthorized' }, 401)
-    const userId = userData.user.id
+    const authUserId = userData.user.id
 
     const body = await req.json().catch(() => ({})) as Record<string, unknown>
     const combinationId = body.combination_id
@@ -187,6 +206,7 @@ serve(async (req) => {
     }
 
     const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+    const userId = await resolveBankUserId(sb, authUserId)
 
     const { data: cell } = await sb
       .from('personal_cells')
@@ -377,10 +397,12 @@ serve(async (req) => {
     // regeneration takes precedence, and replenishment resumes once
     // the cell is current again.
     let replenishmentQueued = 0
+    // The entitlement gate reads the AUTHENTICATED user's profile —
+    // the bank owner's stored flag can be stale after a transfer.
     const { data: profile } = await sb
       .from('personal_profiles')
       .select('entitled')
-      .eq('user_id', userId)
+      .eq('user_id', authUserId)
       .maybeSingle()
     if (profile?.entitled === true && regenStatus === 'current' && serving.length < VARIANT_CAP) {
       const { data: active } = await sb

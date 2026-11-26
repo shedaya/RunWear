@@ -26,7 +26,7 @@
 // Non-entitled users are refused — the fill is a subscriber benefit.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!
@@ -201,6 +201,23 @@ function jsonResponse(body: unknown, status = 200): Response {
   })
 }
 
+// RW-137 subscription-as-identity: the uid whose rows hold the
+// caller's bank, maintained on personal_profiles.bank_user_id by
+// reconcile-personal-entitlement. Falls back to the caller. The
+// entitlement gate below reads the TARGET user's own profile; the
+// fill's data (gender, epoch, references, jobs) keys on the bank.
+async function resolveBankUserId(
+  sb: SupabaseClient<any, any, any>, userId: string,
+): Promise<string> {
+  const { data } = await sb
+    .from('personal_profiles')
+    .select('bank_user_id')
+    .eq('user_id', userId)
+    .maybeSingle()
+  const bank = (data as { bank_user_id?: string | null } | null)?.bank_user_id
+  return typeof bank === 'string' && bank !== '' ? bank : userId
+}
+
 serve(async (req) => {
   try {
     if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405)
@@ -238,13 +255,22 @@ serve(async (req) => {
       userId = data.user.id
     }
 
+    // RW-137: key the fill on the bank; gate on the target user.
+    const targetUserId = userId
+    userId = await resolveBankUserId(sb, userId)
+    const { data: targetProfile } = await sb
+      .from('personal_profiles')
+      .select('entitled')
+      .eq('user_id', targetUserId)
+      .maybeSingle()
+
     const { data: profile } = await sb
       .from('personal_profiles')
       .select('*')
       .eq('user_id', userId)
       .maybeSingle()
     if (!profile) return jsonResponse({ error: 'No personalization profile for this user' }, 404)
-    if (profile.entitled !== true) {
+    if (targetProfile?.entitled !== true) {
       return jsonResponse({ error: 'not_entitled', message: 'The initial fill is a subscriber benefit.' }, 403)
     }
 

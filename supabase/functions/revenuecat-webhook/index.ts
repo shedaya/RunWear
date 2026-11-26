@@ -63,6 +63,21 @@
 // so the personal_entitlement_events audit trail holds one row per real
 // transition, each with source 'revenuecat-webhook'.
 //
+// RW-137 subscription-as-identity (2026-11-25): this handler is also
+// the EVIDENCE capture for bank resolution. RevenueCat's v1 subscriber
+// GET — the only other server read — contains neither aliases nor
+// original_transaction_id (verified live, Nov 25, 2026 restore
+// exercise); the identifiers that survive a delete-and-reinstall
+// exist ONLY in these webhook payloads: original_transaction_id on
+// lifecycle events, transferred_from / transferred_to on TRANSFER.
+// Every authenticated event's identity fields are therefore recorded
+// verbatim in personal_subscription_links BEFORE the entitlement
+// filter runs, and a TRANSFER additionally links the destination uid
+// to every subscription key the source uid's evidence carries.
+// reconcile-personal-entitlement derives bank ownership from that
+// table. Capture is failure-isolated: an evidence-write error is
+// logged and never fails the entitlement path.
+//
 // On a false->true grant transition the function best-effort kicks
 // start-personal-fill (service role + user_id), matching the billing
 // hookup the backend build specified; the clients call it too, and the
@@ -98,6 +113,20 @@ function authorized(req: Request): boolean {
   const header = req.headers.get('authorization')
   if (!header || !WEBHOOK_AUTH_KEY) return false
   return header === WEBHOOK_AUTH_KEY || header === `Bearer ${WEBHOOK_AUTH_KEY}`
+}
+
+// Mirrors public.derive_subscription_key (migration 20261126010000)
+// and the identical helper in reconcile-personal-entitlement: Google
+// Play order ids increment per renewal as GPA.<base>..N; the base
+// identifies the subscription chain. Apple ids carry no suffix.
+function deriveSubscriptionKey(store: unknown, otid: unknown): string | null {
+  if (typeof otid !== 'string' || otid.trim() === '') return null
+  const storePart = typeof store === 'string' && store.trim() !== '' ? store : 'unknown'
+  return `store:${storePart}:${otid.split('..')[0]}`
+}
+
+function strOrNull(v: unknown): string | null {
+  return typeof v === 'string' && v !== '' ? v : null
 }
 
 function concernsEntitlement(event: Record<string, unknown>): boolean {
@@ -143,13 +172,82 @@ serve(async (req: Request) => {
     })
   }
 
+  // RW-137 evidence capture (see header). Runs for EVERY
+  // authenticated, non-duplicate event — including event types the
+  // entitlement path treats as no-ops — and never throws.
+  try {
+    if (type === 'TRANSFER') {
+      const froms = Array.isArray(event.transferred_from) ? event.transferred_from : []
+      const tos = Array.isArray(event.transferred_to) ? event.transferred_to : []
+      for (const fromRaw of froms) {
+        const from = strOrNull(fromRaw)
+        if (!from) continue
+        const { data: sourceLinks } = await admin
+          .from('personal_subscription_links')
+          .select('subscription_key')
+          .or(`app_user_id.eq.${from},original_app_user_id.eq.${from}`)
+          .not('subscription_key', 'is', null)
+          .limit(50)
+        const keys = [...new Set((sourceLinks ?? [])
+          .map(r => r.subscription_key as string | null)
+          .filter((k): k is string => !!k))]
+        for (const toRaw of tos) {
+          const to = strOrNull(toRaw)
+          if (!to) continue
+          if (keys.length === 0) {
+            // No key evidence for the source yet: still record the
+            // from -> to edge; reconcile treats the source as an
+            // original-owner candidate for the destination.
+            await admin.from('personal_subscription_links').insert({
+              event_id: eventId ? `${eventId}:${from}:${to}` : null,
+              event_type: 'TRANSFER',
+              app_user_id: to, transferred_from: from, transferred_to: to,
+              store: strOrNull(event.store),
+            })
+          } else {
+            for (const key of keys) {
+              await admin.from('personal_subscription_links').insert({
+                event_id: eventId ? `${eventId}:${from}:${to}:${key}` : null,
+                event_type: 'TRANSFER',
+                app_user_id: to, transferred_from: from, transferred_to: to,
+                subscription_key: key, store: strOrNull(event.store),
+              })
+            }
+          }
+        }
+      }
+    } else {
+      const otid = strOrNull(event.original_transaction_id)
+      const appUser = strOrNull(event.app_user_id)
+      const originalUser = strOrNull(event.original_app_user_id)
+      if (otid || appUser || originalUser) {
+        await admin.from('personal_subscription_links').insert({
+          event_id: eventId,
+          event_type: type,
+          app_user_id: appUser,
+          original_app_user_id: originalUser,
+          subscription_key: deriveSubscriptionKey(event.store, otid),
+          original_transaction_id: otid,
+          transaction_id: strOrNull(event.transaction_id),
+          store: strOrNull(event.store),
+        })
+      }
+    }
+  } catch (e) {
+    console.error('[revenuecat-webhook] subscription link capture failed:', e)
+  }
+
   // RC's dashboard probe (and every non-entitlement event kind not in
   // the grant/clear sets): acknowledge, change nothing.
   const isGrant = GRANT_TYPES.has(type)
   const isClear = CLEAR_TYPES.has(type)
   if (!isGrant && !isClear) {
-    await record(null, false, 'no_op_event_type')
-    return jsonResponse({ ok: true, applied: false, reason: 'no_op_event_type', type })
+    // TRANSFER lands here too: no entitlement mutation (the
+    // destination's own lifecycle events carry that), but its
+    // identity evidence was captured above — say so in the audit row.
+    const detail = type === 'TRANSFER' ? 'transfer_evidence_recorded' : 'no_op_event_type'
+    await record(null, false, detail)
+    return jsonResponse({ ok: true, applied: false, reason: detail, type })
   }
   if (!concernsEntitlement(event)) {
     await record(null, false, 'other_entitlement_or_product')

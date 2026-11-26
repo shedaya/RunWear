@@ -68,7 +68,7 @@
 // consume no allowance.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!
@@ -149,6 +149,24 @@ async function getCaller(req: Request) {
   const { data, error } = await userClient.auth.getUser()
   if (error || !data.user) return null
   return data.user
+}
+
+// RW-137 subscription-as-identity: the uid whose rows hold the
+// caller's bank, maintained on personal_profiles.bank_user_id by
+// reconcile-personal-entitlement. Falls back to the caller. All
+// bank data in this function (profile, cells, heroes, jobs,
+// references) keys on the resolved uid; the single exception is the
+// personal_consents attestation row, which records who attested.
+async function resolveBankUserId(
+  sb: SupabaseClient<any, any, any>, userId: string,
+): Promise<string> {
+  const { data } = await sb
+    .from('personal_profiles')
+    .select('bank_user_id')
+    .eq('user_id', userId)
+    .maybeSingle()
+  const bank = (data as { bank_user_id?: string | null } | null)?.bank_user_id
+  return typeof bank === 'string' && bank !== '' ? bank : userId
 }
 
 async function ensureProfile(sb: ReturnType<typeof serviceClient>, userId: string) {
@@ -232,7 +250,8 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({})) as Record<string, unknown>
     const action = typeof body.action === 'string' ? body.action : 'request'
     const sb = serviceClient()
-    const profile = await ensureProfile(sb, user.id)
+    const bankUserId = await resolveBankUserId(sb, user.id)
+    const profile = await ensureProfile(sb, bankUserId)
 
     // ---------------- record_consent ----------------
     if (action === 'record_consent') {
@@ -261,7 +280,7 @@ serve(async (req) => {
       const { error: profileError } = await sb
         .from('personal_profiles')
         .update({ personalization_on: true, gender, updated_at: new Date().toISOString() })
-        .eq('user_id', user.id)
+        .eq('user_id', bankUserId)
       if (profileError) throw profileError
       return jsonResponse({ ok: true, personalization_on: true, gender })
     }
@@ -312,6 +331,40 @@ serve(async (req) => {
         }
       }
 
+      // RW-137: when the caller's bank lives under another uid (a
+      // restored subscription), the reference set belongs to the
+      // BANK. The uploads sit in the caller's own storage folder
+      // (the prefix rule above is a security property and stays);
+      // copy them into the bank's folder and register the bank's
+      // paths under the bank's uid, so the worker — which reads
+      // references by the job's (bank) uid — sees the new set, and
+      // the keep-serving regeneration below marks the bank's cells.
+      let refOwnerId = user.id
+      let effectivePaths = paths as string[]
+      if (bankUserId !== user.id) {
+        const copied: string[] = []
+        for (const p of paths as string[]) {
+          const base = p.split('/').pop() as string
+          const target = `${bankUserId}/refs/${base}`
+          await sb.storage.from('personal-heroes').remove([target])
+          const { error: copyError } = await sb.storage
+            .from('personal-heroes')
+            .copy(p, target)
+          if (copyError) throw copyError
+          copied.push(target)
+        }
+        const { data: bankListing, error: bankListError } = await sb.storage
+          .from('personal-heroes')
+          .list(`${bankUserId}/refs`, { limit: 10 })
+        if (bankListError) throw bankListError
+        currentStamps.clear()
+        for (const o of bankListing ?? []) {
+          currentStamps.set(`${bankUserId}/refs/${o.name}`, stampOf(o as unknown as Record<string, unknown>))
+        }
+        refOwnerId = bankUserId
+        effectivePaths = copied
+      }
+
       // (b) Change detection against the previously registered set,
       // position by position: a different path at a position, a
       // different count, or a different stamp at the same path (the
@@ -322,18 +375,18 @@ serve(async (req) => {
       const { data: oldRefs } = await sb
         .from('personal_reference_photos')
         .select('storage_path, object_stamp')
-        .eq('user_id', user.id)
+        .eq('user_id', refOwnerId)
         .order('position', { ascending: true })
       let referencesChanged = false
       if (oldRefs && oldRefs.length > 0) {
-        if (oldRefs.length !== (paths as string[]).length) {
+        if (oldRefs.length !== effectivePaths.length) {
           referencesChanged = true
         } else {
-          for (let i = 0; i < (paths as string[]).length; i++) {
+          for (let i = 0; i < effectivePaths.length; i++) {
             const old = oldRefs[i]
-            if (old.storage_path !== (paths as string[])[i]) { referencesChanged = true; break }
+            if (old.storage_path !== effectivePaths[i]) { referencesChanged = true; break }
             if (old.object_stamp !== null &&
-                old.object_stamp !== currentStamps.get((paths as string[])[i])) {
+                old.object_stamp !== currentStamps.get(effectivePaths[i])) {
               referencesChanged = true; break
             }
           }
@@ -366,12 +419,12 @@ serve(async (req) => {
         const { data: heroRows } = await sb
           .from('personal_heroes')
           .select('combination_id')
-          .eq('user_id', user.id)
+          .eq('user_id', refOwnerId)
         heroesKeptServing = heroRows?.length ?? 0
         const { data: deliveredCells } = await sb
           .from('personal_cells')
           .select('combination_id')
-          .eq('user_id', user.id)
+          .eq('user_id', refOwnerId)
           .eq('ever_delivered', true)
         const cellIds = new Set<string>()
         for (const c of deliveredCells ?? []) cellIds.add(c.combination_id as string)
@@ -385,7 +438,7 @@ serve(async (req) => {
               regen_error: null,
               updated_at: pendingSince
             })
-            .eq('user_id', user.id)
+            .eq('user_id', refOwnerId)
             .in('combination_id', [...cellIds])
             .select('combination_id')
           if (markError) throw markError
@@ -395,9 +448,9 @@ serve(async (req) => {
 
       // Replace the reference set wholesale (positions 1..3),
       // recording the stamps for the next change detection.
-      await sb.from('personal_reference_photos').delete().eq('user_id', user.id)
-      const rows = (paths as string[]).map((p, i) => ({
-        user_id: user.id, storage_path: p, position: i + 1,
+      await sb.from('personal_reference_photos').delete().eq('user_id', refOwnerId)
+      const rows = effectivePaths.map((p, i) => ({
+        user_id: refOwnerId, storage_path: p, position: i + 1,
         object_stamp: currentStamps.get(p) ?? null
       }))
       const { error: insertError } = await sb.from('personal_reference_photos').insert(rows)
@@ -435,7 +488,7 @@ serve(async (req) => {
       const { data: consent } = await sb
         .from('personal_consents')
         .select('id')
-        .eq('user_id', user.id)
+        .eq('user_id', bankUserId)
         .eq('attested_own_likeness', true)
         .eq('attested_adult', true)
         .limit(1)
@@ -447,7 +500,7 @@ serve(async (req) => {
       const { count: refCount } = await sb
         .from('personal_reference_photos')
         .select('id', { count: 'exact', head: true })
-        .eq('user_id', user.id)
+        .eq('user_id', bankUserId)
       if (!refCount || refCount < 1) {
         return jsonResponse({ error: 'references_required', message: 'Upload and register at least one reference photo first.' }, 403)
       }
@@ -463,7 +516,7 @@ serve(async (req) => {
       const { data: cellRow } = await sb
         .from('personal_cells')
         .select('ever_delivered, regen_status, regen_pending_since, regen_error')
-        .eq('user_id', user.id)
+        .eq('user_id', bankUserId)
         .eq('combination_id', cell.combinationId)
         .maybeSingle()
       const regenState = (cellRow?.regen_status as string | undefined) ?? 'current'
@@ -476,7 +529,7 @@ serve(async (req) => {
       const { data: heroRows } = await sb
         .from('personal_heroes')
         .select('id, variant, storage_path, created_at')
-        .eq('user_id', user.id)
+        .eq('user_id', bankUserId)
         .eq('combination_id', cell.combinationId)
       const allHeroes = heroRows ?? []
       const freshHeroes = regenPending
@@ -491,7 +544,7 @@ serve(async (req) => {
       // before this moment) and mark the cell current — then the
       // cell is simply available.
       if (regenPending && freshHeroes.length > 0) {
-        await retirePriorHeroes(sb, user.id, cell.combinationId, priorHeroes)
+        await retirePriorHeroes(sb, bankUserId, cell.combinationId, priorHeroes)
         return jsonResponse({ status: 'already_available', combination_id: cell.combinationId })
       }
 
@@ -508,7 +561,7 @@ serve(async (req) => {
       const { data: active } = await sb
         .from('personal_generation_jobs')
         .select('id, status')
-        .eq('user_id', user.id)
+        .eq('user_id', bankUserId)
         .eq('combination_id', cell.combinationId)
         .in('status', ['QUEUED', 'PROCESSING'])
         .limit(1)
@@ -541,7 +594,7 @@ serve(async (req) => {
         const { data: lastJob } = await sb
           .from('personal_generation_jobs')
           .select('status, error_message')
-          .eq('user_id', user.id)
+          .eq('user_id', bankUserId)
           .eq('combination_id', cell.combinationId)
           .gte('requested_at', pendingSince)
           .order('requested_at', { ascending: false })
@@ -554,7 +607,7 @@ serve(async (req) => {
               regen_error: (lastJob[0].error_message as string | null) ?? 'generation_failed',
               updated_at: new Date().toISOString()
             })
-            .eq('user_id', user.id)
+            .eq('user_id', bankUserId)
             .eq('combination_id', cell.combinationId)
         }
       }
@@ -574,7 +627,7 @@ serve(async (req) => {
       const { data: job, error: jobError } = await sb
         .from('personal_generation_jobs')
         .insert({
-          user_id: user.id,
+          user_id: bankUserId,
           combination_id: cell.combinationId,
           gender: cell.gender,
           weather: cell.weather,
@@ -598,7 +651,7 @@ serve(async (req) => {
         await sb
           .from('personal_cells')
           .update({ regen_status: 'pending', updated_at: new Date().toISOString() })
-          .eq('user_id', user.id)
+          .eq('user_id', bankUserId)
           .eq('combination_id', cell.combinationId)
       }
 
@@ -631,7 +684,7 @@ serve(async (req) => {
         .from('personal_heroes')
         .select('id, combination_id, variant, storage_path, outfit_items')
         .eq('id', heroId)
-        .eq('user_id', user.id)
+        .eq('user_id', bankUserId)
         .maybeSingle()
       if (!hero) return jsonResponse({ error: 'hero_not_found' }, 404)
 
@@ -645,7 +698,7 @@ serve(async (req) => {
         .from('personal_heroes')
         .delete()
         .eq('id', hero.id)
-        .eq('user_id', user.id)
+        .eq('user_id', bankUserId)
       if (heroDeleteError) throw heroDeleteError
       const { error: removeError } = await sb.storage
         .from('personal-heroes')
@@ -658,7 +711,7 @@ serve(async (req) => {
       const { error: flagError } = await sb
         .from('personal_hero_flags')
         .insert({
-          user_id: user.id,
+          user_id: bankUserId,
           hero_id: hero.id,
           combination_id: hero.combination_id,
           variant: hero.variant,
@@ -674,7 +727,7 @@ serve(async (req) => {
       const { data: active } = await sb
         .from('personal_generation_jobs')
         .select('id')
-        .eq('user_id', user.id)
+        .eq('user_id', bankUserId)
         .eq('combination_id', hero.combination_id)
         .in('status', ['QUEUED', 'PROCESSING'])
         .limit(1)
@@ -684,7 +737,7 @@ serve(async (req) => {
         const { data: job, error: jobError } = await sb
           .from('personal_generation_jobs')
           .insert({
-            user_id: user.id,
+            user_id: bankUserId,
             combination_id: hero.combination_id,
             gender: parts[0], weather: parts[1],
             temp_bracket: parts[2], time_of_day: parts[3],
