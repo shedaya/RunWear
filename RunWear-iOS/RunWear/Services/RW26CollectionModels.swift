@@ -2119,7 +2119,13 @@ enum SelfieGuidance {
     /// Face area share the guide asks for: large enough to read,
     /// with margin around it (and never past the intake's
     /// too-close line, which PhotoQualityVerdict also enforces).
-    static let minimumFaceAreaRatio: Double = 0.08
+    ///
+    /// RW-180 (Nov 26, 2026): raised 0.08 → 0.10 so the coaching
+    /// target IS the intake floor (PhotoQualityVerdict's
+    /// tooSmallThreshold) — at 0.08 the calibration's far-away
+    /// reference (0.087) coached as acceptable and then produced
+    /// the bad batch. One line, both doors.
+    static let minimumFaceAreaRatio: Double = 0.10
     /// |yaw| beyond this is not "frontal".
     static let maximumYawDegrees: Double = 15
     /// The intake's own darkness floor (PhotoQualityVerdict).
@@ -2129,13 +2135,17 @@ enum SelfieGuidance {
         faceCount: Int,
         largestFaceAreaRatio: Double,
         yawDegrees: Double,
-        meanLuminance: Double
+        meanLuminance: Double,
+        faceMeanLuminance: Double? = nil
     ) -> SelfieEvaluation {
         SelfieEvaluation(results: [
             .faceFound: faceCount == 1,
             .faceLargeEnough: faceCount == 1 && largestFaceAreaRatio >= minimumFaceAreaRatio,
             .faceFrontal: faceCount == 1 && abs(yawDegrees) <= maximumYawDegrees,
-            .wellLit: meanLuminance >= minimumLuminance
+            // RW-180: the Light chip reads the FACE's light too —
+            // the verdict's rule verbatim (PhotoQualityVerdict).
+            .wellLit: PhotoQualityVerdict.lightPasses(
+                meanLuminance: meanLuminance, faceMeanLuminance: faceMeanLuminance)
         ])
     }
 

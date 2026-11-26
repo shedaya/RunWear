@@ -827,6 +827,13 @@ internal fun MakeItMeUploadFlow(
                     color = RunWearColors.TextSecondary
                 )
                 Spacer(Modifier.height(14.dp))
+                // RW-180 (Nov 26, 2026): the example card — what a
+                // good reference looks like, shown BEFORE the user
+                // picks (Sol: "better light and close up images —
+                // maybe put an example"). iOS carries the identical
+                // card in the identical seat.
+                ReferenceExampleCard()
+                Spacer(Modifier.height(14.dp))
                 // RW-26: guided capture is THE primary door (the app
                 // dictates the selfie: overlay + live ML Kit chips);
                 // upload stays the secondary door below, judged by
@@ -1021,6 +1028,80 @@ internal fun MakeItMeUploadFlow(
 }
 
 @Composable
+/**
+ * RW-180 (Nov 26, 2026): the reference-photo EXAMPLE card on the
+ * capture step. The slot is wired for the bundled asset
+ * `mim_example_good` (a well-lit, close-up, front-on example);
+ * until that asset lands, the slot renders a clearly-labelled
+ * placeholder treatment — the framing oval over a neutral ground
+ * with the placeholder label — never a fake person's photo.
+ * The caption is the settled C2K line (Sol's framing: better
+ * light, close up).
+ */
+@Composable
+private fun ReferenceExampleCard() {
+    val context = LocalContext.current
+    val exampleResId = remember {
+        context.resources.getIdentifier(
+            "mim_example_good", "drawable", context.packageName
+        )
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(RunWearColors.BgCard, RoundedCornerShape(16.dp))
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(width = 84.dp, height = 112.dp)
+                .background(
+                    com.runwear.app.ui.theme.DarkPalette.Background,
+                    RoundedCornerShape(12.dp)
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            if (exampleResId != 0) {
+                androidx.compose.foundation.Image(
+                    painter = androidx.compose.ui.res.painterResource(exampleResId),
+                    contentDescription = null,
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                // Placeholder treatment: the coaching oval and the
+                // label, so the slot's purpose reads even with no
+                // asset — and no invented face stands in for one.
+                Box(
+                    modifier = Modifier
+                        .size(width = 56.dp, height = 76.dp)
+                        .border(
+                            2.dp,
+                            com.runwear.app.ui.theme.PhotoInk.copy(alpha = 0.7f),
+                            androidx.compose.foundation.shape.CircleShape
+                        )
+                )
+                Text(
+                    text = MakeItMeStrings.C2L_EXAMPLE_PLACEHOLDER,
+                    fontSize = 10.sp,
+                    color = com.runwear.app.ui.theme.PhotoInk.copy(alpha = 0.7f),
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 6.dp)
+                )
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(
+            text = MakeItMeStrings.C2K_EXAMPLE_CAPTION,
+            fontSize = 14.sp,
+            lineHeight = 20.sp,
+            color = RunWearColors.TextPrimary
+        )
+    }
+}
+
 private fun PickedPhotoRow(picked: PickedPhoto, onRemove: () -> Unit) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {

@@ -1843,6 +1843,7 @@ enum PhotoRejection: Equatable {
     case tooClose         // C3d
     case faceTooSmall     // C3E (RW-26: frame 18's failed check)
     case rotated          // C3G (WS-6 / F-1: the roll gate)
+    case tooLowResolution // C3J (RW-180: the resolution floor)
 
     var specString: String {
         switch self {
@@ -1868,6 +1869,10 @@ enum PhotoRejection: Equatable {
             // C3G: verbatim with Android's MakeItMeStrings
             // C3G_REJECT_ROTATED (both platforms, one string).
             return AppStrings.mimRejectRotated
+        case .tooLowResolution:
+            // C3J (RW-180): verbatim with Android's MakeItMeStrings
+            // C3J_REJECT_LOW_RESOLUTION (both platforms, one string).
+            return AppStrings.mimRejectLowResolution
         }
     }
 }
@@ -1955,10 +1960,40 @@ enum PhotoQualityVerdict {
     /// half the frame).
     static let tooCloseThreshold: Double = 0.45
     /// Largest-face area share below which the face is too small to
-    /// read (RW-26, frame 18's failed check). Deliberately far
-    /// below the guided capture's coaching target — this rejects
-    /// only faces no pipeline could use.
-    static let tooSmallThreshold: Double = 0.02
+    /// read (RW-26, frame 18's failed check).
+    ///
+    /// RW-180 (Nov 26, 2026): raised 0.02 → 0.10 on Sol's ruling —
+    /// the Make It Me fix is input quality (better light, close
+    /// up), and the old "deliberately far below the coaching
+    /// target" line waved through exactly the class that failed:
+    /// the calibration's far-away reference measures a 0.087 face
+    /// area share and PASSED at 0.02 (and at the guided target's
+    /// old 0.08), while the three accepted references measure
+    /// 0.116–0.173. 0.10 sits between them with margin on both
+    /// sides, and the guided coaching target now matches this
+    /// floor (SelfieGuidance.minimumFaceAreaRatio) — one line,
+    /// both doors. Android judges the same line as a face-WIDTH
+    /// floor (0.30; area ≈ 1.1 × width² on portrait frames — the
+    /// same references read 0.272 fail / 0.324–0.393 pass).
+    static let tooSmallThreshold: Double = 0.10
+    /// RW-180: the FACE's own mean-luminance floor and the
+    /// face-to-frame backlit ratio. The whole-frame mean passes
+    /// on a bright background while the face sits in shadow — the
+    /// dawn/dusk failure class. Grounding (calibration refs,
+    /// measured): accepted references read face means 0.35–0.43
+    /// and face/frame ratios 0.79–1.02; both lines sit well clear.
+    /// Android's PhotoQualityPolicy carries the same constants.
+    static let faceDarkThreshold: Double = 0.14
+    static let faceBacklitRatio: Double = 0.60
+    /// RW-180: the resolution floor, judged on the ORIGINAL
+    /// pixels. Below ~1 MP / an 800 px short edge the face crop
+    /// the generator reads is too coarse to hold identity. The
+    /// weakest real reference on record (960×1280, 1.23 MP)
+    /// passes this floor and is rejected by the face-size line
+    /// instead — resolution is the floor for a different class
+    /// (thumbnails, messaging-compressed images).
+    static let minimumShortEdgePixels: Int = 800
+    static let minimumPixelCount: Int = 1_000_000
 
     /// THE check order (F7 harmonization, RW-26): face COUNT first
     /// (no face, then multiple faces), then DARKNESS, then framing
@@ -1975,19 +2010,54 @@ enum PhotoQualityVerdict {
     /// before this verdict runs) is rejected .rotated for retake,
     /// never waved through sideways. `faceRollDegrees` defaults to
     /// 0 (upright) so pre-F-1 call sites keep their verdicts.
+    ///
+    /// RW-180 (Nov 26, 2026) inserts the FACE-LIGHT rule directly
+    /// after frame darkness and the RESOLUTION floor directly
+    /// after face size — the same seats Android's policy gives
+    /// them. The new inputs default to "no signal" (face light
+    /// unmeasured; dimensions unbounded) so pre-RW-180 call sites
+    /// keep their verdicts.
     static func rejection(
         faceCount: Int,
         largestFaceAreaRatio: Double,
         meanLuminance: Double,
-        faceRollDegrees: Double = 0
+        faceRollDegrees: Double = 0,
+        faceMeanLuminance: Double? = nil,
+        pixelShortEdge: Int = .max,
+        pixelCount: Int = .max
     ) -> PhotoRejection? {
         if faceCount == 0 { return .faceUnclear }
         if faceCount > 1 { return .multiplePeople }
         if !IntakeOrientation.rollWithinGate(faceRollDegrees) { return .rotated }
         if meanLuminance < darkThreshold { return .tooDark }
+        // RW-180: the face's own light — an underexposed face, or
+        // a face dark against a bright frame (backlit), rejects
+        // .tooDark: same class, same remedy (face the light).
+        // Judged only when a face region was measured.
+        if let faceMeanLuminance,
+           faceMeanLuminance < faceDarkThreshold
+            || faceMeanLuminance < meanLuminance * faceBacklitRatio {
+            return .tooDark
+        }
         if largestFaceAreaRatio < tooSmallThreshold { return .faceTooSmall }
+        // RW-180: resolution floor — after face size, so a photo
+        // failing both reports the framing problem first (the
+        // calibration's far-away reference reads .faceTooSmall).
+        if pixelShortEdge < minimumShortEdgePixels || pixelCount < minimumPixelCount {
+            return .tooLowResolution
+        }
         if largestFaceAreaRatio > tooCloseThreshold { return .tooClose }
         return nil
+    }
+
+    /// RW-180: the Light check's full rule (frame + face), shared
+    /// by the per-check report and the guided evaluation so the
+    /// three surfaces can never disagree about what "Light" means.
+    static func lightPasses(meanLuminance: Double, faceMeanLuminance: Double?) -> Bool {
+        guard meanLuminance >= darkThreshold else { return false }
+        guard let faceMeanLuminance else { return true }
+        return faceMeanLuminance >= faceDarkThreshold
+            && faceMeanLuminance >= meanLuminance * faceBacklitRatio
     }
 }
 
@@ -2009,7 +2079,8 @@ struct PhotoCheckReport: Equatable {
         faceCount: Int,
         largestFaceAreaRatio: Double,
         meanLuminance: Double,
-        faceRollDegrees: Double
+        faceRollDegrees: Double,
+        faceMeanLuminance: Double? = nil
     ) -> PhotoCheckReport {
         PhotoCheckReport(
             inFrame: faceCount >= 1,
@@ -2017,7 +2088,10 @@ struct PhotoCheckReport: Equatable {
                 && largestFaceAreaRatio >= PhotoQualityVerdict.tooSmallThreshold
                 && largestFaceAreaRatio <= PhotoQualityVerdict.tooCloseThreshold,
             straightOn: IntakeOrientation.rollWithinGate(faceRollDegrees),
-            light: meanLuminance >= PhotoQualityVerdict.darkThreshold
+            // RW-180: Light reads the face's light too (the
+            // verdict's own rule, shared verbatim).
+            light: PhotoQualityVerdict.lightPasses(
+                meanLuminance: meanLuminance, faceMeanLuminance: faceMeanLuminance)
         )
     }
 

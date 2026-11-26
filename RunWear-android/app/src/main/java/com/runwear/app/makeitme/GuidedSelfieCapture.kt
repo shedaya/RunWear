@@ -81,8 +81,21 @@ data class GuidedCheck(val label: String, val passed: Boolean)
 /** Pure evaluation of the guided capture's check chips. */
 object GuidedSelfieChecks {
 
-    /** A face narrower than this fraction is "too small" for intake. */
-    const val MIN_FACE_WIDTH_FRACTION: Float = 0.18f
+    /**
+     * A face narrower than this fraction is "too small" for intake.
+     *
+     * RW-180 (Nov 26, 2026): raised 0.18 → 0.30 on Sol's ruling —
+     * the fix for Make It Me likeness is input quality (better
+     * light, close up), and the old line waved through exactly the
+     * class that failed: the calibration's far-away reference
+     * (960×1280) measures a 0.272 face-width fraction and PASSED
+     * at 0.18, while the three accepted references measure
+     * 0.324–0.393. 0.30 sits between them with margin on both
+     * sides. iOS judges the same line as a face-AREA floor
+     * (0.10; area ≈ 1.1 × width-fraction² on portrait frames —
+     * the same references read 0.087 fail / 0.116–0.173 pass).
+     */
+    const val MIN_FACE_WIDTH_FRACTION: Float = 0.30f
 
     /** Head turn (degrees) beyond which the face is not frontal. */
     const val MAX_HEAD_TURN_DEGREES: Float = 18f
@@ -112,7 +125,17 @@ object GuidedSelfieChecks {
             GuidedCheck(CHECK_IN_FRAME, m.faceCount >= 1),
             GuidedCheck(CHECK_FACE_SIZE, m.largestFaceWidthFraction >= MIN_FACE_WIDTH_FRACTION),
             GuidedCheck(CHECK_STRAIGHT_ON, m.faceCount >= 1 && m.maxAbsHeadTurnDegrees <= MAX_HEAD_TURN_DEGREES),
-            GuidedCheck(CHECK_LIGHT, m.meanLuminance >= PhotoQualityPolicy.MIN_MEAN_LUMINANCE)
+            // RW-180: the Light chip reads the FACE's light, not
+            // only the frame's — a bright room behind a shadowed
+            // face is the backlit failure, and the frame mean
+            // alone calls it good. Same lines the policy judges.
+            GuidedCheck(
+                CHECK_LIGHT,
+                m.meanLuminance >= PhotoQualityPolicy.MIN_MEAN_LUMINANCE &&
+                    m.faceMeanLuminance >= PhotoQualityPolicy.MIN_FACE_MEAN_LUMINANCE &&
+                    m.faceMeanLuminance >=
+                        m.meanLuminance * PhotoQualityPolicy.MIN_FACE_TO_FRAME_LUMINANCE_RATIO
+            )
         )
     }
 
@@ -126,14 +149,16 @@ object GuidedSelfieChecks {
         faceCount: Int,
         largestFaceWidthFraction: Float,
         maxAbsHeadTurnDegrees: Float,
-        meanLuminance: Double
+        meanLuminance: Double,
+        faceMeanLuminance: Double = meanLuminance
     ): List<GuidedCheck> = evaluate(
         PhotoQualityChecker.Measurements(
             faceCount = faceCount,
             largestFaceWidthFraction = largestFaceWidthFraction,
             meanLuminance = meanLuminance,
             maxAbsHeadTurnDegrees = maxAbsHeadTurnDegrees,
-            subjectHeadRollDegrees = 0f
+            subjectHeadRollDegrees = 0f,
+            faceMeanLuminance = faceMeanLuminance
         )
     )
 
@@ -156,7 +181,10 @@ object GuidedSelfieChecks {
         m != null && evaluate(m).all { it.passed } &&
             PhotoQualityPolicy.decide(
                 m.faceCount, m.largestFaceWidthFraction, m.meanLuminance,
-                m.subjectHeadRollDegrees, m.maxAbsHeadTurnDegrees
+                m.subjectHeadRollDegrees, m.maxAbsHeadTurnDegrees,
+                faceMeanLuminance = m.faceMeanLuminance,
+                imageShortEdgePx = m.imageShortEdgePx,
+                imagePixelCount = m.imagePixelCount
             ) == null
 
     /** The settled passing line (design §10.3 verbatim). */
@@ -316,7 +344,18 @@ fun GuidedSelfieCapture(
                     } else {
                         0.0
                     }
+                    // RW-180: keep the Y plane so the success
+                    // callback can read the FACE region's own mean
+                    // (the backlit reading) once ML Kit returns the
+                    // boxes — same buffer-space convention the
+                    // width fraction below already uses.
+                    val yPlane = proxy.planes[0]
+                    val yBytes = ByteArray(yBuffer.capacity())
+                    yBuffer.get(yBytes)
+                    val yRowStride = yPlane.rowStride
+                    val yPixelStride = yPlane.pixelStride
                     val frameWidth = proxy.width.coerceAtLeast(1)
+                    val frameHeight = proxy.height.coerceAtLeast(1)
                     val input = com.google.mlkit.vision.common.InputImage.fromMediaImage(
                         mediaImage, proxy.imageInfo.rotationDegrees
                     )
@@ -336,12 +375,45 @@ fun GuidedSelfieCapture(
                             val turn = faces.maxOfOrNull {
                                 kotlin.math.abs(it.headEulerAngleY)
                             } ?: 0f
+                            // RW-180: the subject face region's own
+                            // mean luminance from the kept Y plane.
+                            val subject = faces.maxByOrNull {
+                                it.boundingBox.width()
+                            }
+                            val faceLuminance = if (subject != null) {
+                                val box = subject.boundingBox
+                                var fSum = 0L
+                                var fCount = 0
+                                var yy = box.top.coerceIn(0, frameHeight - 1)
+                                val yEnd = box.bottom.coerceIn(0, frameHeight)
+                                while (yy < yEnd) {
+                                    var xx = box.left.coerceIn(0, frameWidth - 1)
+                                    val xEnd = box.right.coerceIn(0, frameWidth)
+                                    while (xx < xEnd) {
+                                        val idx = yy * yRowStride + xx * yPixelStride
+                                        if (idx in yBytes.indices) {
+                                            fSum += yBytes[idx].toInt() and 0xFF
+                                            fCount++
+                                        }
+                                        xx += 6
+                                    }
+                                    yy += 6
+                                }
+                                if (fCount > 0) {
+                                    (fSum.toDouble() / fCount) / 255.0
+                                } else {
+                                    luminance
+                                }
+                            } else {
+                                luminance
+                            }
                             liveMeasurements = PhotoQualityChecker.Measurements(
                                 faceCount = faces.size,
                                 largestFaceWidthFraction = largest / frameWidth,
                                 meanLuminance = luminance,
                                 maxAbsHeadTurnDegrees = turn,
-                                subjectHeadRollDegrees = 0f
+                                subjectHeadRollDegrees = 0f,
+                                faceMeanLuminance = faceLuminance
                             )
                         }
                         .addOnCompleteListener { proxy.close() }
@@ -436,12 +508,11 @@ fun GuidedSelfieCapture(
                     Icon(Icons.Outlined.Close, "Close", tint = com.runwear.app.ui.theme.PhotoInk.copy(alpha = 0.8f))
                 }
             }
-            Text(
-                text = "Make It Me",
-                fontFamily = com.runwear.app.ui.theme.GreatVibesFontFamily,
-                fontSize = 30.sp,
-                color = com.runwear.app.ui.theme.PhotoInk
-            )
+            // RW-180 parity (Nov 26, 2026): iOS's guided surface
+            // (design frame 15) carries NO title — full-screen
+            // camera chrome only. The script title that headed
+            // this surface is removed so both platforms open on
+            // the same untitled capture.
             Spacer(Modifier.height(16.dp))
 
             // Face oval: the LIVE preview inside it (the still,
@@ -570,8 +641,18 @@ fun GuidedSelfieCapture(
                     }
                 }
                 else -> {
+                    // RW-180 parity (Nov 26, 2026): iOS's shutter is
+                    // DISABLED until every live check passes — the
+                    // passing moment is the only moment a photo can
+                    // be taken. Android's button previously fired at
+                    // any time and judged after the fact. The one
+                    // exception is the degraded no-detector state
+                    // (see the creation seam above): with no live
+                    // analysis there is nothing to gate on, and the
+                    // captured still is still judged by the review.
                     Button(
                         onClick = { capture() },
+                        enabled = faceDetector == null || livePassing,
                         modifier = Modifier.fillMaxWidth().height(54.dp),
                         shape = RoundedCornerShape(16.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary)

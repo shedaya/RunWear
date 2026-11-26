@@ -238,7 +238,10 @@ enum AppEnglish {
     static var mimPillPremium: String { "Premium" }
     static var mimProgressSubline: String { "This usually takes a few minutes — the standard photo stays up until yours is done." }
     static var mimProgressTitle: String { "Making this outfit yours…" }
+    static var mimExampleCaption: String { "A good one looks like this: face close up, in good light, straight at the camera." }
+    static var mimExamplePlaceholder: String { "Example photo" }
     static var mimRejectFaceTooSmall: String { "Your face is small in that photo — A closer selfie works best — a mirror selfie is great too. Or let the camera guide you…" }
+    static var mimRejectLowResolution: String { "That photo is too small for us to read your face from. Retake it with the camera, or pick the original full-size photo." }
     static var mimRejectFaceUnclear: String { "We can't see your face clearly in this one. Try a photo without sunglasses or a hat shadow." }
     static var mimRejectMultiplePeople: String { "This photo has more than one person in it. Pick one that's just you." }
     static var mimRejectRotated: String { "This photo came out sideways. Retake it holding your phone upright, or pick a photo that's already upright." }
