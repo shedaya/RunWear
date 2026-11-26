@@ -33,6 +33,9 @@
     <string name="mim_c3e_retake_guided">Let\'s retake that one with the camera — face the light, keep your whole face inside the oval, and hold still.</string>
     <string name="mim_c3f_retake_upload">That photo can\'t be used. Retake with the camera, or choose a brighter photo that\'s just you, face forward.</string>
     <string name="mim_c3g_reject_rotated">This photo came out sideways. Retake it holding your phone upright, or pick a photo that\'s already upright.</string>
+    <string name="mim_c3j_reject_low_resolution">That photo is too small for us to read your face from. Retake it with the camera, or pick the original full-size photo.</string>
+    <string name="mim_c2k_example_caption">A good one looks like this: face close up, in good light, straight at the camera.</string>
+    <string name="mim_c2l_example_placeholder">Example photo</string>
     <string name="mim_hero_pill_making">Making this you…</string>
     <string name="mim_hero_pill_premium">Premium</string>
     <string name="mim_hero_pill_get_unlimited">Get unlimited</string>
