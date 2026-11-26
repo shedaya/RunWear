@@ -188,6 +188,17 @@ data class MainUiState(
      */
     val personalHeroImageUrl: String? = null,
     /**
+     * RW-177: the first-look cell's own approved GENERIC image,
+     * resolved for the first-look moment itself (see
+     * FirstLookPhotoPolicy) — the photo that stands under the
+     * making state while the personal photo is pending, so the
+     * moment never depends on the home scene's resolution having
+     * landed. [firstLookGenericCell] names the cell it was
+     * resolved for; a different cell re-resolves.
+     */
+    val firstLookGenericUrl: String? = null,
+    val firstLookGenericCell: String? = null,
+    /**
      * RW-16.16: the current cell's personal-look status, as the
      * SERVER reports it (spec §7 G1/G2 progress line while MAKING;
      * G5/G6 failed line + retry while FAILED). Server-driven, so it
@@ -2237,6 +2248,49 @@ class MainViewModel @Inject constructor(
         val weather = _uiState.value.weather ?: return
         val outfit = _uiState.value.outfit ?: return
         resolveHeroImage(weather, outfit)
+    }
+
+    /**
+     * RW-177: resolve the first-look cell's approved generic image
+     * for the first-look moment (FirstLookPhotoPolicy). The moment
+     * is raised from the onboarding upload flow — possibly before
+     * the home scene's own hero resolution has landed — and its
+     * making state promises the cell's standard photo underneath;
+     * inheriting the scene's (possibly empty) resolution left the
+     * 2026-11-25 first-look screen blank. This runs the SAME
+     * shared cascade the hero serve path runs (same-gender since
+     * RW-178), for the current cell, and holds the result for the
+     * moment. No-op when the personal photo is already the
+     * displayed one or this cell's generic is already held.
+     */
+    fun ensureFirstLookPhoto() {
+        val state = _uiState.value
+        val weather = state.weather ?: return
+        val outfit = state.outfit ?: return
+        val (cell, _) = personalCombinationFor(weather, outfit)
+        val personalDisplayed = state.heroIsPersonal &&
+            state.personalHeroImageUrl != null &&
+            state.heroImageUrl == state.personalHeroImageUrl
+        if (!com.runwear.app.makeitme.FirstLookPhotoPolicy.shouldResolveGeneric(
+                personalDisplayed, state.firstLookGenericCell, cell
+            )
+        ) return
+        viewModelScope.launch {
+            val result = runCatching {
+                withTimeoutOrNull(HERO_RESOLVE_TIMEOUT_MS) {
+                    heroImageRepository.getHeroImage(
+                        weather = weather,
+                        outfit = outfit,
+                        gender = _uiState.value.genderPreference,
+                        comfort = _uiState.value.comfortPreference
+                    )
+                }
+            }.getOrNull()
+            val url = result?.imageUrl ?: return@launch
+            _uiState.update {
+                it.copy(firstLookGenericUrl = url, firstLookGenericCell = cell)
+            }
+        }
     }
 
     /** DataStore key for one cell's persisted hero choice ("date|url"). */

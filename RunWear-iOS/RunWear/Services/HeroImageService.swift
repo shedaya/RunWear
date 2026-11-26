@@ -64,7 +64,8 @@ actor HeroImageService {
 
     // MARK: - Cascade Fallback
 
-    /// Attempts to fetch image with the cascade (levels 1-7)
+    /// Attempts to fetch image with the cascade (levels 1-4, all
+    /// same-gender since RW-178), then the GEN-4 fallback chain.
     private func fetchWithCascade(
         combination: HeroCombinationId,
         isWatch: Bool,
@@ -87,37 +88,34 @@ actor HeroImageService {
             }
         }
 
-        // Level 4: Opposite gender, same weather
-        if let result = await tryFetch(pattern: combination.oppositeGenderPattern, level: 4, outfit: outfit) {
-            return result
-        }
+        // RW-178 (2026-11-25): GENDER IS A HARD FILTER. The former
+        // levels 4-5 (opposite gender, same weather / clear weather)
+        // and the legacy opposite-gender level are REMOVED — they
+        // served a woman to a user whose fit is Men's whenever the
+        // same-outfit pool held an approved cross-gender row (the
+        // 2026-11-25 planned-view incident: a MALE_RAIN_COOL_DAWN
+        // cell served FEMALE_CLEAR_COOL_MIDDAY art of the same
+        // outfit signature while same-gender scaffold stock for the
+        // cell existed). OUTFIT is the widening axis, never gender:
+        // when this cascade exhausts, the GEN-4 fallback chain
+        // below widens within the user's own gender by
+        // weather/bracket/daypart/garment distance (the scaffold
+        // tier). Android's heroCascadePatterns carries the same
+        // rule.
 
-        // Level 5: Opposite gender, clear weather
-        if combination.weather != .CLEAR {
-            if let result = await tryFetch(pattern: combination.oppositeGenderClearPattern, level: 5, outfit: outfit) {
-                return result
-            }
-        }
-
-        // RW-23 levels 6-7: legacy combination tokens (RAINY/SNOWY).
+        // RW-23 level 4: legacy combination tokens (RAINY/SNOWY).
         // 523 pool rows carry the legacy spellings and no canonical
-        // pattern above matches them; these levels rescue that stock
-        // AFTER the canonical five, filtered by the same point-grain
-        // policy (tryFetch applies it unchanged).
+        // pattern above matches them; this level rescues that stock
+        // AFTER the canonical three, filtered by the same
+        // point-grain policy (tryFetch applies it unchanged).
         if let legacyPattern = combination.legacyWeatherPattern {
-            // Level 6: Legacy weather token, same gender, any time
-            if let result = await tryFetch(pattern: legacyPattern, level: 6, outfit: outfit) {
-                return result
-            }
-        }
-        if let legacyOppositePattern = combination.legacyOppositeGenderPattern {
-            // Level 7: Legacy weather token, opposite gender, any time
-            if let result = await tryFetch(pattern: legacyOppositePattern, level: 7, outfit: outfit) {
+            // Level 4: Legacy weather token, same gender, any time
+            if let result = await tryFetch(pattern: legacyPattern, level: 4, outfit: outfit) {
                 return result
             }
         }
 
-        // Level 8: Bundled fallback — GEN-3 (WS-A(1)): with an
+        // Bundled fallback — GEN-3 (WS-A(1)): with an
         // outfit, the terminus was the POINT-GRAIN GATED bundled
         // resolution: when no bundled asset matched the
         // prescription the result carried an empty URL and the

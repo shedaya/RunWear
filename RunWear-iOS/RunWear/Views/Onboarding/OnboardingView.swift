@@ -660,7 +660,7 @@ private struct FirstLookView: View {
                     // class that produced the filed share-poster
                     // face cut.
                     GeometryReader { geo in
-                        AsyncImage(url: (previewVM.heroImageUrl ?? previewVM.fallbackImageUrl).flatMap(URL.init(string:))) { phase in
+                        AsyncImage(url: FirstLookPhotoURL.resolve(heroUrl: previewVM.heroImageUrl, fallbackUrl: previewVM.fallbackImageUrl)) { phase in
                             switch phase {
                             case .success(let image):
                                 HeroPhoto(image: image, width: geo.size.width, height: 180)
@@ -937,7 +937,7 @@ private struct FirstLookView: View {
     private var firstLookPhotoCard: some View {
         let presentation = firstLookPresentation
         return GeometryReader { geo in
-            AsyncImage(url: (previewVM.heroImageUrl ?? previewVM.fallbackImageUrl).flatMap(URL.init(string:))) { phase in
+            AsyncImage(url: FirstLookPhotoURL.resolve(heroUrl: previewVM.heroImageUrl, fallbackUrl: previewVM.fallbackImageUrl)) { phase in
                 switch phase {
                 case .success(let image):
                     switch presentation.phase {

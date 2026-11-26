@@ -410,6 +410,39 @@ object BillingIdentityPolicy {
 }
 
 /**
+ * RW-137 (DESIGN §4.1/§4.4) + RW-179c (2026-11-25): the client's
+ * identity-adoption decision — the Android mirror of the iOS
+ * IdentityAdoptionPolicy in PersonalHeroModels.swift. Adoption is
+ * AUTOMATIC: a standing Premium property of a restored
+ * subscription (Sol, Nov 7, 2026 — "Premium keeps your looks. New
+ * phone or reinstall — restore your purchase and they're back."),
+ * with no opt-in toggle anywhere in the UI or schema. When the
+ * entitlement reconcile reports a RevenueCat-proven prior identity
+ * (`adoption_available`), the client requests the adoption and
+ * renders the restored state; the server re-verifies the proof
+ * before re-keying anything, so this policy is a trigger, not a
+ * trust decision — its only jobs are to fire on a well-formed hint
+ * and never on a self-adoption (source == caller), which the
+ * server would refuse anyway.
+ *
+ * The 2026-11-25 incident is why this exists on Android at all:
+ * the iOS client shipped this trigger with RW-137, but Android's
+ * reconcile discarded the response body, so after a user reset
+ * (delete photos → reset app → reopen → restore) the new install
+ * uid reconciled its entitlement and inherited NOTHING — the bank
+ * stayed keyed to the previous uid and a full from-scratch fill
+ * began.
+ */
+object IdentityAdoptionPolicy {
+
+    fun sourceToAdopt(adoptionAvailable: String?, currentUserId: String?): String? {
+        val source = adoptionAvailable?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        if (source == currentUserId) return null
+        return source
+    }
+}
+
+/**
  * RW-16.14: the photo intake offers the camera beside the library
  * (Sol, Oct 31: "Both apps should allow camera not just photo
  * roll"). The capture runs through the platform camera intent

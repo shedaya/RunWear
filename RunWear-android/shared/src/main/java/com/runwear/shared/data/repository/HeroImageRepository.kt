@@ -277,15 +277,17 @@ class HeroImageRepository @Inject constructor() {
 
     /**
      * Get a random cached image for the combination.
-     * v3.11: Matches PWA cascade with opposite gender fallback.
+     * RW-178: gender is a hard filter — the cascade never queries
+     * the opposite gender (see heroCascadePatterns). Widening past
+     * these levels happens on the outfit axis via the GEN-4
+     * fallback chain's same-gender scaffold tier.
      *
      * | Priority | Query Pattern                    | Example                    |
      * |----------|----------------------------------|----------------------------|
      * | 1        | Gender + Weather + Temp + Time   | FEMALE_CLEAR_COLD_MIDDAY_% |
      * | 2        | Gender + Weather + Temp          | FEMALE_CLEAR_COLD_%        |
      * | 3        | Gender + Clear + Temp (if !CLEAR)| FEMALE_CLEAR_COLD_%        |
-     * | 4        | Opposite Gender + Weather + Temp | MALE_CLEAR_COLD_%          |
-     * | 5        | Opposite Gender + Clear + Temp   | MALE_CLEAR_COLD_%          |
+     * | 4        | Gender + legacy RAINY/SNOWY      | FEMALE_RAINY_COLD_%        |
      */
     private suspend fun getRandomImage(
         combination: OutfitCombination,
@@ -300,9 +302,8 @@ class HeroImageRepository @Inject constructor() {
         val time = combination.timeOfDay.name
 
         val requestedCombo = "${gender}_${weather}_${temp}_${time}"
-        val oppositeGender = if (gender == "MALE") "FEMALE" else "MALE"
 
-        val queries = heroCascadePatterns(gender, weather, temp, time, oppositeGender)
+        val queries = heroCascadePatterns(gender, weather, temp, time)
 
         var exactMatchCount = 0
         var foundViaFallback = false
@@ -798,22 +799,34 @@ class HeroImageRepository @Inject constructor() {
 /**
  * RW-23: the hero cascade pattern list, in serving order.
  *
- * Canonical levels (v3.11, preserved exactly):
- * 1. exact, 2. any-time, 3. clear-weather only when weather != "CLEAR",
- * 4. opposite gender + weather, 5. opposite gender + clear.
+ * Canonical levels:
+ * 1. exact, 2. any-time, 3. clear-weather only when weather != "CLEAR".
  *
  * Legacy-token levels (appended AFTER every canonical level):
  * 523 pool rows live under legacy RAINY/SNOWY combination tokens no
  * canonical pattern can match (105 of them fully on-prescription);
  * they join the cascade only after every canonical level, under the
  * same review + point-grain gates.
+ *
+ * RW-178 (2026-11-25): GENDER IS A HARD FILTER. The v3.11 cascade's
+ * levels 4–5 (opposite gender + weather, opposite gender + clear)
+ * and the legacy opposite-gender levels are REMOVED. They served a
+ * woman to a user whose fit is Men's whenever the same-outfit pool
+ * happened to hold an approved cross-gender row — on 2026-11-25 the
+ * planned view for a MALE_RAIN_COOL_DAWN cell served
+ * FEMALE_CLEAR_COOL_MIDDAY art of the same outfit signature while
+ * same-gender scaffold stock for the cell existed. OUTFIT is the
+ * widening axis, never gender: when this cascade exhausts, the
+ * caller's GEN-4 fallback chain (HeroFallbackChain) widens within
+ * the user's own gender by weather/bracket/daypart/garment
+ * distance — the scaffold tier — which is where a non-exact serve
+ * belongs.
  */
 internal fun heroCascadePatterns(
     gender: String,
     weather: String,
     temp: String,
-    time: String,
-    oppositeGender: String
+    time: String
 ): List<String> {
     val queries = mutableListOf(
         "${gender}_${weather}_${temp}_${time}_%",
@@ -822,15 +835,11 @@ internal fun heroCascadePatterns(
     if (weather != "CLEAR") {
         queries.add("${gender}_CLEAR_${temp}_%")
     }
-    queries.add("${oppositeGender}_${weather}_${temp}_%")
-    queries.add("${oppositeGender}_CLEAR_${temp}_%")
     if (weather == "RAIN") {
         queries.add("${gender}_RAINY_${temp}_%")
-        queries.add("${oppositeGender}_RAINY_${temp}_%")
     }
     if (weather == "SNOW") {
         queries.add("${gender}_SNOWY_${temp}_%")
-        queries.add("${oppositeGender}_SNOWY_${temp}_%")
     }
     return queries
 }

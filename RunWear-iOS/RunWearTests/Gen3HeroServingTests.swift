@@ -441,6 +441,35 @@ final class Gen3HeroServingTests: XCTestCase {
         XCTAssertEqual(banked.meterLine, "That was look 3 of your 5 free looks — 2 remain, whenever you want them.")
     }
 
+    // MARK: - RW-177 · the first-look card's photo URL
+
+    func testFirstLookPhotoURLPrefersTheResolvedHero() {
+        // While the personal photo is pending, the preview's hero
+        // URL is the cell's approved generic (the cascade serve) —
+        // it, not the bundled fallback, is the card's photo.
+        let url = FirstLookPhotoURL.resolve(
+            heroUrl: "https://pool.example/generic.jpg",
+            fallbackUrl: "file:///bundle/fallback.jpg")
+        XCTAssertEqual(url?.absoluteString, "https://pool.example/generic.jpg")
+    }
+
+    func testFirstLookPhotoURLEmptyFallbackIsNoURL() {
+        // The chain resolution encodes "no bundled asset" as an
+        // EMPTY fallback string; URL(string: "") is nil, and the
+        // card must read that as "nothing to show" rather than
+        // letting it shadow the resolution order.
+        XCTAssertNil(FirstLookPhotoURL.resolve(heroUrl: nil, fallbackUrl: ""))
+        XCTAssertNil(FirstLookPhotoURL.resolve(heroUrl: nil, fallbackUrl: nil))
+        XCTAssertNil(FirstLookPhotoURL.resolve(heroUrl: "  ", fallbackUrl: ""))
+    }
+
+    func testFirstLookPhotoURLFallsBackWhenNoHero() {
+        let url = FirstLookPhotoURL.resolve(
+            heroUrl: nil,
+            fallbackUrl: "file:///bundle/fallback.jpg")
+        XCTAssertEqual(url?.absoluteString, "file:///bundle/fallback.jpg")
+    }
+
     func testNoStockPublishOverAnAppliedPersonalPhoto_sourcePin() throws {
         // Defect 2: a stock photo faded in under the finished
         // claim for ~0.6 s — a same-cell reload republishing the
