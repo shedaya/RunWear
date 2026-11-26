@@ -227,6 +227,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 export interface BankOutcome {
   state: string          // 'restored' | 'own' | 'new'
   looks: number          // heroes held by the resolved bank
+  refs: number           // reference photos held by the resolved bank
   collision: boolean
   bankUserId: string
 }
@@ -294,9 +295,14 @@ async function resolveBank(
       .from('personal_heroes')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', row.bank_user_id)
+    const { count: refCount } = await admin
+      .from('personal_reference_photos')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', row.bank_user_id)
     return {
       state: row.state as string,
       looks: count ?? 0,
+      refs: refCount ?? 0,
       collision: row.collision === true,
       bankUserId: row.bank_user_id as string,
     }
@@ -309,7 +315,7 @@ async function resolveBank(
 // collision. The bank uid itself never crosses the wire.
 function bankForResponse(bank: BankOutcome | null): Record<string, unknown> | null {
   if (!bank) return null
-  return { state: bank.state, looks: bank.looks, collision: bank.collision }
+  return { state: bank.state, looks: bank.looks, refs: bank.refs, collision: bank.collision }
 }
 
 async function fetchRcState(userId: string, platform: string): Promise<RcEntitlementState> {
