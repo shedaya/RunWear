@@ -395,13 +395,16 @@ private struct PickedPhoto: Identifiable {
 }
 
 /// RW-180 (Nov 26, 2026): the reference-photo EXAMPLE card on
-/// the capture step. The slot is wired for the bundled asset
+/// the capture step. The slot renders the bundled asset
 /// "MakeItMeExampleGood" (a well-lit, close-up, front-on
-/// example); until that asset lands, the slot renders a
-/// clearly-labelled placeholder treatment — the coaching oval
-/// over a neutral ground with the placeholder label — never a
-/// fake person's photo. The caption is the settled example
-/// line (Sol's framing: better light, close up).
+/// example); if that asset is ever missing, the slot falls back
+/// to a clearly-labelled placeholder treatment — the coaching
+/// oval over a neutral ground with the placeholder label —
+/// never a fake person's photo. The asset landed Nov 26, 2026
+/// (§30): a licensed stock portrait (Pexels, Chukwuka Prosper)
+/// that passes the RW-180 intake checks itself. The caption is
+/// the settled example line (Sol's framing: better light,
+/// close up).
 private struct MakeItMeExampleCard: View {
     var body: some View {
         HStack(spacing: 12) {
