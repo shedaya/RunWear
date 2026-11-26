@@ -758,6 +758,11 @@ struct MakeItMeSubscriptionSheet: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var purchasing = false
     @State private var unavailableLine: String?
+    /// RW-137: the line the explicit Restore Purchases action
+    /// surfaces once its reconcile completes (the resolved
+    /// bank's outcome, in words). Only the restore action sets
+    /// it — background reconciles never pop UI.
+    @State private var restoreMessage: String?
     /// GEN-3 (Sol's Nov 4 resolution): the plan selection —
     /// annual is the hero and the default; the monthly row below
     /// it is the one quiet secondary alternative.
@@ -957,17 +962,31 @@ struct MakeItMeSubscriptionSheet: View {
 
                     Button {
                         Task {
-                            // RW-137 (DESIGN §4.4.3): Restore runs
-                            // the store's restore + reconcile +
-                            // adoption sync, so a restored
-                            // subscription brings its looks back
-                            // in the same pass.
-                            await store.restorePurchases()
-                            if store.billing.isSubscribed { dismiss() }
+                            // RW-137: Restore runs the store's
+                            // restore + reconcile sync, so a
+                            // restored subscription's bank is
+                            // resolved in the same pass. When the
+                            // reconcile reports an outcome, its
+                            // line surfaces here and the sheet
+                            // stays up so it can be read; with no
+                            // outcome to report, the pre-RW-137
+                            // behaviour stands (dismiss when
+                            // subscribed).
+                            if let message = await store.restorePurchases() {
+                                restoreMessage = message
+                            } else if store.billing.isSubscribed {
+                                dismiss()
+                            }
                         }
                     } label: {
                         Text(AppStrings.mimsetRestore)
                             .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(AppTheme.inkSecondary)
+                    }
+
+                    if let restoreMessage {
+                        Text(restoreMessage)
+                            .font(.system(size: 14))
                             .foregroundColor(AppTheme.inkSecondary)
                     }
                 }

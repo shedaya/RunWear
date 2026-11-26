@@ -2,21 +2,24 @@ import XCTest
 import Foundation
 import Security
 
-/// RW-137 iOS client (DESIGN §7 S4 + S4c client half; design of
-/// record: rw137-identity-exploration-2026-11-07/DESIGN.md):
+/// RW-137 iOS client (subscription-as-identity; Sol's ruling,
+/// Nov 7, 2026 — the personal bank is keyed to the SUBSCRIPTION,
+/// not the device uid):
 ///
-/// - S4 adoption hook: reconcile's response gains an optional
-///   `adoption_available` source uid; when RevenueCat proof
-///   links the caller's entitled identity to a prior uid, the
-///   client calls `request-identity-adoption` (the source uid
-///   rides as a lookup hint — the server re-verifies, so a
-///   stale/wrong hint is a silent no-op) and renders the
-///   restored state through the EXISTING profile/bank surfaces.
-///   Adoption is AUTOMATIC — a standing Premium property (Sol,
-///   Nov 7, 2026): no opt-in toggle in UI or schema, no new
-///   user-facing flow, no login, no settings screen.
+/// - Bank resolution: reconcile-personal-entitlement resolves
+///   the caller's bank ENTIRELY server-side and reports the
+///   outcome on its response as `bank` — {state: restored |
+///   own | new, looks, refs, collision}, or null when there is
+///   no outcome (unentitled caller, or resolution unavailable).
+///   Resolution REPLACES the retired hint-and-adopt flow: the
+///   server no longer reports a source uid to adopt and the
+///   client makes no follow-up request — there is no opt-in
+///   toggle in UI or schema, no login, no settings screen.
 /// - Sync points: bootstrap, entitlement change, and Restore
-///   Purchases all run the store's one reconcileWithAdoption.
+///   Purchases all run the store's one `reconcile()`. Only the
+///   explicit Restore Purchases action surfaces the outcome, as
+///   the BankOutcomePolicy line its store call returns;
+///   background reconciles never pop UI.
 /// - S4c client half (DESIGN §4.8.3): when delete-my-data
 ///   completes, the client discards its local session material
 ///   — the Keychain session item is deleted via the auth
@@ -72,19 +75,16 @@ final class RW137IdentityTests: XCTestCase {
     // MARK: - Fixtures
 
     private static let uidCurrent = "11111111-1111-4111-8111-111111111111"
-    private static let uidSource = "22222222-2222-4222-8222-222222222222"
     private static let uidFresh = "33333333-3333-4333-8333-333333333333"
 
     /// One mocked backend behind both clients' transport seams.
     /// The auth seam answers anonymous sign-ups with the staged
-    /// uid; the API seam routes by function slug and records
-    /// every adoption request (body hint + caller JWT).
+    /// uid; the API seam routes by function slug.
     private final class MockBackend: @unchecked Sendable {
         private let lock = NSLock()
         private var _signupUid = ""
         private var _reconcileBody = Data("{}".utf8)
         private var _deleteBody = Data(#"{"account_deleted": true}"#.utf8)
-        private var _adoptionCalls: [(sourceUserId: String?, authorization: String?)] = []
 
         var signupUid: String {
             get { lock.lock(); defer { lock.unlock() }; return _signupUid }
@@ -97,9 +97,6 @@ final class RW137IdentityTests: XCTestCase {
         var deleteBody: Data {
             get { lock.lock(); defer { lock.unlock() }; return _deleteBody }
             set { lock.lock(); _deleteBody = newValue; lock.unlock() }
-        }
-        var adoptionCalls: [(sourceUserId: String?, authorization: String?)] {
-            lock.lock(); defer { lock.unlock() }; return _adoptionCalls
         }
 
         func authTransport(_ request: URLRequest) -> (Data, Int) {
@@ -118,19 +115,6 @@ final class RW137IdentityTests: XCTestCase {
             let response = HTTPURLResponse(
                 url: request.url!, statusCode: 200, httpVersion: "HTTP/1.1",
                 headerFields: ["Content-Type": "application/json"])!
-            if url.contains("request-identity-adoption") {
-                var hint: String? = nil
-                if let body = request.httpBody,
-                   let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any] {
-                    hint = json["source_user_id"] as? String
-                }
-                lock.lock()
-                _adoptionCalls.append((
-                    sourceUserId: hint,
-                    authorization: request.value(forHTTPHeaderField: "Authorization")))
-                lock.unlock()
-                return (Data("{}".utf8), response)
-            }
             if url.contains("reconcile-personal-entitlement") {
                 return (reconcileBody, response)
             }
@@ -150,109 +134,135 @@ final class RW137IdentityTests: XCTestCase {
         }
     }
 
-    // MARK: - S4: the reconcile contract (model layer)
+    // MARK: - Bank outcome: the reconcile contract (model layer)
 
-    func testRW137_ReconcileResponse_AdoptionAvailableDecoding() {
-        let withAdoption = ReconcileEntitlementResponse.decode(from: Data("""
-        {"ok": true, "entitled": true, "adoption_available": "\(Self.uidSource)"}
+    func testRW137_ReconcileResponse_BankOutcomeDecoding() {
+        // Each state the server can report, with its counts.
+        let restored = ReconcileEntitlementResponse.decode(from: Data("""
+        {"ok": true, "entitled": true, "bank": {"state": "restored", "looks": 12, "refs": 3, "collision": false}}
         """.utf8))
-        XCTAssertEqual(withAdoption?.adoptionAvailable, Self.uidSource)
+        XCTAssertEqual(restored?.entitled, true)
+        XCTAssertEqual(restored?.bank, BankOutcome(state: "restored", looks: 12, refs: 3, collision: false))
 
-        // Absent field = the pre-RW-137 response = no adoption.
-        let absent = ReconcileEntitlementResponse.decode(from: Data("""
-        {"ok": true, "entitled": true}
+        let own = ReconcileEntitlementResponse.decode(from: Data("""
+        {"ok": true, "entitled": true, "bank": {"state": "own", "looks": 4, "refs": 2, "collision": false}}
         """.utf8))
-        XCTAssertNotNil(absent)
-        XCTAssertNil(absent?.adoptionAvailable)
+        XCTAssertEqual(own?.bank, BankOutcome(state: "own", looks: 4, refs: 2, collision: false))
 
-        // Explicit null = no adoption.
+        let new = ReconcileEntitlementResponse.decode(from: Data("""
+        {"ok": true, "entitled": true, "bank": {"state": "new", "looks": 0, "refs": 0, "collision": true}}
+        """.utf8))
+        XCTAssertEqual(new?.bank, BankOutcome(state: "new", looks: 0, refs: 0, collision: true))
+
+        // Explicit null = no outcome (unentitled, or resolution
+        // unavailable) — never an error.
         let null = ReconcileEntitlementResponse.decode(from: Data("""
-        {"ok": true, "adoption_available": null}
+        {"ok": true, "entitled": false, "bank": null}
         """.utf8))
-        XCTAssertNil(null?.adoptionAvailable)
+        XCTAssertEqual(null?.entitled, false)
+        XCTAssertNil(null?.bank)
 
         // A malformed body decodes to nil — reconcile's failure
         // mode is doing nothing, never an error state.
         XCTAssertNil(ReconcileEntitlementResponse.decode(from: Data("not json".utf8)))
     }
 
-    func testRW137_IdentityAdoptionPolicy_TriggerRules() {
-        let reporting = ReconcileEntitlementResponse.decode(from: Data("""
-        {"adoption_available": "\(Self.uidSource)"}
+    func testRW137_ReconcileResponse_BankAbsent_OldServerDecoding() {
+        // Absent field = the pre-RW-137 response = no bank
+        // outcome; the entitlement word still reads.
+        let absent = ReconcileEntitlementResponse.decode(from: Data("""
+        {"ok": true, "entitled": true}
         """.utf8))
-        XCTAssertEqual(
-            IdentityAdoptionPolicy.sourceToAdopt(response: reporting, currentUserId: Self.uidCurrent),
-            Self.uidSource,
-            "a reported source distinct from the caller triggers adoption")
-
-        // Self-adoption never fires (the server would refuse it;
-        // the client does not even ask).
-        let selfReport = ReconcileEntitlementResponse.decode(from: Data("""
-        {"adoption_available": "\(Self.uidCurrent)"}
-        """.utf8))
-        XCTAssertNil(IdentityAdoptionPolicy.sourceToAdopt(
-            response: selfReport, currentUserId: Self.uidCurrent))
-
-        // Absent / empty / missing-response hints never fire.
-        XCTAssertNil(IdentityAdoptionPolicy.sourceToAdopt(
-            response: ReconcileEntitlementResponse.decode(from: Data("{}".utf8)),
-            currentUserId: Self.uidCurrent))
-        XCTAssertNil(IdentityAdoptionPolicy.sourceToAdopt(
-            response: ReconcileEntitlementResponse.decode(from: Data(
-                #"{"adoption_available": "  "}"#.utf8)),
-            currentUserId: Self.uidCurrent))
-        XCTAssertNil(IdentityAdoptionPolicy.sourceToAdopt(
-            response: nil, currentUserId: Self.uidCurrent))
+        XCTAssertNotNil(absent)
+        XCTAssertEqual(absent?.entitled, true)
+        XCTAssertNil(absent?.bank)
     }
 
-    func testRW137_IdentityAdoptionBody_CarriesTheSourceHintOnly() {
-        let body = PersonalHeroRequests.identityAdoptionBody(sourceUserId: Self.uidSource)
-        XCTAssertEqual(body.count, 1, "the hint is the whole body — no assertion rides along")
-        XCTAssertEqual(body["source_user_id"] as? String, Self.uidSource)
+    // MARK: - Bank outcome: the restore message (policy)
+
+    func testRW137_BankOutcomePolicy_RestoreMessageMapping() {
+        func bank(_ state: String, _ looks: Int) -> BankOutcome {
+            BankOutcome(state: state, looks: looks, refs: 0, collision: false)
+        }
+        // Not entitled: the policy stays silent — the existing
+        // not-entitled flow owns that case, bank or no bank.
+        XCTAssertNil(BankOutcomePolicy.restoreMessage(entitled: false, bank: nil))
+        XCTAssertNil(BankOutcomePolicy.restoreMessage(entitled: false, bank: bank("restored", 3)))
+
+        // Entitled, no outcome reported (older server /
+        // resolution unavailable): the plain active line.
+        XCTAssertEqual(BankOutcomePolicy.restoreMessage(entitled: true, bank: nil),
+                       "Your subscription is active.")
+
+        // Restored: plural, singular, and empty.
+        XCTAssertEqual(BankOutcomePolicy.restoreMessage(entitled: true, bank: bank("restored", 12)),
+                       "Restored — your subscription and your 12 saved looks are back.")
+        XCTAssertEqual(BankOutcomePolicy.restoreMessage(entitled: true, bank: bank("restored", 1)),
+                       "Restored — your subscription and your 1 saved look is back.")
+        XCTAssertEqual(BankOutcomePolicy.restoreMessage(entitled: true, bank: bank("restored", 0)),
+                       "Restored — your subscription is back. No saved looks were found for it.")
+
+        // Own bank: plural, singular, and empty.
+        XCTAssertEqual(BankOutcomePolicy.restoreMessage(entitled: true, bank: bank("own", 4)),
+                       "Your subscription is active — 4 saved looks on this account.")
+        XCTAssertEqual(BankOutcomePolicy.restoreMessage(entitled: true, bank: bank("own", 1)),
+                       "Your subscription is active — 1 saved look on this account.")
+        XCTAssertEqual(BankOutcomePolicy.restoreMessage(entitled: true, bank: bank("own", 0)),
+                       "Your subscription is active.")
+
+        // New bank: nothing was there to find.
+        XCTAssertEqual(BankOutcomePolicy.restoreMessage(entitled: true, bank: bank("new", 0)),
+                       "Your subscription is active. No saved looks were found for it.")
+
+        // An unknown future state degrades to the plain line,
+        // never to silence or a wrong claim.
+        XCTAssertEqual(BankOutcomePolicy.restoreMessage(entitled: true, bank: bank("future", 9)),
+                       "Your subscription is active.")
     }
 
-    // MARK: - S4: the hook against the mocked backend
+    func testRW137_BankOutcomePolicy_HasBankReferences() {
+        XCTAssertFalse(BankOutcomePolicy.hasBankReferences(nil))
+        XCTAssertFalse(BankOutcomePolicy.hasBankReferences(
+            BankOutcome(state: "own", looks: 2, refs: 0, collision: false)))
+        XCTAssertTrue(BankOutcomePolicy.hasBankReferences(
+            BankOutcome(state: "restored", looks: 2, refs: 3, collision: false)))
+    }
 
-    func testRW137_ReconcileReportsAdoption_AdoptionRequestPostsTheHint() async throws {
+    // MARK: - Bank outcome: the hook against the mocked backend
+
+    func testRW137_ReconcileReportsBankOutcome() async throws {
         let backend = MockBackend()
         backend.signupUid = Self.uidCurrent
         backend.reconcileBody = Data("""
-        {"ok": true, "entitled": true, "adoption_available": "\(Self.uidSource)"}
+        {"ok": true, "entitled": true, "bank": {"state": "restored", "looks": 7, "refs": 3, "collision": false}}
         """.utf8)
         await install(backend)
 
-        // The store's exact sequence (its wiring is source-pinned
-        // below): reconcile → policy → adoption request.
+        // The store's reconcile reads exactly this response and
+        // folds `bank` into lastBankOutcome (source-pinned
+        // below); the message the restore action would surface
+        // composes from it.
         let response = await PersonalHeroAPI.shared.reconcileEntitlement()
-        XCTAssertEqual(response?.adoptionAvailable, Self.uidSource)
-        let currentUserId = await PersonalHeroAPI.shared.currentUserId()
-        XCTAssertEqual(currentUserId, Self.uidCurrent)
-        let source = IdentityAdoptionPolicy.sourceToAdopt(
-            response: response, currentUserId: currentUserId)
-        XCTAssertEqual(source, Self.uidSource)
-        await PersonalHeroAPI.shared.requestIdentityAdoption(sourceUserId: try XCTUnwrap(source))
-
-        XCTAssertEqual(backend.adoptionCalls.count, 1)
-        XCTAssertEqual(backend.adoptionCalls.first?.sourceUserId, Self.uidSource,
-                       "the source uid rides as the lookup hint")
-        XCTAssertEqual(backend.adoptionCalls.first?.authorization,
-                       "Bearer token-\(Self.uidCurrent)",
-                       "the request carries the CALLER's JWT — the server derives the destination from it")
+        XCTAssertEqual(response?.entitled, true)
+        XCTAssertEqual(response?.bank, BankOutcome(state: "restored", looks: 7, refs: 3, collision: false))
+        XCTAssertEqual(
+            BankOutcomePolicy.restoreMessage(entitled: response?.entitled ?? false, bank: response?.bank),
+            "Restored — your subscription and your 7 saved looks are back.")
+        XCTAssertTrue(BankOutcomePolicy.hasBankReferences(response?.bank))
     }
 
-    func testRW137_ReconcileWithoutAdoption_StaysSilent() async throws {
+    func testRW137_ReconcileWithoutBank_StaysSilent() async throws {
         let backend = MockBackend()
         backend.signupUid = Self.uidCurrent
-        backend.reconcileBody = Data(#"{"ok": true, "entitled": true}"#.utf8)
+        backend.reconcileBody = Data(#"{"ok": true, "entitled": false, "bank": null}"#.utf8)
         await install(backend)
 
         let response = await PersonalHeroAPI.shared.reconcileEntitlement()
-        XCTAssertNil(response?.adoptionAvailable)
-        let source = IdentityAdoptionPolicy.sourceToAdopt(
-            response: response,
-            currentUserId: await PersonalHeroAPI.shared.currentUserId())
-        XCTAssertNil(source, "no reported source → no adoption request is ever composed")
-        XCTAssertTrue(backend.adoptionCalls.isEmpty)
+        XCTAssertEqual(response?.entitled, false)
+        XCTAssertNil(response?.bank)
+        XCTAssertNil(BankOutcomePolicy.restoreMessage(
+            entitled: response?.entitled ?? false, bank: response?.bank),
+            "an unentitled reconcile surfaces no restore line")
     }
 
     // MARK: - S4c: the deletion closure against the mocked backend
@@ -364,32 +374,40 @@ final class RW137IdentityTests: XCTestCase {
                        "this host cannot delete Keychain items — see the characterization above")
     }
 
-    // MARK: - S4/S4c: store + surface wiring (source pins)
+    // MARK: - Bank resolution + S4c: store + surface wiring (source pins)
 
-    func testRW137_StoreSyncPointsRunTheAdoptionHook_SourcePin() throws {
+    func testRW137_StoreSyncPointsRunTheOneReconcile_SourcePin() throws {
         let store = try sourceFile("../RunWear/Services/PersonalHeroStore.swift")
-        XCTAssertTrue(store.contains("func reconcileWithAdoption()"),
-                      "the store owns ONE reconcile + adoption pass")
-        XCTAssertTrue(store.contains("IdentityAdoptionPolicy.sourceToAdopt("),
-                      "the trigger is the model-layer policy")
-        XCTAssertTrue(store.contains("api.requestIdentityAdoption(sourceUserId: source)"),
-                      "a reported source is requested for adoption")
-        // The hook runs at every sync point where reconcile
+        XCTAssertTrue(store.contains("func reconcile() async -> Bool"),
+                      "the store owns ONE reconcile pass")
+        XCTAssertTrue(store.contains("lastBankOutcome = response.bank"),
+                      "the reconcile folds the response's bank outcome into the published property")
+        XCTAssertTrue(store.contains("@Published private(set) var lastBankOutcome: BankOutcome?"),
+                      "the bank outcome is published state the surfaces read")
+        XCTAssertTrue(store.contains("BankOutcomePolicy.hasBankReferences(lastBankOutcome)"),
+                      "the server-references check consults the resolved bank's references")
+        // The pass runs at every sync point where reconcile
         // already ran: bootstrap, entitlement change, restore —
         // three call sites of the one pass.
-        let callSites = store.components(separatedBy: "await reconcileWithAdoption()").count - 1
+        let callSites = store.components(separatedBy: "await reconcile()").count - 1
         XCTAssertEqual(callSites, 3,
-                       "bootstrap + entitlementDidChange + restorePurchases all run the adoption hook")
-        XCTAssertTrue(store.contains("func restorePurchases()"),
-                      "Restore Purchases is a store-level sync, not a bare billing call")
+                       "bootstrap + entitlementDidChange + restorePurchases all run the one reconcile")
+        XCTAssertTrue(store.contains("func restorePurchases() async -> String?"),
+                      "Restore Purchases is a store-level sync that returns its surface line")
         XCTAssertTrue(store.contains("await billing.restore()"),
                       "the store restore still runs the RevenueCat restore first")
+        XCTAssertTrue(store.contains("BankOutcomePolicy.restoreMessage(entitled: entitled, bank: lastBankOutcome)"),
+                      "the restore line composes from the folded outcome through the policy")
     }
 
-    func testRW137_RestoreButtonRoutesThroughTheStoreSync_SourcePin() throws {
+    func testRW137_RestoreButtonSurfacesTheOutcome_SourcePin() throws {
         let views = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
         XCTAssertTrue(views.contains("await store.restorePurchases()"),
-                      "the Restore purchases button runs the store's restore + adoption sync")
+                      "the Restore purchases button runs the store's restore + reconcile sync")
+        XCTAssertTrue(views.contains("restoreMessage = message"),
+                      "a non-nil outcome line is surfaced by the restore action")
+        XCTAssertTrue(views.contains("if let restoreMessage"),
+                      "the surfaced line renders inline in the sheet")
         XCTAssertFalse(views.contains("await store.billing.restore()"),
                        "no surface calls the bare billing restore anymore")
     }
@@ -408,18 +426,33 @@ final class RW137IdentityTests: XCTestCase {
                       "the Danger zone's Delete my data routes to the closing flow (no new deletion UI)")
     }
 
-    func testRW137_NoAdoptionSurfaceOrToggle_SourcePin() throws {
-        // Sol's ruling (DESIGN §4.1): adoption is automatic —
+    func testRW137_NoAdoptionMechanismRemains_SourcePin() throws {
+        // Resolution replaced the retired hint-and-adopt flow:
+        // no client file may still reference it. (The word
+        // "adoption" survives only in unrelated hero-serving
+        // senses elsewhere — bundled-photo adoption in the view
+        // model — never in the identity mechanism's files.)
+        let models = try sourceFile("../RunWear/Models/PersonalHeroModels.swift")
+        XCTAssertFalse(models.contains("adoption_available"))
+        XCTAssertFalse(models.contains("IdentityAdoptionPolicy"),
+                       "the adoption policy is replaced by BankOutcomePolicy")
+        XCTAssertFalse(models.contains("identityAdoptionBody"),
+                       "no adoption request body is composed anymore")
+        let api = try sourceFile("../RunWear/Services/PersonalHeroAPI.swift")
+        XCTAssertFalse(api.contains("requestIdentityAdoption"))
+        XCTAssertFalse(api.contains("request-identity-adoption"),
+                       "the client never calls the retired endpoint")
+        let store = try sourceFile("../RunWear/Services/PersonalHeroStore.swift")
+        XCTAssertFalse(store.contains("reconcileWithAdoption"),
+                       "the two-step pass is replaced by the one reconcile")
+        // Sol's ruling (DESIGN §4.1): resolution is automatic —
         // no opt-in toggle in UI or schema, no new user-facing
-        // flow. The mechanism's tokens live in the model/API/
-        // store layers only; the view layer never references it.
+        // flow. The view layer never references the mechanism.
         let modal = try sourceFile("../RunWear/Views/Modals/SettingsModal.swift")
         XCTAssertFalse(modal.lowercased().contains("adoption"),
                        "Settings grows no adoption surface")
         let views = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
         XCTAssertFalse(views.contains("requestIdentityAdoption"))
-        XCTAssertFalse(views.contains("adoption_available"))
-        let models = try sourceFile("../RunWear/Models/PersonalHeroModels.swift")
         XCTAssertFalse(models.contains("adoptionEnabled"))
         XCTAssertFalse(models.contains("adoptionOptIn"),
                        "no per-user adoption flag exists in the schema-facing model layer")

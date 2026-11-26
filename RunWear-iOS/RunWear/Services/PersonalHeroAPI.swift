@@ -232,32 +232,18 @@ actor PersonalHeroAPI {
     /// swallowed — the next bootstrap or entitlement change asks
     /// again.
     ///
-    /// RW-137 (DESIGN §4.4.2): the call now RETURNS its decoded
-    /// response — the caller (PersonalHeroStore) reads
-    /// `adoption_available` off it and requests the identity
-    /// adoption when RevenueCat proof links this entitled
-    /// identity to a prior uid. Nil on any failure, exactly as
-    /// silent as before.
+    /// RW-137: the call RETURNS its decoded response — the
+    /// caller (PersonalHeroStore) reads the server-resolved
+    /// `bank` outcome off it (the bank is keyed to the
+    /// subscription and resolved entirely server-side; there
+    /// is no follow-up request for the client to make). Nil on
+    /// any failure, exactly as silent as before.
     @discardableResult
     func reconcileEntitlement() async -> ReconcileEntitlementResponse? {
         guard let data = try? await functionPost("reconcile-personal-entitlement", body: [:]) else {
             return nil
         }
         return ReconcileEntitlementResponse.decode(from: data)
-    }
-
-    /// RW-137 (DESIGN §4.4.2/§4.4.3): ask the server to re-key
-    /// the hinted source identity's personal layer into the
-    /// caller's. The endpoint re-verifies the RevenueCat proof
-    /// server-side — the client's hint is never trusted — so
-    /// every failure here is swallowed: a wrong or stale hint is
-    /// a silent no-op by design, and the next reconcile asks
-    /// again.
-    func requestIdentityAdoption(sourceUserId: String) async {
-        _ = try? await functionPost(
-            "request-identity-adoption",
-            body: PersonalHeroRequests.identityAdoptionBody(sourceUserId: sourceUserId)
-        )
     }
 
     /// Subscriber matrix fill. The server gates this on its OWN

@@ -549,50 +549,97 @@ struct PersonalProfileRow: Decodable {
     }
 }
 
+/// RW-137: the bank outcome reconcile-personal-entitlement
+/// resolves server-side for an entitled caller. The bank is
+/// keyed to the SUBSCRIPTION, not the device uid (Sol's ruling,
+/// Nov 7, 2026): the server resolves the caller's bank from
+/// their verified entitlement and reports only the outcome —
+/// the bank's uid itself never crosses the wire.
+/// - `state`: "restored" (the bank belonged to a prior uid of
+///   this subscription), "own" (the caller's own bank), or
+///   "new" (no bank existed; one starts with this caller).
+/// - `looks` / `refs`: heroes / reference photos the resolved
+///   bank holds.
+/// - `collision`: another identity also claimed this bank.
+struct BankOutcome: Decodable, Equatable {
+    let state: String
+    let looks: Int
+    let refs: Int
+    let collision: Bool
+}
+
 /// RW-137 (DESIGN §4.4.2): reconcile-personal-entitlement's
 /// response. The entitlement itself stays server-side truth the
-/// client never asserts; the ONE field the client acts on is
-/// `adoption_available` — the source uid RevenueCat proof links
-/// to the caller's entitled identity, present only when a prior
-/// identity's personal layer can be adopted into this one.
-/// Additive and optional by contract: an absent field is the
-/// pre-RW-137 response and means "no adoption", never an error.
+/// client never asserts; alongside it the server now reports
+/// the resolved `bank` outcome (see BankOutcome) — resolution
+/// REPLACES the retired hint-and-adopt flow: there is nothing
+/// for the client to request, the bank is already resolved by
+/// the time this response lands. Additive and optional by
+/// contract: an absent or null `bank` is the pre-RW-137
+/// response (or an unentitled caller) and means "no bank
+/// outcome", never an error.
 struct ReconcileEntitlementResponse: Decodable {
-    let adoptionAvailable: String?
+    let entitled: Bool?
+    let bank: BankOutcome?
 
     enum CodingKeys: String, CodingKey {
-        case adoptionAvailable = "adoption_available"
+        case entitled
+        case bank
     }
 
     /// Decode tolerantly: a malformed body reads as "no
-    /// adoption" — reconcile is a silent backstop and its
+    /// outcome" — reconcile is a silent backstop and its
     /// failure mode is doing nothing.
     static func decode(from data: Data) -> ReconcileEntitlementResponse? {
         try? JSONDecoder().decode(ReconcileEntitlementResponse.self, from: data)
     }
 }
 
-/// RW-137 (DESIGN §4.1/§4.4): the client's adoption decision —
-/// pure, so the rule is testable without the network. Adoption
-/// is AUTOMATIC: a standing Premium property of a restored
+/// RW-137: what a bank outcome means for the user — pure, so
+/// the wording is testable without the network. Resolution is
+/// AUTOMATIC: a standing Premium property of a restored
 /// subscription (Sol, Nov 7, 2026) — there is no opt-in toggle
-/// anywhere in the UI or schema. When reconcile reports a
-/// source, the client requests the adoption and renders the
-/// restored state. The server re-verifies the RevenueCat proof
-/// before executing, so this policy is a trigger, not a trust
-/// decision — its only jobs are to fire on a well-formed hint
-/// and never on a self-adoption (source == caller), which the
-/// server would refuse anyway.
-enum IdentityAdoptionPolicy {
-    static func sourceToAdopt(
-        response: ReconcileEntitlementResponse?,
-        currentUserId: String?
-    ) -> String? {
-        guard let raw = response?.adoptionAvailable else { return nil }
-        let source = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !source.isEmpty else { return nil }
-        guard source != currentUserId else { return nil }
-        return source
+/// anywhere in the UI or schema, and no request for the client
+/// to make; the only client-side decision left is what the
+/// explicit Restore Purchases action reports back.
+enum BankOutcomePolicy {
+    /// The line the Restore Purchases action surfaces once its
+    /// reconcile completes. Nil when the caller is not entitled
+    /// — the existing not-entitled flow owns that case and this
+    /// policy stays silent. An entitled caller with no bank
+    /// outcome (an older server, or resolution unavailable)
+    /// still gets the plain active line.
+    static func restoreMessage(entitled: Bool, bank: BankOutcome?) -> String? {
+        guard entitled else { return nil }
+        guard let bank else { return "Your subscription is active." }
+        switch bank.state {
+        case "restored":
+            if bank.looks > 0 {
+                return bank.looks == 1
+                    ? "Restored — your subscription and your 1 saved look is back."
+                    : "Restored — your subscription and your \(bank.looks) saved looks are back."
+            }
+            return "Restored — your subscription is back. No saved looks were found for it."
+        case "own":
+            if bank.looks > 0 {
+                return bank.looks == 1
+                    ? "Your subscription is active — 1 saved look on this account."
+                    : "Your subscription is active — \(bank.looks) saved looks on this account."
+            }
+            return "Your subscription is active."
+        case "new":
+            return "Your subscription is active. No saved looks were found for it."
+        default:
+            return "Your subscription is active."
+        }
+    }
+
+    /// Whether the resolved bank holds reference photos — the
+    /// references live under the BANK's uid, so a restored
+    /// bank's references are invisible to the caller's own-uid
+    /// reference read; this is the check that sees them.
+    static func hasBankReferences(_ bank: BankOutcome?) -> Bool {
+        (bank?.refs ?? 0) > 0
     }
 }
 
@@ -628,16 +675,6 @@ enum PersonalHeroRequests {
         ]
     }
 
-    /// RW-137 (DESIGN §4.4.2): request-identity-adoption — the
-    /// source uid travels as a LOOKUP HINT only. The endpoint
-    /// re-verifies the RevenueCat alias/transfer proof
-    /// server-side before re-keying anything; a stale or wrong
-    /// hint degrades to a silent no-op, never an error state.
-    static func identityAdoptionBody(sourceUserId: String) -> [String: Any] {
-        [
-            "source_user_id": sourceUserId
-        ]
-    }
 }
 
 // MARK: - Personal-hero flag (RW-14 acceptance (19), spec §4)

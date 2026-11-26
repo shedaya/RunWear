@@ -67,6 +67,22 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
     /// read succeeds — the band shows only the real banking state.
     @Published private(set) var bankCoverage: BankCoverage?
 
+    /// RW-137: the bank outcome the last reconcile resolved
+    /// server-side (see BankOutcome) — the subscription's bank
+    /// as the server holds it, folded by `reconcile()`. Nil
+    /// until a reconcile reports one, and cleared again when a
+    /// reconcile reports no bank (an unentitled caller).
+    @Published private(set) var lastBankOutcome: BankOutcome?
+
+    /// Whether the server holds reference photos for this user:
+    /// the caller's own-uid reference read, OR the resolved
+    /// bank's — a restored bank's references live under the
+    /// bank's uid, invisible to the own-uid read, so the bank
+    /// outcome is consulted too (RW-137).
+    var hasServerReferences: Bool {
+        referenceCount > 0 || BankOutcomePolicy.hasBankReferences(lastBankOutcome)
+    }
+
     /// Fix wave 2026-11-07 (RW-126): whether the server's last
     /// job read proved generation still in flight — the band's
     /// terminal fold. Nil until a job read lands.
@@ -193,11 +209,11 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
             // profile read, so a purchase the webhook never
             // delivered is already reflected in the state this
             // bootstrap renders. The server verifies; we only ask.
-            // RW-137 (DESIGN §4.4): the same reconcile carries the
-            // adoption check — a restored subscription's prior
-            // identity is re-keyed onto this one before the
+            // RW-137: the same reconcile carries the bank
+            // resolution — a restored subscription's bank is
+            // resolved server-side onto this caller before the
             // profile read renders it.
-            await reconcileWithAdoption()
+            await reconcile()
             await refreshProfile()
             if billing.isSubscribed {
                 kickFillWithRetry()
@@ -209,45 +225,50 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
         }
     }
 
-    // MARK: - RW-137 identity adoption (DESIGN §4.4)
+    // MARK: - RW-137 bank resolution
 
     /// The reconcile every sync point runs (bootstrap, entitlement
     /// change, Restore Purchases): ask the server to reconcile the
-    /// entitlement (the RW-16.12 backstop), and when its response
-    /// reports a RevenueCat-proven prior identity
-    /// (`adoption_available`), request the adoption and fold the
-    /// restored profile + bank into the rendered state.
+    /// entitlement (the RW-16.12 backstop) and fold the bank
+    /// outcome its response carries into `lastBankOutcome`. The
+    /// bank is keyed to the SUBSCRIPTION and resolved entirely
+    /// server-side (Sol, Nov 7, 2026) — resolution replaces the
+    /// retired hint-and-adopt flow, so this is ONE call: no
+    /// follow-up request, no second reconcile. A failed reconcile
+    /// (nil response) leaves the last known outcome standing.
     ///
-    /// Adoption is AUTOMATIC — a standing Premium property of a
-    /// restored subscription (Sol, Nov 7, 2026); there is no
-    /// opt-in toggle anywhere in the UI or schema, and no new
-    /// user-facing flow: the restored state renders through the
-    /// EXISTING surfaces (the profile read drives the mode; the
-    /// bank read drives the Your Looks library and the
-    /// convergence band). The endpoint re-verifies the proof
-    /// server-side, so a hint it cannot verify degrades to a
-    /// silent no-op and the next reconcile asks again.
-    func reconcileWithAdoption() async {
-        let response = await api.reconcileEntitlement()
-        guard let source = IdentityAdoptionPolicy.sourceToAdopt(
-            response: response,
-            currentUserId: await api.currentUserId()
-        ) else { return }
-        await api.requestIdentityAdoption(sourceUserId: source)
-        await refreshProfile()
-        await refreshBankLibrary()
+    /// Returns the caller's entitled state as the server reports
+    /// it, falling back to the billing layer's word when no
+    /// response landed.
+    @discardableResult
+    func reconcile() async -> Bool {
+        guard let response = await api.reconcileEntitlement() else {
+            return billing.isSubscribed
+        }
+        lastBankOutcome = response.bank
+        return response.entitled ?? billing.isSubscribed
     }
 
-    /// Restore Purchases (the paywall/Settings route, DESIGN
-    /// §4.4.3): the store restore runs first, then the same
-    /// reconcile + adoption sync bootstrap runs — a restore that
-    /// lands a prior identity's subscription brings its looks
-    /// back in the same pass.
-    func restorePurchases() async {
+    /// Restore Purchases (the paywall/Settings route): the store
+    /// restore runs first, then the same reconcile bootstrap
+    /// runs — a restore that lands a prior identity's
+    /// subscription resolves its bank in the same pass, and the
+    /// restored state renders through the EXISTING surfaces (the
+    /// profile read drives the mode; the bank read drives the
+    /// Your Looks library and the convergence band).
+    ///
+    /// Returns the line the explicit restore action surfaces
+    /// (BankOutcomePolicy.restoreMessage) — nil when the caller
+    /// is not entitled, where the existing not-entitled flow
+    /// owns the outcome. Background reconciles never surface it;
+    /// only this action's caller renders the return value.
+    @discardableResult
+    func restorePurchases() async -> String? {
         await billing.restore()
-        await reconcileWithAdoption()
+        let entitled = await reconcile()
         await refreshProfile()
         await refreshBankLibrary()
+        return BankOutcomePolicy.restoreMessage(entitled: entitled, bank: lastBankOutcome)
     }
 
     func refreshProfile() async {
@@ -391,9 +412,9 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
         // server to reconcile (Lane B backstop) and re-reads the
         // profile it may have just moved — this is the path a fresh
         // purchase takes when the webhook hasn't landed.
-        // RW-137: the reconcile carries the adoption check too.
+        // RW-137: the reconcile carries the bank resolution too.
         Task {
-            await reconcileWithAdoption()
+            await reconcile()
             await refreshProfile()
         }
         if active {
@@ -792,6 +813,7 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
         scaffoldServes.removeAll()
         serveTiers.removeAll()
         bankedLooks.removeAll()
+        lastBankOutcome = nil
         bankGenerationActive = nil
         requestedCells.removeAll()
         pollingTasks.values.forEach { $0.cancel() }
