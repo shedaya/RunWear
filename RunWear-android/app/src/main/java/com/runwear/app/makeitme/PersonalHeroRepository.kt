@@ -65,6 +65,25 @@ class PersonalHeroRepository @Inject constructor(
     val state: StateFlow<PersonalState> = _state.asStateFlow()
 
     /**
+     * RW-137 (2026-11-25): the bank outcome of the most recent
+     * completed entitlement reconcile — the personal bank the
+     * server resolved for the caller's SUBSCRIPTION (see
+     * [PersonalHeroService.ReconcileOutcome]). Null until a
+     * reconcile completes. The Restore Purchases message and the
+     * reference-photo truth ([hasServerReferences]) read it; a
+     * background sync records it silently and surfaces nothing.
+     */
+    data class BankOutcomeUi(
+        val state: String?,
+        val looks: Int,
+        val refs: Int,
+        val collision: Boolean
+    )
+
+    private val _lastBankOutcome = MutableStateFlow<BankOutcomeUi?>(null)
+    val lastBankOutcome: StateFlow<BankOutcomeUi?> = _lastBankOutcome.asStateFlow()
+
+    /**
      * GEN-5 (RW-28 Addendum 8, second follow-up): the selfie
      * epoch — bumped whenever the registered reference-photo set
      * CHANGES (a replacement set, not the first upload and not a
@@ -94,12 +113,14 @@ class PersonalHeroRepository @Inject constructor(
      *  2. invoke reconcile-personal-entitlement — the server verifies
      *     the caller's state against RevenueCat and flips the
      *     `entitled` flag (kicking the matrix fill on a grant) without
-     *     trusting anything the client claims;
-     *  3. if the reconcile names a RevenueCat-proven prior identity,
-     *     request its adoption (RW-137/RW-179c) so a restored
-     *     subscription's bank follows the account to this uid;
-     *  4. if the reconcile call completed, re-read the profile so the
-     *     local mirror reflects any transition.
+     *     trusting anything the client claims, and resolves the
+     *     caller's personal bank from the SUBSCRIPTION (RW-137,
+     *     2026-11-25) — resolution replaces the retired client-side
+     *     re-keying step, so a restored subscription's bank reaches
+     *     this uid with no further call;
+     *  3. if the reconcile call completed, record its bank outcome
+     *     ([lastBankOutcome]) and re-read the profile so the local
+     *     mirror reflects any transition.
      * Silent and idempotent: no session, a failed link, or a failed
      * reconcile leaves local state exactly as it was.
      */
@@ -109,30 +130,27 @@ class PersonalHeroRepository @Inject constructor(
         runCatching { billing.logIn(uid) }
         val outcome = service.reconcileEntitlement()
         if (outcome.completed) {
-            // RW-137 (DESIGN §4.4) + RW-179c (2026-11-25): the same
-            // reconcile carries the adoption check — when it names
-            // a RevenueCat-proven prior identity, request the
-            // adoption so the restored subscription's bank re-keys
-            // onto THIS uid before the profile read renders it.
-            // This is the step whose absence stranded Sol's bank on
-            // his previous install uid after the Nov 25 reset: the
-            // entitlement reconciled, the looks did not follow.
-            // Adoption is automatic (a standing Premium property —
-            // no opt-in), the endpoint re-verifies the proof
-            // server-side, and an unprovable hint is a silent
-            // no-op; the iOS store's reconcileWithAdoption is the
-            // mirror. Sync points: bootstrap, entitlement change,
-            // purchase, Restore Purchases — all of them run through
-            // this method.
-            val source = IdentityAdoptionPolicy.sourceToAdopt(
-                outcome.adoptionSourceUserId, uid
+            _lastBankOutcome.value = BankOutcomeUi(
+                state = outcome.bankState,
+                looks = outcome.bankLooks,
+                refs = outcome.bankRefs,
+                collision = outcome.bankCollision
             )
-            if (source != null) {
-                runCatching { service.requestIdentityAdoption(source) }
-            }
             refreshFromServer()
         }
     }
+
+    /**
+     * True when reference photos exist server-side for this user:
+     * the caller's own registered rows (the profile mirror's
+     * reference count), OR the resolved subscription bank's rows
+     * ([BankOutcomePolicy.hasBankReferences]) — a restored user
+     * whose photos live in the bank under a prior uid must not be
+     * prompted to re-upload them.
+     */
+    fun hasServerReferences(): Boolean =
+        _state.value.referenceCount > 0 ||
+            BankOutcomePolicy.hasBankReferences(_lastBankOutcome.value?.refs ?: 0)
 
     /** Re-read the profile + reference count from the server. */
     suspend fun refreshFromServer() {
@@ -552,6 +570,7 @@ class PersonalHeroRepository @Inject constructor(
         // expired signed URLs. The requested-set sweep above covers the
         // generated ones.
         service.clearSession()
+        _lastBankOutcome.value = null
         _state.value = PersonalState(forkDecided = _state.value.forkDecided, synced = true)
     }
 

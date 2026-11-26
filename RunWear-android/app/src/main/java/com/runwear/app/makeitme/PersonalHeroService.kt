@@ -389,26 +389,29 @@ class PersonalHeroService @Inject constructor(
      * client's own startPersonalFill call with forecast cells
      * (Defect 1). Silent and idempotent by design (the function
      * writes only on a real transition). The outcome reports
-     * whether the call completed and any adoptable prior identity
-     * it named; the caller requests the adoption when one is
-     * named and re-reads the profile afterwards to mirror any
-     * change.
+     * whether the call completed and the bank the server resolved
+     * for this caller; the caller records the bank outcome and
+     * re-reads the profile afterwards to mirror any change.
      */
     /**
-     * RW-137 (DESIGN §4.4.2) + RW-179c: the reconcile's outcome —
-     * whether the call completed, and the prior identity the
-     * response names as adoptable (`adoption_available`), when
-     * RevenueCat proof links this entitled identity to a previous
-     * uid. Additive and optional by contract: an absent field is
-     * the pre-RW-137 response and means "no adoption", never an
-     * error. (Before RW-179c this method returned only a Boolean
-     * and discarded the body — the adoption the response offered
-     * was never requested, and a restored subscription's bank
-     * stayed keyed to the previous install's uid.)
+     * RW-137 (2026-11-25, subscription-as-identity — Sol's ruling,
+     * Nov 7, 2026): the reconcile's outcome — whether the call
+     * completed, and the personal bank the server resolved for the
+     * caller's SUBSCRIPTION (`bank`), never for the device uid.
+     * The bank is keyed server-side to the subscription, so a
+     * restored subscription's looks and reference photos reach a
+     * fresh install's uid by resolution, with no client-side
+     * re-keying step. Additive and optional by contract: an absent
+     * or null `bank` (a pre-RW-137 response, or a resolution
+     * outage server-side) means "no bank resolved" — [bankState]
+     * is null and the counts are 0, never an error.
      */
     data class ReconcileOutcome(
         val completed: Boolean,
-        val adoptionSourceUserId: String?
+        val bankState: String? = null,
+        val bankLooks: Int = 0,
+        val bankRefs: Int = 0,
+        val bankCollision: Boolean = false
     )
 
     suspend fun reconcileEntitlement(): ReconcileOutcome {
@@ -419,29 +422,18 @@ class PersonalHeroService @Inject constructor(
             "reconcile-personal-entitlement", "{\"platform\":\"android\"}"
         )
         val body = (result as? FunctionResult.Ok)?.body
-            ?: return ReconcileOutcome(completed = false, adoptionSourceUserId = null)
+            ?: return ReconcileOutcome(completed = false)
+        // `bank` is a JSON object or an explicit null; only an
+        // object carries an outcome (a JsonNull is not a JsonObject).
+        val bank = body["bank"] as? JsonObject
         return ReconcileOutcome(
             completed = true,
-            adoptionSourceUserId = body["adoption_available"]?.jsonPrimitive?.contentOrNull
+            bankState = bank?.get("state")?.jsonPrimitive?.contentOrNull,
+            bankLooks = bank?.get("looks")?.jsonPrimitive?.intOrNull ?: 0,
+            bankRefs = bank?.get("refs")?.jsonPrimitive?.intOrNull ?: 0,
+            bankCollision = bank?.get("collision")?.jsonPrimitive?.booleanOrNull ?: false
         )
     }
-
-    /**
-     * RW-137 (DESIGN §4.4.2/§4.4.3): ask the server to re-key the
-     * hinted source identity's personal layer into the caller's.
-     * The endpoint re-verifies the RevenueCat proof server-side —
-     * the client's hint is never trusted — so every failure here
-     * is swallowed by the caller: a wrong or stale hint is a
-     * silent no-op by design, and the next reconcile asks again.
-     * The source uid travels as `source_user_id` — the deployed
-     * function's field name (the wire contract; see the iOS
-     * PersonalHeroRequests.identityAdoptionBody mirror).
-     */
-    suspend fun requestIdentityAdoption(sourceUserId: String): Boolean =
-        callFunction(
-            "request-identity-adoption",
-            "{\"source_user_id\":\"$sourceUserId\"}"
-        ) is FunctionResult.Ok
 
     data class DeleteOutcome(val storageRemoved: Int, val totalRowsRemoved: Int)
 

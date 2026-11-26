@@ -79,6 +79,16 @@ class MakeItMeViewModel @Inject constructor(
     /** True while a purchase or fill kick is in flight (sheet spinner). */
     val purchaseInFlight = MutableStateFlow(false)
 
+    /**
+     * RW-137 (2026-11-25): the bank outcome message of the last
+     * explicit Restore Purchases action, composed by
+     * [BankOutcomePolicy] from the bank the reconcile resolved for
+     * the subscription. ONLY [restorePurchases] sets it — bootstrap
+     * and background identity syncs record the bank outcome in the
+     * repository silently and never surface a message here.
+     */
+    val restoreMessage = MutableStateFlow<String?>(null)
+
     init {
         billing.configure()
         // GEN-5 (EX-15): the band watch runs for the ViewModel's
@@ -306,12 +316,31 @@ class MakeItMeViewModel @Inject constructor(
      * GEN-5 (RW-29 FA-7): the paywall's Restore door. A restore
      * that lands the entitlement activates the subscription state
      * exactly like a purchase does.
+     *
+     * RW-137 (2026-11-25): the activation sync is AWAITED here (not
+     * fired through [onSubscriptionActivated]) so the bank outcome
+     * the reconcile resolved for the subscription is on hand before
+     * the result is reported: [restoreMessage] is then set from
+     * [BankOutcomePolicy] against the post-sync entitlement state.
+     * When the policy returns null (not entitled after the sync),
+     * the existing failure / no-subscription behaviour stands
+     * exactly as it was — the outcome alone drives it.
      */
     fun restorePurchases(onResult: (BillingManager.PurchaseOutcome) -> Unit) {
         viewModelScope.launch {
+            restoreMessage.value = null
             val outcome = billing.restorePurchases()
             if (outcome == BillingManager.PurchaseOutcome.Success) {
-                onSubscriptionActivated()
+                repository.syncBillingIdentity()
+                repository.refreshFromServer()
+                val entitled = billing.makeItMeActive.value ||
+                    repository.state.value.entitled
+                val bank = repository.lastBankOutcome.value
+                BankOutcomePolicy.restoreMessage(
+                    entitled = entitled,
+                    bankState = bank?.state,
+                    bankLooks = bank?.looks ?: 0
+                )?.let { restoreMessage.value = it }
             }
             onResult(outcome)
         }

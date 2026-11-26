@@ -410,36 +410,72 @@ object BillingIdentityPolicy {
 }
 
 /**
- * RW-137 (DESIGN §4.1/§4.4) + RW-179c (2026-11-25): the client's
- * identity-adoption decision — the Android mirror of the iOS
- * IdentityAdoptionPolicy in PersonalHeroModels.swift. Adoption is
- * AUTOMATIC: a standing Premium property of a restored
- * subscription (Sol, Nov 7, 2026 — "Premium keeps your looks. New
- * phone or reinstall — restore your purchase and they're back."),
- * with no opt-in toggle anywhere in the UI or schema. When the
- * entitlement reconcile reports a RevenueCat-proven prior identity
- * (`adoption_available`), the client requests the adoption and
- * renders the restored state; the server re-verifies the proof
- * before re-keying anything, so this policy is a trigger, not a
- * trust decision — its only jobs are to fire on a well-formed hint
- * and never on a self-adoption (source == caller), which the
- * server would refuse anyway.
+ * RW-137 (2026-11-25, subscription-as-identity — Sol's ruling,
+ * Nov 7, 2026: "Premium keeps your looks. New phone or reinstall —
+ * restore your purchase and they're back."): the client's reading
+ * of the bank outcome the entitlement reconcile resolves
+ * SERVER-SIDE. The personal bank is keyed to the SUBSCRIPTION, not
+ * the device uid, so there is no client-side re-keying step left:
+ * the reconcile response's `bank` object already names the bank
+ * this caller resolves to, and this policy only decides what the
+ * Restore Purchases action says about it and whether the resolved
+ * bank holds reference photos.
  *
- * The 2026-11-25 incident is why this exists on Android at all:
- * the iOS client shipped this trigger with RW-137, but Android's
- * reconcile discarded the response body, so after a user reset
- * (delete photos → reset app → reopen → restore) the new install
- * uid reconciled its entitlement and inherited NOTHING — the bank
- * stayed keyed to the previous uid and a full from-scratch fill
- * began.
+ * The states are the server's: "restored" (the bank belonged to a
+ * prior uid of the same subscription), "own" (the bank is already
+ * the caller's), and "new" (no bank existed for the subscription
+ * yet). A null state means no bank was resolved (a pre-RW-137
+ * response or a resolution outage) — the subscription itself is
+ * still active, and the copy says only that.
  */
-object IdentityAdoptionPolicy {
+object BankOutcomePolicy {
 
-    fun sourceToAdopt(adoptionAvailable: String?, currentUserId: String?): String? {
-        val source = adoptionAvailable?.trim()?.takeIf { it.isNotEmpty() } ?: return null
-        if (source == currentUserId) return null
-        return source
+    const val SUBSCRIPTION_ACTIVE: String = "Your subscription is active."
+
+    const val RESTORED_NO_LOOKS: String =
+        "Restored — your subscription is back. No saved looks were found for it."
+
+    const val NEW_NO_LOOKS: String =
+        "Your subscription is active. No saved looks were found for it."
+
+    fun restoredWithLooks(looks: Int): String =
+        if (looks == 1) {
+            "Restored — your subscription and your 1 saved look is back."
+        } else {
+            "Restored — your subscription and your $looks saved looks are back."
+        }
+
+    fun ownWithLooks(looks: Int): String =
+        if (looks == 1) {
+            "Your subscription is active — 1 saved look on this account."
+        } else {
+            "Your subscription is active — $looks saved looks on this account."
+        }
+
+    /**
+     * The Restore Purchases message for one bank outcome. Null
+     * when the caller is not entitled — the not-entitled flow
+     * (no-subscription failure) owns that case and this policy
+     * must not paper over it.
+     */
+    fun restoreMessage(entitled: Boolean, bankState: String?, bankLooks: Int): String? {
+        if (!entitled) return null
+        return when (bankState) {
+            "restored" ->
+                if (bankLooks > 0) restoredWithLooks(bankLooks) else RESTORED_NO_LOOKS
+            "own" ->
+                if (bankLooks > 0) ownWithLooks(bankLooks) else SUBSCRIPTION_ACTIVE
+            "new" -> NEW_NO_LOOKS
+            // No bank resolved, or a state this build doesn't know:
+            // the subscription is active and nothing more is proven.
+            else -> SUBSCRIPTION_ACTIVE
+        }
     }
+
+    /** True when the resolved bank holds reference photos — a
+     *  restored user whose photos live in the bank must not be
+     *  prompted to re-upload them. */
+    fun hasBankReferences(bankRefs: Int): Boolean = bankRefs > 0
 }
 
 /**

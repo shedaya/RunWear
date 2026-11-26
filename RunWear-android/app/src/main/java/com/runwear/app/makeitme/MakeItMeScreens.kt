@@ -1902,7 +1902,23 @@ fun MakeItMePaywallSheet(
             // every state of this sheet, subscribed included. A
             // restore that lands the entitlement completes like a
             // purchase; one that finds nothing says so honestly.
+            // RW-137 (2026-11-25): a restore that resolved a bank
+            // outcome carries the view model's restoreMessage —
+            // when one is present the sheet stays open on the
+            // subscribed state so the user actually reads what was
+            // restored; with no message the success landing is the
+            // purchase landing, exactly as before.
+            val restoreMessage by viewModel.restoreMessage.collectAsState()
             var restoring by remember { mutableStateOf(false) }
+            restoreMessage?.let {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = it,
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp,
+                    color = RunWearColors.TextPrimary
+                )
+            }
             TextButton(
                 onClick = {
                     restoring = true
@@ -1910,7 +1926,10 @@ fun MakeItMePaywallSheet(
                     viewModel.restorePurchases { outcome ->
                         restoring = false
                         when (outcome) {
-                            BillingManager.PurchaseOutcome.Success -> onPurchased()
+                            BillingManager.PurchaseOutcome.Success ->
+                                if (viewModel.restoreMessage.value == null) {
+                                    onPurchased()
+                                }
                             // Restore never yields this outcome
                             // (it reports Success directly), but the
                             // subscribed landing is the same.
