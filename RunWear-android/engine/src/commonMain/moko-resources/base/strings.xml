@@ -97,6 +97,8 @@
     <string name="mim_u2b_monthly">Monthly</string>
     <string name="mim_u2b_annual">Annual</string>
     <string name="mim_u2c_fine_print">Your outfits for your local weather are made when you subscribe. A brand-new outfit or a new place takes about a minute to make the first time — after that, it\'s ready instantly. Cancel any time in your Google Play subscriptions.</string>
+    <string name="legal_privacy_policy">Privacy Policy</string>
+    <string name="legal_terms_of_use">Terms of Use</string>
     <string name="mim_band_making_heading">Making your looks</string>
     <string name="mim_band_making_line">We\'re generating your outfits across all running conditions, so it will be ready when you need it.</string>
     <string name="mim_first_look_band_readiness">Ready the moment you open the app — made ahead, never while you wait.</string>

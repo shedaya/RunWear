@@ -175,6 +175,8 @@ enum AppEnglish {
     static func homeActualLine(_ p1: String) -> String { String(format: "Actual %1$@", arguments: [p1]) }
     static var homeCurrentLocation: String { "Current Location" }
     static func homeLocationLine(_ p1: String, _ p2: String) -> String { String(format: "%1$@ · %2$@", arguments: [p1, p2]) }
+    static var legalPrivacyPolicy: String { "Privacy Policy" }
+    static var legalTermsOfUse: String { "Terms of Use" }
     static var loadingFirstRecommendation: String { "Getting your first recommendation…" }
     static var locCurrentBadge: String { "CURRENT" }
     static var locCurrentLocation: String { "Current location" }

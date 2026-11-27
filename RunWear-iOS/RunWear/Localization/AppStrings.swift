@@ -858,6 +858,8 @@ enum AppStrings {
     static func homeActualLine(_ p1: String) -> String { fmt("home_actual_line", [p1]) }
     static var homeCurrentLocation: String { raw("home_current_location") }
     static func homeLocationLine(_ p1: String, _ p2: String) -> String { fmt("home_location_line", [p1, p2]) }
+    static var legalPrivacyPolicy: String { raw("legal_privacy_policy") }
+    static var legalTermsOfUse: String { raw("legal_terms_of_use") }
     static var loadingFirstRecommendation: String { raw("loading_first_recommendation") }
     static var locCurrentBadge: String { raw("loc_current_badge") }
     static var locCurrentLocation: String { raw("loc_current_location") }

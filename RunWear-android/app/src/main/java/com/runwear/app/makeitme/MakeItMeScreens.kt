@@ -5,6 +5,7 @@ import com.runwear.engine.*
 import dev.icerock.moko.resources.compose.stringResource
 
 import android.app.Activity
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -1652,6 +1653,69 @@ fun MakeItMeUpsellCard(
 }
 
 // ============================================================================
+// Purchase legal links (Guideline 3.1.2(c) fix, Nov 27, 2026).
+// Apple rejected iOS 1.3 (build 34) because both purchase
+// surfaces showed the subscription's title, length and price
+// with NO Privacy Policy or Terms of Use links anywhere; the
+// links were added to iOS and — full platform parity — here,
+// shared by the paywall sheet and the Settings offer card.
+//
+// URLs, from the sources of truth (verified live Nov 27, 2026):
+//  - Privacy Policy: the privacyPolicyUrl filed in App Store
+//    Connect for the app — the live store page links
+//    https://uptimeventuresllc.com/runwear/privacy, which
+//    resolves HTTP 200 to "RunWear Privacy Policy — Uptime
+//    Ventures LLC" (the same URL filed with Google Play).
+//  - Terms of Use: Apple's standard EULA, the license the app
+//    is distributed under —
+//    https://www.apple.com/legal/internet-services/itunes/dev/stdeula/
+//    resolves HTTP 200 to Apple's "Licensed Application End
+//    User License Agreement". The app has no hosted terms of
+//    its own (uptimeventuresllc.com/runwear/terms is not a real
+//    document — it falls back to the studio homepage).
+// ============================================================================
+
+const val PRIVACY_POLICY_URL = "https://uptimeventuresllc.com/runwear/privacy"
+const val TERMS_OF_USE_URL =
+    "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/"
+
+/**
+ * The two legal doors, in the purchase surfaces' fine-print
+ * register (plain text buttons, secondary colour — the same
+ * treatment as the paywall's Restore purchases button). Each
+ * opens the real document in the browser via ACTION_VIEW, the
+ * app's established external-link pattern.
+ */
+@Composable
+internal fun PurchaseLegalLinksRow() {
+    val context = LocalContext.current
+    fun open(url: String) {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        TextButton(onClick = { open(PRIVACY_POLICY_URL) }) {
+            Text(
+                text = stringResource(MR.strings.legal_privacy_policy),
+                fontSize = 13.5.sp,
+                color = RunWearColors.PineAccent
+            )
+        }
+        Text(text = "·", fontSize = 13.5.sp, color = RunWearColors.TextSecondary)
+        TextButton(onClick = { open(TERMS_OF_USE_URL) }) {
+            Text(
+                text = stringResource(MR.strings.legal_terms_of_use),
+                fontSize = 13.5.sp,
+                color = RunWearColors.PineAccent
+            )
+        }
+    }
+}
+
+// ============================================================================
 // Subscription sheet (spec §5.3, strings U2). Every price renders
 // from the fetched current RevenueCat offering — the experiment
 // requirement (RW-16.30, Nov 2 2026): a user assigned a variant
@@ -1985,6 +2049,12 @@ fun MakeItMePaywallSheet(
                 lineHeight = 17.sp,
                 color = RunWearColors.TextSecondary
             )
+
+            // Guideline 3.1.2(c) parity: Privacy Policy + Terms
+            // of Use, in the sheet's footer block with the fine
+            // print and Restore — visible on the sheet, opening
+            // the real documents.
+            PurchaseLegalLinksRow()
 
             // GEN-5 (RW-29 FA-7): Restore purchases — present in
             // every state of this sheet, subscribed included. A
@@ -2545,6 +2615,11 @@ fun MakeItMeSettingsSection(
                                 modifier = Modifier.padding(top = 10.dp)
                             )
                         }
+                        // Guideline 3.1.2(c) parity: the legal
+                        // doors sit directly under the purchase
+                        // button, on the card itself.
+                        Spacer(Modifier.height(4.dp))
+                        PurchaseLegalLinksRow()
                     }
                 }
                 }

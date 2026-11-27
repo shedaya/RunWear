@@ -538,4 +538,24 @@ final class Gen3TrainDeltaTests: XCTestCase {
         XCTAssertFalse(settings.contains("Text(\"Get Premium\")"),
                        "RW-100: the bare 'Get Premium' button does not return")
     }
+
+    // MARK: - Guideline 3.1.2(c) · purchase-surface legal links
+
+    /// Nov 27, 2026: Apple rejected 1.3 (build 34) because both
+    /// purchase surfaces showed title/length/price with no
+    /// Privacy Policy or Terms of Use links. Pin the fix: the
+    /// shared legal row exists, opens the two verified URLs,
+    /// and is rendered on BOTH surfaces (paywall sheet + the
+    /// Settings Premium offer card).
+    func testPurchaseSurfacesCarryLegalLinks_sourcePin() throws {
+        let views = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
+        XCTAssertTrue(views.contains("https://uptimeventuresllc.com/runwear/privacy"),
+                      "the Privacy Policy URL filed in App Store Connect")
+        XCTAssertTrue(views.contains("https://www.apple.com/legal/internet-services/itunes/dev/stdeula/"),
+                      "the Terms of Use URL — Apple's standard EULA")
+        XCTAssertTrue(views.contains("AppStrings.legalPrivacyPolicy"))
+        XCTAssertTrue(views.contains("AppStrings.legalTermsOfUse"))
+        XCTAssertEqual(views.components(separatedBy: "PurchaseLegalLinksRow()").count - 1, 2,
+                       "the legal row renders on both purchase surfaces — paywall sheet and Settings offer card")
+    }
 }

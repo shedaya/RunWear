@@ -344,6 +344,58 @@ struct MakeItMeSettingsSection: View {
     }
 }
 
+// MARK: - Purchase legal links (Guideline 3.1.2(c) fix, Nov 27, 2026)
+//
+// Apple rejected iOS 1.3 (build 34) under Guideline 3.1.2(c):
+// both purchase surfaces (the paywall sheet and the Settings
+// Premium offer card) showed the subscription's title, length
+// and price with NO Privacy Policy or Terms of Use links
+// anywhere. This row is the fix, shared by both surfaces so
+// the two can never drift apart again.
+//
+// URLs, from the sources of truth (verified live Nov 27, 2026):
+//  - Privacy Policy: the privacyPolicyUrl filed in App Store
+//    Connect for app 6827973343 — the live App Store page links
+//    https://uptimeventuresllc.com/runwear/privacy, which
+//    resolves HTTP 200 to "RunWear Privacy Policy — Uptime
+//    Ventures LLC".
+//  - Terms of Use: the app is licensed under Apple's standard
+//    EULA (the EULA the 21 localized store descriptions carry),
+//    https://www.apple.com/legal/internet-services/itunes/dev/stdeula/
+//    — resolves HTTP 200 to Apple's "Licensed Application End
+//    User License Agreement". The app has no hosted terms of
+//    its own (uptimeventuresllc.com/runwear/terms is not a real
+//    document — it falls back to the studio homepage).
+enum PurchaseLegalLinks {
+    static let privacyPolicyURL = URL(string: "https://uptimeventuresllc.com/runwear/privacy")!
+    static let termsOfUseURL = URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!
+}
+
+/// The two legal doors, in the purchase surfaces' existing
+/// fine-print register (plain buttons, inkSecondary — the same
+/// treatment as the paywall's Restore purchases button). Each
+/// opens the real document via the system URL handler (Safari).
+struct PurchaseLegalLinksRow: View {
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Button(AppStrings.legalPrivacyPolicy) {
+                openURL(PurchaseLegalLinks.privacyPolicyURL)
+            }
+            Text("·")
+                .foregroundColor(AppTheme.inkSecondary)
+            Button(AppStrings.legalTermsOfUse) {
+                openURL(PurchaseLegalLinks.termsOfUseURL)
+            }
+        }
+        .font(.system(size: 14, weight: .medium))
+        .foregroundColor(AppTheme.inkSecondary)
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, alignment: .center)
+    }
+}
+
 // MARK: - The Premium offer card (GEN-3 · WS-D)
 //
 // Frame 35's quiet card was quiet to the point of illegibility
@@ -428,6 +480,11 @@ private struct MakeItMePremiumOfferCard: View {
                     .font(.system(size: 13))
                     .foregroundColor(AppTheme.inkSecondary)
             }
+            // Guideline 3.1.2(c): the legal doors sit directly
+            // under the purchase button, on the card itself —
+            // visible without scrolling past it.
+            PurchaseLegalLinksRow()
+                .padding(.top, 2)
         }
         .padding(.vertical, 6)
         // GEN-5 (cream map row 30): the offer card carries its
@@ -954,6 +1011,12 @@ struct MakeItMeSubscriptionSheet: View {
                             .font(.system(size: 14))
                             .foregroundColor(AppTheme.weatherAccentColor(.orange, isDark: colorScheme == .dark))
                     }
+
+                    // Guideline 3.1.2(c): Privacy Policy + Terms
+                    // of Use, directly under the purchase button —
+                    // in the reviewer's screenshot frame, not
+                    // below the fold.
+                    PurchaseLegalLinksRow()
 
                     Button {
                         Task {
