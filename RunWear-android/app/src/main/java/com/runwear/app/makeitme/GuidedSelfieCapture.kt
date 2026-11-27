@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -650,12 +651,42 @@ fun GuidedSelfieCapture(
                     // (see the creation seam above): with no live
                     // analysis there is nothing to gate on, and the
                     // captured still is still judged by the review.
+                    //
+                    // JG-15 hunt D1 (Nov 27, 2026): the DISABLED
+                    // state gets an explicit treatment. Material's
+                    // default disabled colours (onSurface at 12% /
+                    // 38%) collapse onto this surface's near-black
+                    // ground — the pill measured luminance 22.4
+                    // against the background's 19.3, a ghost that
+                    // reads as absent, not waiting. The disabled
+                    // shutter instead carries the register of the
+                    // flow's other disabled CTA (the upload step's
+                    // "Make my first look", a legible muted pill):
+                    // a filled-muted PhotoInk container, a hairline
+                    // PhotoInk outline, and a readable muted label.
+                    // Enabled colours are untouched — containerColor
+                    // alone still governs the passing state.
+                    val shutterEnabled = faceDetector == null || livePassing
                     Button(
                         onClick = { capture() },
-                        enabled = faceDetector == null || livePassing,
+                        enabled = shutterEnabled,
                         modifier = Modifier.fillMaxWidth().height(54.dp),
                         shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary)
+                        border = if (shutterEnabled) {
+                            null
+                        } else {
+                            BorderStroke(
+                                1.dp,
+                                com.runwear.app.ui.theme.PhotoInk.copy(alpha = 0.35f)
+                            )
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = RunWearColors.Primary,
+                            disabledContainerColor =
+                                com.runwear.app.ui.theme.PhotoInk.copy(alpha = 0.14f),
+                            disabledContentColor =
+                                com.runwear.app.ui.theme.PhotoInk.copy(alpha = 0.75f)
+                        )
                     ) {
                         Text("Take photo", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                     }
