@@ -652,7 +652,35 @@ fun ShareStudioSheet(
     entry: WearIveRunDayEntry,
     gender: GenderPreference,
     temperatureUnit: TemperatureUnit = TemperatureUnit.FAHRENHEIT,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    /** RW-152 §3 (Nov 10, 2026): the HeroRefResolver re-sign seam —
+     * the poster composition loads the RESOLVED hero, never a
+     * stored (possibly expired) display URL. */
+    heroResign: (suspend (String) -> String?)? = null,
+    /** RW-158 (user ruling, Nov 10, 2026): tapping the Morning
+     * Poster preview opens the entry's full photo (the RW-133
+     * hero rule, reached from inside the sheet now that a past
+     * entry's tap opens the sheet instead of the photo). Null =
+     * the preview is not tappable (render proofs). */
+    onViewPhoto: ((WearIveRunDayEntry) -> Unit)? = null,
+    /** RW-166 (Nov 10, 2026): the bank re-link recovery seam —
+     * an entry that settled with NO hero reference resolves its
+     * own banked hero through [HeroRecovery] before the poster
+     * gate judges it photo-less. Null = no recovery (render
+     * proofs and hosts without the bank). */
+    heroRecovery: HeroRecoverySeam? = null,
+    /** RW-166: a recovery hit is persisted on the entry through
+     * here (the host's store heal), so it happens once. */
+    onHeroRecovered: (String) -> Unit = {},
+    /** RW-168 (Nov 11, 2026): the host may seed + track the card
+     * selection, so the home share menu's direct "Save to photos"
+     * saves the CURRENTLY SELECTED card (kind + size format).
+     * Defaults preserve the sheet's standing behaviour exactly:
+     * Postcard, Feed. */
+    initialKind: ShareArtifactKind = ShareArtifactKind.MORNING_POSTER,
+    initialFormat: ShareExportFormat = ShareExportFormat.FEED,
+    onKindSelected: (ShareArtifactKind) -> Unit = {},
+    onFormatSelected: (ShareExportFormat) -> Unit = {}
 ) {
     val context = LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -676,18 +704,38 @@ fun ShareStudioSheet(
     }
     val posterMoment = forms.poster
 
-    var kind by remember { mutableStateOf(ShareArtifactKind.MORNING_POSTER) }
-    var format by remember { mutableStateOf(ShareExportFormat.FEED) }
+    var kind by remember(entry, initialKind) { mutableStateOf(initialKind) }
+    var format by remember(entry, initialFormat) { mutableStateOf(initialFormat) }
     var excludedKeys by remember(entry) { mutableStateOf<Set<String>>(emptySet()) }
     var renderNonce by remember { mutableStateOf(0) }
     var shareFailed by remember { mutableStateOf(false) }
 
     // — Hero input —
+    // RW-152 §3: through the resolver — a personal hero's stored
+    // signed URL is re-signed by path before the poster loads it.
+    // RW-166: an entry with NO loadable reference resolves through
+    // the recovery seam too, and its poster gate waits while the
+    // recovery is still pending — the empty-ref entry whose bank
+    // hero exists must load it; only a recovery that concludes
+    // with no banked look lands on NoPhoto.
+    val heroResolution = rememberHeroResolution(
+        entry, heroResign, heroRecovery, onHeroRecovered
+    )
+    val resolvedHeroRef = heroResolution.url
     var heroState by remember(entry) { mutableStateOf<HeroLoadState>(HeroLoadState.Loading) }
-    LaunchedEffect(entry) {
+    LaunchedEffect(entry, resolvedHeroRef, heroResolution.pending) {
         heroState = when {
-            entry.heroRef.isNullOrBlank() -> HeroLoadState.NoPhoto
-            else -> ShareExportRenderer.loadHeroBitmap(context, entry.heroRef)
+            !HeroRefResolver.hasLoadableReference(entry) ->
+                when {
+                    heroResolution.pending -> HeroLoadState.Loading
+                    resolvedHeroRef != null ->
+                        ShareExportRenderer.loadHeroBitmap(context, resolvedHeroRef)
+                            ?.let { HeroLoadState.Loaded(it) }
+                            ?: HeroLoadState.Failed
+                    else -> HeroLoadState.NoPhoto
+                }
+            resolvedHeroRef == null -> HeroLoadState.Loading
+            else -> ShareExportRenderer.loadHeroBitmap(context, resolvedHeroRef)
                 ?.let { HeroLoadState.Loaded(it) } ?: HeroLoadState.Failed
         }
     }
@@ -931,7 +979,10 @@ fun ShareStudioSheet(
                         failed = posterRenderFailed,
                         selected = kind == ShareArtifactKind.MORNING_POSTER,
                         modifier = Modifier.weight(1f),
-                        onClick = { kind = ShareArtifactKind.MORNING_POSTER }
+                        onClick = {
+                            kind = ShareArtifactKind.MORNING_POSTER
+                            onKindSelected(ShareArtifactKind.MORNING_POSTER)
+                        }
                     )
                     StudioThumbnailChoice(
                         label = androidx.compose.ui.res.stringResource(com.runwear.app.R.string.share_kit_card),
@@ -940,7 +991,10 @@ fun ShareStudioSheet(
                         failed = kitRenderFailed,
                         selected = kind == ShareArtifactKind.KIT_CARD,
                         modifier = Modifier.weight(1f),
-                        onClick = { kind = ShareArtifactKind.KIT_CARD }
+                        onClick = {
+                            kind = ShareArtifactKind.KIT_CARD
+                            onKindSelected(ShareArtifactKind.KIT_CARD)
+                        }
                     )
                 }
                 if (posterRendering || kitRendering) {
@@ -960,7 +1014,10 @@ fun ShareStudioSheet(
                 ShareExportFormat.entries.forEach { option ->
                     FilterChip(
                         selected = format == option,
-                        onClick = { format = option },
+                        onClick = {
+                            format = option
+                            onFormatSelected(option)
+                        },
                         label = { Text(option.label) }
                     )
                 }
@@ -974,11 +1031,35 @@ fun ShareStudioSheet(
                 when {
                     currentRender != null -> Image(
                         bitmap = currentRender.bitmap.asImageBitmap(),
-                        contentDescription = null,
+                        // RW-158: the poster preview is the eye —
+                        // it names itself and opens the full
+                        // photo when the host wires onViewPhoto
+                        // (the Kit Card preview is the kit, not
+                        // the photo, and stays untappable).
+                        contentDescription = if (
+                            kind == ShareArtifactKind.MORNING_POSTER &&
+                            onViewPhoto != null
+                        ) {
+                            "View full photo"
+                        } else {
+                            null
+                        },
                         contentScale = ContentScale.FillBounds,
                         modifier = Modifier.fillMaxWidth()
                             .aspectRatio(format.aspect.toFloat())
                             .clip(RoundedCornerShape(16.dp))
+                            .then(
+                                if (
+                                    kind == ShareArtifactKind.MORNING_POSTER &&
+                                    onViewPhoto != null
+                                ) {
+                                    Modifier.clickable {
+                                        onViewPhoto(entry)
+                                    }
+                                } else {
+                                    Modifier
+                                }
+                            )
                     )
                     currentRendering -> Box(
                         modifier = Modifier.fillMaxWidth()

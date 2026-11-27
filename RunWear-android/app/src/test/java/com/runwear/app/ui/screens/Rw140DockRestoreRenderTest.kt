@@ -49,6 +49,7 @@ import java.io.File
 import java.time.LocalDate
 import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -907,31 +908,55 @@ class Rw140SourcePinTest {
         throw IllegalStateException("HeroMainScreen.kt not found")
     }
 
+    // RE-PINNED (RW-152 §1, Nov 10, 2026 — supersedes both
+    // RW-140 pins below in full): the in-flow footer and the
+    // layout-position handoff are RETIRED. The expanded panel is
+    // a state of the dock overlay (one composable, in-place
+    // morph); there is no wirFooterContent for any host, no
+    // grid breakout variant, and no fade derivation in the host
+    // (the pure policy functions remain only for this file's own
+    // RW-140 harness host above).
+    //
+    // RE-PINNED AGAIN (RW-169 §7A, Nov 11, 2026 — supersedes the
+    // RW-152 mechanism pins, keeps its retirements): the RW-152
+    // two-layout AnimatedContent crossfade + SizeTransform is
+    // itself REPLACED by the shared-layout geometry morph
+    // (WearIveRunMorphSurface) — one layout whose geometry
+    // interpolates between the mini and expanded rest
+    // geometries, no two complete forms arbitrated. The overlay
+    // host and seat are unchanged.
     @Test
-    fun `rw140 - compact host uses the plain footer content, grids keep the breakout`() {
+    fun `rw152 - no in-flow footer content remains in any host`() {
         val source = heroMainSource()
         assertEquals(
-            "grid breakout variant used by exactly the two grid hosts",
-            2,
-            Regex("wirFooterContent = wirFooterContentGrid").findAll(source).count()
+            "no footer content lambda is passed to any scroll host",
+            0,
+            Regex("wirFooterContent").findAll(source).count()
         )
         assertTrue(
-            "compact list host uses the plain footer content",
-            Regex("wirFooterContent = wirFooterContent\\s*\\)")
-                .containsMatchIn(source)
+            "the expanded state lives in the overlay morph surface (RW-169 §7A)",
+            source.contains("WearIveRunMorphSurface(")
+        )
+        assertFalse(
+            "the RW-152 two-form surface tag is retired (RW-169 §7A)",
+            source.contains("\"wirDockSurfaceMorph\"")
         )
     }
 
     @Test
-    fun `rw140 - dock handoff transform reads the fade state in the draw phase`() {
+    fun `rw152 - the host derives no layout fade for the dock element`() {
         val source = heroMainSource()
-        assertTrue(
-            "graphicsLayer reads wirFooterFadeState",
-            source.contains("val drawFade = wirFooterFadeState.value")
+        assertFalse(
+            "the fadeFromLayoutPx handoff is retired in the host (RW-152 §1)",
+            source.contains("WearIveRunDockPolicy.fadeFromLayoutPx")
+        )
+        assertFalse(
+            "no SizeTransform arbitration remains in the host (RW-169 §7A)",
+            source.contains("SizeTransform(")
         )
         assertTrue(
-            "host derives the fade through the shared policy path",
-            source.contains("WearIveRunDockPolicy.fadeFromLayoutPx")
+            "the dock and panel are one morph surface (RW-169 §7A)",
+            source.contains("WearIveRunMorphSurface(")
         )
     }
 }

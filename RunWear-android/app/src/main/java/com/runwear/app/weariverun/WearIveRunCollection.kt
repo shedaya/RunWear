@@ -55,6 +55,17 @@ data class WearIveRunDayEntry(
     val items: List<String>,
     /** Hero image reference for the day (URL or row id). */
     val heroRef: String?,
+    /**
+     * RW-152 §3 (Nov 10, 2026): the hero's DURABLE identity —
+     * the Storage path for personal heroes, the stable URL for
+     * pool/curated heroes — persisted alongside the display URL
+     * above, whose signed form expires an hour after settle.
+     * Surfaces resolve THIS at render through [HeroRefResolver].
+     * Null on entries recorded before RW-152; the resolver
+     * recovers their identity from [heroRef] itself (an expired
+     * signed URL still names its path).
+     */
+    val heroDurableRef: String? = null,
     /** GEN-3 (WS-C): the recording session's id (minted in process
      * memory at runtime; persisted ON the entry so the scrapbook
      * can key by session). Blank = legacy, pre-session-rule entry. */
@@ -302,7 +313,9 @@ object WearIveRunCollectionLogic {
         val days: List<WearIveRunDayEntry>,
         /** Stays computed from the FILTERED days. */
         val stays: List<Stay>,
-        /** Most recent card (of the filtered set) — the cover. */
+        /** RW-152 §3: the cover representative — the newest entry
+         * (of the filtered set) WITH a loadable hero reference,
+         * else the newest entry. See [chapters]. */
         val cover: WearIveRunDayEntry?,
         val feelsMinF: Double?,
         val feelsMaxF: Double?,
@@ -358,7 +371,21 @@ object WearIveRunCollectionLogic {
                 place = place,
                 days = days,
                 stays = staysOf(days),
-                cover = days.firstOrNull(),
+                // RW-152 §3 (Nov 10, 2026): the cover is the newest
+                // entry WITH A LOADABLE REFERENCE (through
+                // HeroRefResolver), falling back to the newest
+                // entry (honest placeholder) only when no entry in
+                // the chapter has one. The pre-fix rule — the
+                // newest entry, whatever it carried — blanked a
+                // multi-entry place's cover whenever its newest
+                // entry settled before any hero was served, even
+                // when older entries held good references.
+                // Covers, counts and spans still recompute from
+                // the FULL entry set; only the representative
+                // selection changes.
+                cover = days.firstOrNull {
+                    HeroRefResolver.hasLoadableReference(it)
+                } ?: days.firstOrNull(),
                 feelsMinF = days.minOfOrNull { it.feelsLikeF },
                 feelsMaxF = days.maxOfOrNull { it.feelsLikeF },
                 totalDaysUnfiltered = placeEntries.map { it.date }.distinct().size
@@ -473,8 +500,25 @@ object WearIveRunRecordPolicy {
     fun shouldRecord(
         isNowSelected: Boolean,
         weatherMoment: kotlinx.datetime.LocalDateTime?,
-        selectedMoment: java.time.LocalDateTime
+        selectedMoment: java.time.LocalDateTime,
+        /**
+         * RW-175: whether the presented selection's place NAME is
+         * resolved. A GPS selection's name arrives by reverse
+         * geocode, after its weather can land; recording in that
+         * window would persist an entry whose place is the
+         * unresolved placeholder — or, pre-fix, the PREVIOUS
+         * place's name paired with the new place's kit (Sol's
+         * "Miami Beach, FL" entry carrying New York's cold kit,
+         * Nov 15, 2026). While the name is unresolved the record
+         * is refused outright; when the resolved name lands the
+         * presented frame's place changes, so the stability gate
+         * re-settles and the entry is recorded under the current
+         * place. Default true: every caller that has no
+         * unresolved-name state keeps its previous behaviour.
+         */
+        placeNameResolved: Boolean = true
     ): Boolean {
+        if (!placeNameResolved) return false
         if (isNowSelected) return true
         val weather = weatherMoment ?: return false
         return weather.date == kotlinx.datetime.LocalDate(

@@ -26,14 +26,23 @@ import kotlin.coroutines.resume
 suspend fun detectFaceAnchor(bitmap: Bitmap): ShareFaceAnchor? =
     withContext(Dispatchers.Default) {
         if (bitmap.width <= 0 || bitmap.height <= 0) return@withContext null
-        val detector = FaceDetection.getClient(
-            FaceDetectorOptions.Builder()
-                .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
-                .build()
-        )
+        // Client creation lives INSIDE the try: getClient itself
+        // throws where ML Kit is uninitialized (e.g. a Robolectric
+        // sandbox), and this function's contract is that detection
+        // never throws into the share flow (RW-168's headless
+        // pipeline hit exactly that escape).
+        var detector: com.google.mlkit.vision.face.FaceDetector? = null
         try {
+            val client = FaceDetection.getClient(
+                FaceDetectorOptions.Builder()
+                    .setPerformanceMode(
+                        FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE
+                    )
+                    .build()
+            )
+            detector = client
             val faces = suspendCancellableCoroutine { cont ->
-                detector.process(InputImage.fromBitmap(bitmap, 0))
+                client.process(InputImage.fromBitmap(bitmap, 0))
                     .addOnSuccessListener { cont.resume(it) }
                     .addOnFailureListener { cont.resume(emptyList()) }
             }
@@ -50,6 +59,6 @@ suspend fun detectFaceAnchor(bitmap: Bitmap): ShareFaceAnchor? =
         } catch (e: Exception) {
             null
         } finally {
-            detector.close()
+            detector?.close()
         }
     }

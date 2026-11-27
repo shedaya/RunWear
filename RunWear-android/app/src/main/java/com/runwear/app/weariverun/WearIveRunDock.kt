@@ -44,6 +44,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -498,18 +499,34 @@ fun WearIveRunDock(
                     darkTheme = darkTheme
                 )
             ),
+            // RW-156 REOPENED (Nov 11, 2026): a hairline boundary
+            // of the dock's own — over the now-uniform sheet
+            // ground the translucent fill alone (85% of a colour
+            // ~identical to the ground) cannot carry the pill's
+            // edge; the 1dp ink hairline + the soft shadow below
+            // are its boundary/depth, in both themes.
+            border = androidx.compose.foundation.BorderStroke(
+                1.dp,
+                RunWearColors.TextPrimary.copy(alpha = 0.09f)
+            ),
             shadowElevation = 6.dp
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(start = 16.dp, end = 4.dp)
             ) {
+                // RW-169 §7B width law: the wordmark is a
+                // FIXED-CLAIM element — it never yields, wraps or
+                // shrinks (softWrap off, no weight). The narration
+                // beside it is the flexing element: it wraps and
+                // the bar grows (spec §4.3).
                 Text(
                     text = WearIveRunNarrationFormatter.WORDMARK,
                     fontFamily = GreatVibesFontFamily,
                     fontSize = 17.sp,
                     color = RunWearColors.TextPrimary,
-                    maxLines = 1
+                    maxLines = 1,
+                    softWrap = false
                 )
                 Spacer(Modifier.width(10.dp))
                 Crossfade(
@@ -608,6 +625,23 @@ fun WearIveRunFooterSection(
     onCollapse: () -> Unit,
     onDelete: () -> Unit,
     onOpenCollection: () -> Unit,
+    /** RW-158 (user ruling, Nov 10, 2026): when the footer's
+     * entry is a PAST entry, its row tap opens the share studio
+     * for that entry instead of the collection. Null (today's
+     * entry) keeps the collection doorway on the row; the
+     * "Open the collection ›" line below always keeps it. */
+    onEntryTap: (() -> Unit)? = null,
+    /** RW-166 (Nov 10, 2026): the resolver's re-sign seam for the
+     * footer thumbnail. When set (and the entry carries its
+     * recorded form), the thumbnail resolves through the
+     * recovering resolver (HeroRecovery) instead of loading the
+     * raw stored reference; null keeps the pre-RW-166 behaviour
+     * (render proofs). */
+    heroResign: (suspend (String) -> String?)? = null,
+    /** RW-166: the bank re-link recovery seam (HeroRecovery). */
+    heroRecovery: HeroRecoverySeam? = null,
+    /** RW-166: a recovery hit is persisted through here. */
+    onHeroRecovered: (WearIveRunDayEntry, String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
     sheetGapDp: Int = WearIveRunDockPolicy.FOOTER_SHEET_GAP_DP,
     growInKey: Int = 0,
@@ -727,16 +761,39 @@ fun WearIveRunFooterSection(
         1f
     }
 
+    // RW-156 REOPENED (Nov 11, 2026): in the RW-152 overlay
+    // residence the host seats this panel at the dock's own
+    // inset (sheetGapDp == 0). There the panel is a floating
+    // card, not an in-flow sheet: ALL corners rounded, a real
+    // elevation shadow following the rounded shape, and a
+    // hairline boundary — the in-flow shadow device (an
+    // un-clipped rectangular gradient strip above the panel)
+    // is exactly the square-cornered block Sol circled at the
+    // panel's top corners on 1.2.32, so in this seat it is not
+    // painted at all. The in-flow seat (sheetGapDp > 0, the
+    // spec section 2.2 rendering) is unchanged.
+    val overlaySeat = sheetGapDp == 0
+    val panelShape = if (overlaySeat) {
+        RoundedCornerShape(WearIveRunDockPolicy.FOOTER_TOP_CORNER_DP.dp)
+    } else {
+        RoundedCornerShape(
+            topStart = WearIveRunDockPolicy.FOOTER_TOP_CORNER_DP.dp,
+            topEnd = WearIveRunDockPolicy.FOOTER_TOP_CORNER_DP.dp
+        )
+    }
+
     Column(modifier = modifier.heightFraction(heightFraction.value)) {
         // The sheet gap (spec section 2.2): card sheet between
         // the preceding section and the footer's top edge; the
         // shadow strip occupies its last ~18dp.
-        Spacer(
-            Modifier.height(
-                (sheetGapDp - WearIveRunDockPolicy.FOOTER_SHADOW_STRIP_DP)
-                    .coerceAtLeast(0).dp
+        if (!overlaySeat) {
+            Spacer(
+                Modifier.height(
+                    (sheetGapDp - WearIveRunDockPolicy.FOOTER_SHADOW_STRIP_DP)
+                        .coerceAtLeast(0).dp
+                )
             )
-        )
+        }
         Column(
             modifier = Modifier.graphicsLayer {
                 alpha = contentAlpha.value * growAlpha
@@ -745,30 +802,51 @@ fun WearIveRunFooterSection(
             // The top shadow (spec section 2.2: 0/-10pt, 28pt
             // blur, black 7%) expressed as a soft gradient strip
             // above the section: black 7% at the footer's edge
-            // fading to transparent over ~18dp.
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(WearIveRunDockPolicy.FOOTER_SHADOW_STRIP_DP.dp)
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                Color.Black.copy(alpha = 0.07f)
+            // fading to transparent over ~18dp. In-flow seat
+            // only — see the RW-156 note above.
+            if (!overlaySeat) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(WearIveRunDockPolicy.FOOTER_SHADOW_STRIP_DP.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    Color.Black.copy(alpha = 0.07f)
+                                )
                             )
                         )
-                    )
-            )
+                )
+            }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(
-                        RoundedCornerShape(
-                            topStart = WearIveRunDockPolicy.FOOTER_TOP_CORNER_DP.dp,
-                            topEnd = WearIveRunDockPolicy.FOOTER_TOP_CORNER_DP.dp
-                        )
+                    .then(
+                        if (overlaySeat) {
+                            Modifier.shadow(
+                                elevation = 16.dp,
+                                shape = panelShape
+                            )
+                        } else {
+                            Modifier
+                        }
                     )
+                    .clip(panelShape)
                     .background(RunWearColors.FooterGround)
+                    .then(
+                        if (overlaySeat) {
+                            Modifier.border(
+                                width = 1.dp,
+                                color = RunWearColors.TextPrimary.copy(
+                                    alpha = 0.09f
+                                ),
+                                shape = panelShape
+                            )
+                        } else {
+                            Modifier
+                        }
+                    )
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     // Top hairline: 1dp at ink 4% (spec section 2.2).
@@ -805,14 +883,21 @@ fun WearIveRunFooterSection(
                                 }
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
+                                    // RW-169 §7B width law: the
+                                    // wordmark is fixed-claim (no
+                                    // weight, no wrap) — the SPACER
+                                    // flexes to keep the controls
+                                    // right-aligned, never the
+                                    // wordmark.
                                     Text(
                                         text = WearIveRunNarrationFormatter.WORDMARK,
                                         fontFamily = GreatVibesFontFamily,
                                         fontSize = 31.sp,
                                         color = RunWearColors.TextPrimary,
                                         maxLines = 1,
-                                        modifier = Modifier.weight(1f)
+                                        softWrap = false
                                     )
+                                    Spacer(Modifier.weight(1f))
                                     IconButton(onClick = onCollapse) {
                                         Icon(
                                             imageVector = Icons.Outlined.ExpandMore,
@@ -859,7 +944,17 @@ fun WearIveRunFooterSection(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { onOpenCollection() }
+                                .clickable {
+                                    // RW-158: a past entry's row
+                                    // opens its share studio; the
+                                    // collection stays one line
+                                    // below either way.
+                                    if (onEntryTap != null) {
+                                        onEntryTap()
+                                    } else {
+                                        onOpenCollection()
+                                    }
+                                }
                         ) {
                             // Thumbnail (spec section 4.5): cross-
                             // fades when the record's hero image
@@ -867,42 +962,47 @@ fun WearIveRunFooterSection(
                             // the decode-gated paint rule — until
                             // decoded the slot is a plain tinted
                             // box, never a broken-image glyph.
-                            Crossfade(
-                                targetState = entry.thumbnailUrl,
-                                animationSpec = tween(
-                                    WearIveRunDockPolicy.NARRATION_CROSSFADE_MS
-                                ),
-                                label = "wirFooterThumbnail"
-                            ) { url ->
-                                Box(
-                                    modifier = Modifier
-                                        .size(56.dp)
-                                        .clip(RoundedCornerShape(14.dp))
-                                        .background(RunWearColors.Background),
-                                    contentAlignment = Alignment.Center
+                            // RW-166: with the host's seams present
+                            // the URL is the RESOLVED one — the raw
+                            // stored reference is a signed URL, dead
+                            // one hour after issue; an entry with no
+                            // reference at all recovers through the
+                            // bank re-link like every other surface.
+                            // RW-169 §7E.4: the thumbnail resolves
+                            // through the HELD resolver and renders
+                            // in the never-unload slot — while a
+                            // successor reference resolves, the
+                            // current decoded image stays; the slot
+                            // never returns to empty for this entry.
+                            val footerThumbnailUrl =
+                                if (heroResign != null &&
+                                    entry.sourceEntry != null
                                 ) {
-                                    url?.let {
-                                        var decoded by remember(it) {
-                                            mutableStateOf(false)
-                                        }
-                                        AsyncImage(
-                                            model = it,
-                                            contentDescription = null,
-                                            contentScale = ContentScale.Crop,
-                                            alignment = Alignment.TopCenter,
-                                            onState = { painterState ->
-                                                if (painterState is
-                                                    AsyncImagePainter.State.Success
-                                                ) {
-                                                    decoded = true
-                                                }
-                                            },
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .alpha(if (decoded) 1f else 0f)
+                                    rememberHeldResolvedHeroUrl(
+                                        entry.sourceEntry!!,
+                                        heroResign, heroRecovery
+                                    ) { path ->
+                                        onHeroRecovered(
+                                            entry.sourceEntry!!, path
                                         )
                                     }
+                                } else {
+                                    entry.thumbnailUrl
                                 }
+                            Box(
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(RunWearColors.Background),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                HeldHeroThumbnail(
+                                    url = footerThumbnailUrl,
+                                    identityKey = entry.sourceEntry?.let {
+                                        WearIveRunCollectionLogic.identityOf(it)
+                                    } ?: entry.place,
+                                    modifier = Modifier.fillMaxSize()
+                                )
                             }
                             Spacer(Modifier.width(12.dp))
                             // Entry line (spec section 4.5):

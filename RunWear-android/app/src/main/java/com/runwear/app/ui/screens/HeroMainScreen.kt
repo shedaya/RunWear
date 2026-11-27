@@ -8,9 +8,10 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
@@ -27,7 +28,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -76,11 +82,15 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -108,6 +118,7 @@ import com.runwear.app.weariverun.WearIveRunElementEvent
 import com.runwear.app.weariverun.WearIveRunElementMachine
 import com.runwear.app.weariverun.WearIveRunCollectionLogic
 import com.runwear.app.weariverun.WearIveRunCollectionScreen
+import com.runwear.app.weariverun.ShareStudioSheet
 import com.runwear.app.weariverun.WearIveRunDayEntry
 import com.runwear.app.weariverun.WearIveRunEntry
 import com.runwear.app.weariverun.WearIveRunDock
@@ -262,6 +273,49 @@ fun HeroMainScreen(
     // GEN-3 A-HERO (WS-A(2)): THE hero pill — one content value,
     // resolved once from the look/serve/entitlement state and handed
     // to every layout's hero (see HeroPillPolicy for the states).
+    // RW-169 §7D: the straddle pill's measured seat. HeroStackedUnit
+    // reports its in-list pill's window bounds here; the pill rule
+    // at the overlay host below (corrected by the conformance
+    // loop-back — see its comment) decides which copy, if any,
+    // renders from the measured overlap with the WIR surface.
+    var wirPillAnchorBounds by remember {
+        mutableStateOf<androidx.compose.ui.geometry.Rect?>(null)
+    }
+    // RW-169 loop-back (D8, victim swapped): the WIR overlay
+    // host's own window bounds, so the pill rule below is
+    // GEOMETRIC — driven by whether the two approved surfaces
+    // actually overlap on screen, in any viewport class.
+    var wirPanelBounds by remember {
+        mutableStateOf<androidx.compose.ui.geometry.Rect?>(null)
+    }
+    // RW-173: the morph surface's OWN window bounds (the
+    // painted card, inside the host's padding). Its bottom
+    // edge is the panel's seated bottom — invariant across
+    // the morph (the surface is bottom-anchored) — and with
+    // the pill anchor's measured bottom it prices the
+    // pill-aware expansion cap in wirFooterRender below:
+    // the panel may grow until its top reaches the pill
+    // seat's bottom edge, and no further (RB-09: the pill
+    // renders whole and above the surface; the panel yields).
+    var wirSurfaceBounds by remember {
+        mutableStateOf<androidx.compose.ui.geometry.Rect?>(null)
+    }
+    // RW-170 Move 2: the PRESENTED (mini) form's measured
+    // height, reported by the morph surface at p = 0 geometry.
+    // Every dock-band consumer below prices from this one
+    // quantity. Default = the one-line policy estimate (49dp),
+    // so the band is 63dp from first composition; a wrapped
+    // two-line narration reports its grown height and the band
+    // follows. Expansion never reports, so expansion never
+    // moves the band.
+    var wirPresentedMiniHeightDp by remember {
+        mutableFloatStateOf(
+            DockClearancePolicy.DEFAULT_PRESENTED_MINI_HEIGHT_DP
+        )
+    }
+    val pillOverlapsPanel = wirPillAnchorBounds != null &&
+        wirPanelBounds != null &&
+        wirPillAnchorBounds!!.overlaps(wirPanelBounds!!)
     val heroPill = com.runwear.app.ui.components.HeroPillPolicy.resolve(
         lookStatus = uiState.personalLookStatus,
         serveKind = uiState.heroServeKind,
@@ -362,7 +416,16 @@ fun HeroMainScreen(
                             uiState.isNowSelected
                         ),
                     runningTip = uiState.outfit?.tips?.firstOrNull(),
-                    comfortPreference = uiState.comfortPreference
+                    comfortPreference = uiState.comfortPreference,
+                    // RW-167: this call is INLINED in the home
+                    // scroll, where homeTrailingListItems renders
+                    // the Pro Tip card from the same tips list —
+                    // the inlined block drops its tip row (the
+                    // weather sheet's call keeps it). The tip is
+                    // still passed: suppression is the flag, not
+                    // a null (null would render the generic
+                    // fallback tip instead).
+                    showRunningTip = false
                 )
             }
         }
@@ -396,6 +459,12 @@ fun HeroMainScreen(
     val wearIveRunState by wearIveRunHolder.state.collectAsState()
     val wearCueSequence by wearIveRunHolder.cueSequence.collectAsState()
     val wearIveRunEntries by wearIveRunStore.entriesFlow.collectAsState(initial = emptyList())
+    // RW-169 §7E.1: the PresentedEntry stability gate — a viewed
+    // frame reaches the record only after it is unchanged for the
+    // spec's ≈2 s window (see PresentedEntry.kt).
+    val wirStabilityGate = remember {
+        com.runwear.app.weariverun.StabilityGate()
+    }
     var showWearIveRunCollection by remember { mutableStateOf(false) }
     // RW-133: full-screen hero viewer state — the home hero, or a
     // collection entry's stored photograph.
@@ -403,6 +472,29 @@ fun HeroMainScreen(
     var heroViewerEntry by remember {
         mutableStateOf<WearIveRunDayEntry?>(null)
     }
+    // RW-158 (user ruling, Nov 10, 2026): the footer's entry row,
+    // when the footer's entry is a PAST entry, opens the share
+    // studio for that entry directly.
+    var wirFooterShareEntry by remember {
+        mutableStateOf<WearIveRunDayEntry?>(null)
+    }
+
+    // RW-168 (Nov 11, 2026): the share-card selection the user
+    // last made in any Share Studio sheet this session (kind +
+    // size format), seeded back into every sheet host — the home
+    // share menu's direct "Save to photos" saves today's card in
+    // exactly this selection. Standing defaults: Postcard, Feed.
+    var shareKind by remember {
+        mutableStateOf(
+            com.runwear.app.weariverun.ShareArtifactKind.MORNING_POSTER
+        )
+    }
+    var shareFormat by remember {
+        mutableStateOf(
+            com.runwear.app.weariverun.ShareExportFormat.FEED
+        )
+    }
+    var saveToPhotosBusy by remember { mutableStateOf(false) }
 
     // GEN-5 (RW-28, B-1): the FIRST emission in this process is
     // the stored collection restoring — it primes the holder at
@@ -440,6 +532,7 @@ fun HeroMainScreen(
     val wearToday = uiState.locationNow.toLocalDate()
     LaunchedEffect(wearToday) {
         wearIveRunHolder.onDayRollover(wearToday)
+        wirStabilityGate.reset()
     }
 
     // Record the day's settled version at generation time. NOTE
@@ -468,7 +561,13 @@ fun HeroMainScreen(
     // edits, so the latest admitted solve is the final content.
     LaunchedEffect(
         uiState.outfit, uiState.weather, uiState.locationName,
-        uiState.effectiveHeroUrl, uiState.isNowSelected, uiState.selectedDateTime
+        // RW-175: the resolution flag is a key in its own right —
+        // a geocode-failure fallback resolves the SAME display
+        // string ("Your Location"), so the name alone cannot
+        // re-fire this effect to admit the now-recordable entry.
+        uiState.placeNameResolved,
+        uiState.effectiveHeroUrl, uiState.heroImageUrl, uiState.heroFallbackUrl,
+        uiState.isNowSelected, uiState.selectedDateTime
     ) {
         val outfit = uiState.outfit
         val weather = uiState.weather
@@ -489,7 +588,13 @@ fun HeroMainScreen(
             com.runwear.app.weariverun.WearIveRunRecordPolicy.shouldRecord(
                 isNowSelected = uiState.isNowSelected,
                 weatherMoment = weather.dateTime,
-                selectedMoment = uiState.selectedDateTime
+                selectedMoment = uiState.selectedDateTime,
+                // RW-175: never record while the current
+                // selection's place name is unresolved (a GPS
+                // selection whose reverse geocode has not landed)
+                // — the entry would carry a placeholder, or worse
+                // the previous place's name, over this place's kit.
+                placeNameResolved = uiState.placeNameResolved
             )
         ) {
             // GEN-6 Wave B (RW-31): the day's canonical range for
@@ -555,7 +660,23 @@ fun HeroMainScreen(
                 isSnowing = weather.isSnowing,
                 isRaining = weather.isRaining,
                 items = outfit.allItems.map { it.displayName },
-                heroRef = uiState.effectiveHeroUrl,
+                // RW-169 §7E.4: only a PRIMARY hero serve is
+                // recorded as the entry's hero reference — a
+                // fallback serve is a stand-in, never the record.
+                heroRef = com.runwear.app.weariverun.recordableHeroRef(
+                    uiState.heroImageUrl, uiState.heroFallbackUrl
+                ),
+                // RW-152 §3 (Nov 10, 2026): persist the hero's
+                // DURABLE identity alongside the display URL —
+                // the signed display form expires in an hour, the
+                // durable form (Storage path / stable URL) is
+                // what collection surfaces resolve at render.
+                heroDurableRef = com.runwear.app.weariverun.HeroRefResolver
+                    .durableRefFor(
+                        com.runwear.app.weariverun.recordableHeroRef(
+                            uiState.heroImageUrl, uiState.heroFallbackUrl
+                        )
+                    ),
                 // GEN-6 Wave B (RW-31): the share record's
                 // canonical fields — the day's actual + wind
                 // from the same weather frame, the day range
@@ -569,10 +690,40 @@ fun HeroMainScreen(
                 dayHighF = todaysForecast.maxOfOrNull { it.temperatureInFahrenheit },
                 itemKeys = outfit.allItems.map { it.key }
             )
-            // RW-142: the write leaves the effect's lifetime here —
-            // see the note above the effect.
-            screenScope.launch {
-                wearIveRunStore.recordSettled(entry)
+            // RW-169 §7E.1 (supersedes the immediate RW-142 write
+            // in timing only — the write still leaves the effect's
+            // lifetime on screenScope and recordSettled still runs
+            // under NonCancellable): the candidate is OFFERED to
+            // the stability gate. It reaches the record only after
+            // its viewed frame (place, day/hour, kit, hero
+            // reference) is unchanged for ≈2 s; a re-settle that
+            // changes the frame restarts the window, and one that
+            // changes nothing the frame names never writes at all.
+            // The delayed completion rides screenScope so an
+            // effect relaunch cannot strand an admitted frame.
+            val frame = com.runwear.app.weariverun.ViewedFrame.of(entry)
+            val nowMs = System.currentTimeMillis()
+            val committedNow = wirStabilityGate.offer(frame, entry, nowMs)
+            if (committedNow != null) {
+                screenScope.launch {
+                    wearIveRunStore.recordSettled(committedNow)
+                }
+            } else if (wirStabilityGate.pendingFrame == frame) {
+                screenScope.launch {
+                    kotlinx.coroutines.delay(
+                        com.runwear.app.weariverun.StabilityGate.STABILITY_WINDOW_MS + 50L
+                    )
+                    // Re-offer ONLY if this frame is still the
+                    // pending one — a newer frame owns the gate now.
+                    if (wirStabilityGate.pendingFrame == frame) {
+                        val committed = wirStabilityGate.offer(
+                            frame, entry, System.currentTimeMillis()
+                        )
+                        if (committed != null) {
+                            wearIveRunStore.recordSettled(committed)
+                        }
+                    }
+                }
             }
         }
     }
@@ -640,7 +791,87 @@ fun HeroMainScreen(
     val wearPresentState = wearIveRunState
     val wirPresent = wearPresentState != WearIveRunBarState.Absent
     val wirDayEntry by wearIveRunHolder.currentEntryFlow.collectAsState()
-    var wirShownLine by remember { mutableStateOf<WearIveRunNarration?>(null) }
+    // RW-169 §7E.2/§7E.3: THE presented snapshot — one immutable
+    // object (entry + narration + entry line + bar projection,
+    // built together from the same recorded entry). Mini, expanded
+    // and (through the gated store) the collection TODAY card all
+    // render ONLY this; it swaps atomically at scroll rest when
+    // the recorded entry changes (the scroll-rest effect below).
+    var wirPresented by remember {
+        mutableStateOf<com.runwear.app.weariverun.PresentedSnapshot?>(null)
+    }
+    val wirShownLine: WearIveRunNarration? = wirPresented?.narration
+    // RW-152 §1 (Nov 10, 2026): the expanded footer is a STATE of
+    // the dock's overlay surface, not an in-flow list section.
+    // R-1 (Sol's ruling, Nov 12, 2026 — RW-135 rebuild): the
+    // presented state is the pure function in
+    // WearIveRunExpansionTrigger —
+    //   expanded = userSummoned || (atFooter && !footerSuppressed)
+    // Reaching the page end presents the expanded form;
+    // scrolling away re-docks it to MINI. A tap-summoned
+    // expansion persists until an explicit collapse (chevron /
+    // glide-up / Back); a collapse AT the footer sets the
+    // suppression latch until the scroll position leaves the
+    // footer zone. The scroll facts come from the ACTIVE
+    // container (the compact layout's LazyColumn; the grid in
+    // every other layout) — its layoutInfo, never a retired
+    // in-flow footer item.
+    var wirTriggerState by remember {
+        mutableStateOf(
+            com.runwear.app.weariverun.WearIveRunExpansionTrigger.State()
+        )
+    }
+    // The ACTIVE container's scroll facts as one triple —
+    // extracted per container type (list/grid layoutInfo share
+    // no common type), consumed by the pure trigger below.
+    val wirScrollFacts: Triple<Int, Int?, Boolean> by remember {
+        derivedStateOf {
+            if (layout == AdaptiveLayout.COMPACT) {
+                Triple(
+                    listState.layoutInfo.totalItemsCount,
+                    listState.layoutInfo.visibleItemsInfo
+                        .lastOrNull()?.index,
+                    listState.canScrollForward
+                )
+            } else {
+                Triple(
+                    gridState.layoutInfo.totalItemsCount,
+                    gridState.layoutInfo.visibleItemsInfo
+                        .lastOrNull()?.index,
+                    gridState.canScrollForward
+                )
+            }
+        }
+    }
+    val wirInFooterZone by remember {
+        derivedStateOf {
+            com.runwear.app.weariverun.WearIveRunExpansionTrigger
+                .inFooterZone(wirScrollFacts.first, wirScrollFacts.second)
+        }
+    }
+    val wirAtFooter by remember {
+        derivedStateOf {
+            com.runwear.app.weariverun.WearIveRunExpansionTrigger
+                .atFooter(
+                    wirScrollFacts.first,
+                    wirScrollFacts.second,
+                    wirScrollFacts.third
+                )
+        }
+    }
+    val wirExpanded by remember {
+        derivedStateOf {
+            com.runwear.app.weariverun.WearIveRunExpansionTrigger
+                .expanded(wirTriggerState, wirAtFooter)
+        }
+    }
+    // The suppression latch clears when the scroll position
+    // leaves the footer zone (R-1).
+    LaunchedEffect(wirInFooterZone) {
+        wirTriggerState =
+            com.runwear.app.weariverun.WearIveRunExpansionTrigger
+                .onScroll(wirTriggerState, wirInFooterZone)
+    }
     // Reduce Motion (spec section 5) = animator duration scale 0.
     val wirReduceMotion = remember {
         Settings.Global.getFloat(
@@ -662,7 +893,13 @@ fun HeroMainScreen(
         val barEntry: WearIveRunEntry,
         val dayEntry: WearIveRunDayEntry,
         val entryLine: String,
-        val fromTrash: Boolean
+        val fromTrash: Boolean,
+        /** RW-174 (spec §4.7): the form the exit starts
+         * from, captured at the moment the exit begins —
+         * the delete split (host fade+sink from MINI vs
+         * morph fade+fold from EXPANDED) keys off this
+         * frozen value, never the live expansion state. */
+        val fromExpanded: Boolean
     )
     var wirExit by remember { mutableStateOf<WirExitSnapshot?>(null) }
     var wirExitFromTrashDone by remember { mutableStateOf(false) }
@@ -682,6 +919,13 @@ fun HeroMainScreen(
     val wirFinishExit: (WirExitSnapshot) -> Unit = { exit ->
         if (wirExit != null) {
             wirExit = null
+            // RW-152 §1: an exit leaves the ONE surface in its
+            // mini (rest) state — the expanded state is never a
+            // rest state, including after a delete. R-1: the
+            // trigger resets with it (no summon, no latch).
+            wirTriggerState =
+                com.runwear.app.weariverun.WearIveRunExpansionTrigger
+                    .reset(wirTriggerState)
             if (exit.fromTrash) {
                 wirExitFromTrashDone = true
                 wearIveRunHolder.onEvent(WearIveRunElementEvent.TRASH)
@@ -700,6 +944,128 @@ fun HeroMainScreen(
     // section 4.8).
     val wirSurfacesPresent = wirPresent || wirExit != null
 
+    // RB-09 hygiene: the panel's measured bounds are reported
+    // only while the surface is composed. When it leaves, the
+    // last reported bounds are stale — if they were the
+    // expanded panel's, they could keep the pill rule in its
+    // overlap branch (in-list copy suppressed) after the
+    // surface is gone. Clear them on absence.
+    LaunchedEffect(wirSurfacesPresent) {
+        if (!wirSurfacesPresent) {
+            wirPanelBounds = null
+            wirSurfaceBounds = null
+        }
+    }
+
+    // RW-168: the direct save's execution — renders + verifies
+    // today's card in the tracked selection through the Share
+    // Studio's pipeline and writes it to the photo roll,
+    // confirmed through the screen's existing snackbar host.
+    fun launchSaveToPhotos(
+        entry: WearIveRunDayEntry,
+        kindSnapshot: com.runwear.app.weariverun.ShareArtifactKind,
+        formatSnapshot: com.runwear.app.weariverun.ShareExportFormat
+    ) {
+        if (saveToPhotosBusy) return
+        saveToPhotosBusy = true
+        screenScope.launch {
+            val saved = runCatching {
+                com.runwear.app.weariverun.saveTodaysCardToPhotos(
+                    context = context,
+                    entry = entry,
+                    kind = kindSnapshot,
+                    format = formatSnapshot,
+                    gender = uiState.genderPreference,
+                    temperatureUnit = uiState.temperatureUnit,
+                    heroResign = { path ->
+                        makeItMeViewModel?.signedHeroUrlForPath(path)
+                    },
+                    heroRecovery =
+                        com.runwear.app.weariverun.HeroRecoverySeam(
+                            genderSegment =
+                                uiState.genderPreference.name,
+                            bankPaths = {
+                                makeItMeViewModel?.bankHeroPaths()
+                            }
+                        ),
+                    onHeroRecovered = { path ->
+                        screenScope.launch {
+                            wearIveRunStore.healHeroReference(
+                                entry, path
+                            )
+                        }
+                    }
+                )
+            }.getOrDefault(false)
+            saveToPhotosBusy = false
+            snackbarHostState.showSnackbar(
+                if (saved) {
+                    "Saved to photos"
+                } else {
+                    "Couldn't save the card — try again"
+                }
+            )
+        }
+    }
+    // RW-168: API 26–28 needs the storage grant for the
+    // MediaStore write (29+ is permission-free); the pending
+    // save resumes when the grant lands.
+    var pendingSaveEntry by remember {
+        mutableStateOf<WearIveRunDayEntry?>(null)
+    }
+    val savePhotosPermissionLauncher =
+        androidx.activity.compose.rememberLauncherForActivityResult(
+            androidx.activity.result.contract.ActivityResultContracts
+                .RequestPermission()
+        ) { granted ->
+            val pending = pendingSaveEntry
+            pendingSaveEntry = null
+            if (granted && pending != null) {
+                launchSaveToPhotos(pending, shareKind, shareFormat)
+            } else if (!granted) {
+                screenScope.launch {
+                    snackbarHostState.showSnackbar(
+                        "Couldn't save the card — photo access is off"
+                    )
+                }
+            }
+        }
+
+    // RW-168: the hero share button's doors (existing entries
+    // only): the RW-158 sheet for the CURRENT day entry through
+    // the same host state the footer's past-entry rows use; the
+    // collection through its standing state; and the direct
+    // save of today's card in the tracked selection.
+    val heroShareActions = com.runwear.app.ui.components.HeroShareActions(
+        onShareOutfit = {
+            wirDayEntry?.let { wirFooterShareEntry = it }
+        },
+        onShareFromCollection = { showWearIveRunCollection = true },
+        onSaveToPhotos = {
+            val entry = wirDayEntry
+            if (entry != null && !saveToPhotosBusy) {
+                val needsGrant =
+                    android.os.Build.VERSION.SDK_INT < 29 &&
+                        androidx.core.content.ContextCompat
+                            .checkSelfPermission(
+                                context,
+                                android.Manifest.permission
+                                    .WRITE_EXTERNAL_STORAGE
+                            ) != android.content.pm.PackageManager
+                                .PERMISSION_GRANTED
+                if (needsGrant) {
+                    pendingSaveEntry = entry
+                    savePhotosPermissionLauncher.launch(
+                        android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+                    )
+                } else {
+                    launchSaveToPhotos(entry, shareKind, shareFormat)
+                }
+            }
+        },
+        outfitEnabled = wirDayEntry != null
+    )
+
     // The handoff (spec section 3): a PURE function of the
     // footer's position in the ACTIVE host. a = how far (dp) the
     // footer's top edge is above the viewport's bottom edge,
@@ -715,58 +1081,23 @@ fun HeroMainScreen(
     // recomposition that a fling can coalesce away (the vc41
     // defect: the dissolve existed as a function but its
     // intermediate values never reached the display).
-    val wirFooterFadeState = remember(listState, gridState, layout) {
-        derivedStateOf {
-            when (layout) {
-                AdaptiveLayout.COMPACT -> {
-                    val info = listState.layoutInfo
-                    val footer = info.visibleItemsInfo.firstOrNull {
-                        info.totalItemsCount > 0 &&
-                            it.index == info.totalItemsCount - 1
-                    }
-                    WearIveRunDockPolicy.fadeFromLayoutPx(
-                        info.viewportEndOffset,
-                        footer?.offset,
-                        wirDensity.density
-                    )
-                }
-                else -> {
-                    val info = gridState.layoutInfo
-                    val footer = info.visibleItemsInfo.firstOrNull {
-                        info.totalItemsCount > 0 &&
-                            it.index == info.totalItemsCount - 1
-                    }
-                    WearIveRunDockPolicy.fadeFromLayoutPx(
-                        info.viewportEndOffset,
-                        footer?.offset?.y,
-                        wirDensity.density
-                    )
-                }
-            }
-        }
-    }
-    val wirFooterFade by wirFooterFadeState
-    // Whether the footer item is among the active host's visible
-    // items (its content is composed and on screen) — the delete
-    // choreography branches on this (spec section 4.7).
-    val wirFooterComposed by remember(listState, gridState, layout) {
-        derivedStateOf {
-            when (layout) {
-                AdaptiveLayout.COMPACT -> {
-                    val info = listState.layoutInfo
-                    info.totalItemsCount > 0 && info.visibleItemsInfo.any {
-                        it.index == info.totalItemsCount - 1
-                    }
-                }
-                else -> {
-                    val info = gridState.layoutInfo
-                    info.totalItemsCount > 0 && info.visibleItemsInfo.any {
-                        it.index == info.totalItemsCount - 1
-                    }
-                }
-            }
-        }
-    }
+    // RW-135 REBUILD (Nov 12, 2026): the layout-position
+    // handoff is RETIRED for this element and its last host
+    // remnant — a constant-0 fade state feeding a graphicsLayer
+    // dissolve that could only ever render the rest value —
+    // is removed from the Home path entirely. Scroll position
+    // now reaches this surface through exactly one channel:
+    // the R-1 trigger's layoutInfo facts above (footer zone /
+    // at-footer). (The pure WearIveRunDockPolicy fade functions
+    // remain for the RW-140 harness, which builds its own
+    // host; nothing on the Home path reads them.)
+    // RW-174: the delete choreography no longer branches on
+    // a live "footer composed" derivation — it branches on
+    // the exit snapshot's frozen form (WirExitSnapshot
+    // .fromExpanded, stamped by the trash / session-end
+    // paths from wirExpanded at the moment the exit begins),
+    // so a mid-exit expansion change can never re-route an
+    // exit that has already started.
 
     // Creation / update cue bookkeeping. A CREATION is an
     // Absent -> Present flip with the cue armed (the holder's Cue
@@ -786,17 +1117,25 @@ fun HeroMainScreen(
         mutableStateOf<WearIveRunDayEntry?>(null)
     }
 
+    // RW-169 §7E.2/§7E.5: the presented snapshot swaps ATOMICALLY
+    // at scroll rest — entry, narration, entry line and bar
+    // projection together, never piecemeal, never mid-scroll
+    // (spec §4.3's deferral). The update bounce keys off the
+    // snapshot swap, as before.
     LaunchedEffect(wirDayEntry, wirAnyScrolling) {
         if (!wirAnyScrolling) {
             val newEntry = wirDayEntry
-            val newLine = newEntry?.let {
-                WearIveRunDockNarration.line(
-                    it, uiState.locationNow.toLocalDate()
+            val newSnapshot = newEntry?.let {
+                com.runwear.app.weariverun.PresentedSnapshot.of(
+                    it,
+                    uiState.locationNow.toLocalDate(),
+                    uiState.temperatureUnit
                 )
             }
+            val newLine = newSnapshot?.narration
             val oldLine = wirShownLine
             val oldEntry = wirPrevShownEntry
-            wirShownLine = newLine
+            wirPresented = newSnapshot
             wirPrevShownEntry = newEntry
             if (newLine != null && oldLine != null && newEntry != null &&
                 oldEntry != null && newLine.text != oldLine.text &&
@@ -811,7 +1150,10 @@ fun HeroMainScreen(
                 // creation never reaches here (oldLine is null):
                 // the creation cue owns that moment alone, and
                 // the two never double.
-                if (wirFooterFade >= 1f) {
+                // RW-152 §1: the visible state of the ONE
+                // surface takes the bounce — the panel while
+                // expanded, the dock otherwise.
+                if (wirExpanded) {
                     wirFooterBounceKey += 1
                 } else {
                     wirDockBounceKey += 1
@@ -832,10 +1174,10 @@ fun HeroMainScreen(
                 wearCueSequence > 0
             ) {
                 wirCreationKey = wearCueSequence
-                // Footer grow (section 4.1): only when the footer
-                // is in or near the viewport (the handoff has
-                // begun); far off-screen it inserts silently.
-                if (wirFooterFade > 0f || wirFooterComposed) {
+                // Panel grow (section 4.1): only when the
+                // expanded state is the visible one; otherwise
+                // the creation inserts silently.
+                if (wirExpanded) {
                     wirFooterGrowKey = wearCueSequence
                 }
             }
@@ -849,7 +1191,10 @@ fun HeroMainScreen(
             // haptic, off the last live snapshot.
             if (wirExit == null && !wirExitFromTrashDone) {
                 wirLastSnapshot?.let { snap ->
-                    wirExit = snap.copy(fromTrash = false)
+                    wirExit = snap.copy(
+                        fromTrash = false,
+                        fromExpanded = wirExpanded
+                    )
                 }
             }
             wirExitFromTrashDone = false
@@ -857,39 +1202,43 @@ fun HeroMainScreen(
         wirWasPresent = wirPresent
     }
 
-    // Keep the last live snapshot current while present.
-    LaunchedEffect(wirShownLine, wirDayEntry, wearPresentState) {
-        val line = wirShownLine
-        val dayEntry = wirDayEntry
-        val presentState = wearPresentState as? WearIveRunBarState.Present
-        if (line != null && dayEntry != null && presentState != null) {
+    // Keep the last live snapshot current while present — built
+    // from the PRESENTED snapshot alone (RW-169 §7E.3), so an exit
+    // freezes exactly what the surfaces were showing.
+    LaunchedEffect(wirPresented) {
+        val snapshot = wirPresented
+        if (snapshot != null) {
             wirLastSnapshot = WirExitSnapshot(
-                line = line,
-                barEntry = presentState.entry,
-                dayEntry = dayEntry,
-                entryLine = WearIveRunDockNarration.entryLine(
-                    dayEntry,
-                    uiState.locationNow.toLocalDate(),
-                    uiState.temperatureUnit
-                ),
-                fromTrash = false
+                line = snapshot.narration,
+                barEntry = snapshot.barEntry,
+                dayEntry = snapshot.entry,
+                entryLine = snapshot.entryLine,
+                fromTrash = false,
+                // Placeholder: the trash and session-end
+                // paths stamp the live form when the exit
+                // actually begins (RW-174).
+                fromExpanded = false
             )
         }
     }
 
-    // The dock's exit animation + the exit completion for the
-    // paths where the footer cannot report it (footer off-screen
-    // at trash: dock exit only, 300ms — section 4.7; session end
-    // with the footer off-screen likewise). When the footer IS
-    // composed, its fold is the longest exit and IT reports
-    // completion via onExitFinished; this effect then only drives
-    // the dock's own fade/sink.
+    // RW-174 (spec §4.7): the exit split, form-aware. The
+    // host layer owns the exit ONLY from MINI — fade + 26dp
+    // sink over 300ms exit easing, height released — and
+    // under Reduce Motion (a shared 200ms fade in both
+    // forms). From EXPANDED (non-RM) the host drives
+    // NOTHING: the morph's own content fade (160ms) + height
+    // fold (400ms) is the whole exit, and the morph reports
+    // completion via onExitFinished; from MINI this effect
+    // reports completion when its 300ms runs out. (At
+    // 5a9e0b0 this effect ran the fade/sink in BOTH forms,
+    // stacking a sink + container fade on expanded exits.)
     LaunchedEffect(wirExit) {
         val exit = wirExit ?: return@LaunchedEffect
         wirDockExit.snapTo(0f)
         if (wirReduceMotion) {
             wirDockExit.animateTo(1f, tween(durationMillis = 200))
-        } else {
+        } else if (!exit.fromExpanded) {
             wirDockExit.animateTo(
                 1f,
                 tween(
@@ -898,7 +1247,7 @@ fun HeroMainScreen(
                 )
             )
         }
-        if (!wirFooterComposed) {
+        if (!exit.fromExpanded) {
             wirFinishExit(exit)
         }
     }
@@ -909,218 +1258,37 @@ fun HeroMainScreen(
     // separate dock animation). A user touch cancels the glide
     // (Compose scroll mutual exclusion). Reduce Motion: instant
     // jumps (section 5).
+    // RW-152 §1 (supersedes RW-135 §4.4's scroll glides for this
+    // element): expansion and collapse are IN-PLACE state changes
+    // of the overlay surface — there is no footer in the scroll
+    // content to glide to, and dismissal restores the page exactly
+    // (scroll position is never touched). The names are kept
+    // because every control wired to them (dock expand, panel
+    // chevron) means the same thing it always meant.
+    // R-1: the dock's tap (body or expand control — the same
+    // action) SUMMONS the expanded state; it then persists
+    // until an explicit collapse. The panel's chevron, a
+    // glide-up on the panel, and Back all collapse through the
+    // same transition — a collapse at the footer sets the
+    // suppression latch so the footer presentation does not
+    // re-fire in the same frame.
     val wirGlideToFooter: () -> Unit = {
-        screenScope.launch {
-            when (layout) {
-                AdaptiveLayout.COMPACT -> {
-                    val info = listState.layoutInfo
-                    val total = info.totalItemsCount
-                    if (total > 0) {
-                        if (wirReduceMotion) {
-                            listState.scrollToItem(total - 1)
-                            val f = listState.layoutInfo.visibleItemsInfo
-                                .firstOrNull { it.index == total - 1 }
-                            if (f != null) {
-                                listState.scrollBy(
-                                    ((f.offset + f.size) -
-                                        listState.layoutInfo.viewportEndOffset)
-                                        .toFloat()
-                                )
-                            }
-                        } else {
-                            val footer = info.visibleItemsInfo.firstOrNull {
-                                it.index == total - 1
-                            }
-                            val distancePx = if (footer != null) {
-                                (footer.offset + footer.size) -
-                                    info.viewportEndOffset
-                            } else {
-                                val visible = info.visibleItemsInfo
-                                val last = visible.lastOrNull()
-                                if (last == null) {
-                                    0
-                                } else {
-                                    val pitch = if (visible.size >= 2) {
-                                        (last.offset - visible.first().offset)
-                                            .toFloat() /
-                                            (last.index - visible.first().index)
-                                    } else {
-                                        last.size.toFloat()
-                                    }
-                                    ((last.offset + last.size -
-                                        info.viewportEndOffset) +
-                                        (total - 1 - last.index) * pitch)
-                                        .roundToInt()
-                                }
-                            }
-                            val duration = WearIveRunDockPolicy.glideDurationMs(
-                                distancePx / wirDensity.density
-                            )
-                            listState.animateScrollBy(
-                                distancePx.toFloat(),
-                                tween(
-                                    durationMillis = duration,
-                                    easing = WearIveRunDockPolicy.GLIDE_EASING
-                                )
-                            )
-                            // Land exactly at the end if the
-                            // estimate was short.
-                            val f2 = listState.layoutInfo.visibleItemsInfo
-                                .firstOrNull { it.index == total - 1 }
-                            if (f2 != null) {
-                                val delta = (f2.offset + f2.size) -
-                                    listState.layoutInfo.viewportEndOffset
-                                if (kotlin.math.abs(delta) > 1) {
-                                    listState.animateScrollBy(
-                                        delta.toFloat(),
-                                        tween(
-                                            durationMillis = 150,
-                                            easing = WearIveRunDockPolicy.GLIDE_EASING
-                                        )
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-                else -> {
-                    val info = gridState.layoutInfo
-                    val total = info.totalItemsCount
-                    if (total > 0) {
-                        if (wirReduceMotion) {
-                            gridState.scrollToItem(total - 1)
-                            val f = gridState.layoutInfo.visibleItemsInfo
-                                .firstOrNull { it.index == total - 1 }
-                            if (f != null) {
-                                gridState.scrollBy(
-                                    ((f.offset.y + f.size.height) -
-                                        gridState.layoutInfo.viewportEndOffset)
-                                        .toFloat()
-                                )
-                            }
-                        } else {
-                            val footer = info.visibleItemsInfo.firstOrNull {
-                                it.index == total - 1
-                            }
-                            val distancePx = if (footer != null) {
-                                (footer.offset.y + footer.size.height) -
-                                    info.viewportEndOffset
-                            } else {
-                                val visible = info.visibleItemsInfo
-                                val last = visible.lastOrNull()
-                                if (last == null) {
-                                    0
-                                } else {
-                                    val columns = visible
-                                        .map { it.offset.x }
-                                        .distinct().size.coerceAtLeast(1)
-                                    val avgHeight = visible
-                                        .map { it.size.height }
-                                        .average().toFloat()
-                                    ((last.offset.y + last.size.height -
-                                        info.viewportEndOffset) +
-                                        ((total - 1 - last.index + columns - 1) /
-                                            columns) *
-                                            (avgHeight + 10f * wirDensity.density))
-                                        .roundToInt()
-                                }
-                            }
-                            val duration = WearIveRunDockPolicy.glideDurationMs(
-                                distancePx / wirDensity.density
-                            )
-                            gridState.animateScrollBy(
-                                distancePx.toFloat(),
-                                tween(
-                                    durationMillis = duration,
-                                    easing = WearIveRunDockPolicy.GLIDE_EASING
-                                )
-                            )
-                            val f2 = gridState.layoutInfo.visibleItemsInfo
-                                .firstOrNull { it.index == total - 1 }
-                            if (f2 != null) {
-                                val delta = (f2.offset.y + f2.size.height) -
-                                    gridState.layoutInfo.viewportEndOffset
-                                if (kotlin.math.abs(delta) > 1) {
-                                    gridState.animateScrollBy(
-                                        delta.toFloat(),
-                                        tween(
-                                            durationMillis = 150,
-                                            easing = WearIveRunDockPolicy.GLIDE_EASING
-                                        )
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        wirTriggerState =
+            com.runwear.app.weariverun.WearIveRunExpansionTrigger
+                .summon(wirTriggerState)
     }
-    // The footer's chevron (spec section 4.4): the inverse glide
-    // up, landing with the footer's top edge 24dp BELOW the
-    // viewport's bottom edge — delta = footerItem.offset -
-    // (viewportHeight + 24dp) in px, same duration rule from
-    // |delta|. The chevron exists only on the footer, so the
-    // footer item is composed when this runs.
     val wirGlideFromFooter: () -> Unit = {
-        screenScope.launch {
-            val extraPx = (24 * wirDensity.density).roundToInt()
-            when (layout) {
-                AdaptiveLayout.COMPACT -> {
-                    val info = listState.layoutInfo
-                    val total = info.totalItemsCount
-                    val footer = info.visibleItemsInfo.firstOrNull {
-                        total > 0 && it.index == total - 1
-                    }
-                    if (footer != null) {
-                        val viewportHeight =
-                            info.viewportEndOffset - info.viewportStartOffset
-                        val delta = footer.offset - (viewportHeight + extraPx)
-                        if (wirReduceMotion) {
-                            listState.scrollBy(delta.toFloat())
-                        } else {
-                            listState.animateScrollBy(
-                                delta.toFloat(),
-                                tween(
-                                    durationMillis =
-                                        WearIveRunDockPolicy.glideDurationMs(
-                                            delta / wirDensity.density
-                                        ),
-                                    easing = WearIveRunDockPolicy.GLIDE_EASING
-                                )
-                            )
-                        }
-                    }
-                }
-                else -> {
-                    val info = gridState.layoutInfo
-                    val total = info.totalItemsCount
-                    val footer = info.visibleItemsInfo.firstOrNull {
-                        total > 0 && it.index == total - 1
-                    }
-                    if (footer != null) {
-                        val viewportHeight =
-                            info.viewportEndOffset - info.viewportStartOffset
-                        val delta = footer.offset.y - (viewportHeight + extraPx)
-                        if (wirReduceMotion) {
-                            gridState.scrollBy(delta.toFloat())
-                        } else {
-                            gridState.animateScrollBy(
-                                delta.toFloat(),
-                                tween(
-                                    durationMillis =
-                                        WearIveRunDockPolicy.glideDurationMs(
-                                            delta / wirDensity.density
-                                        ),
-                                    easing = WearIveRunDockPolicy.GLIDE_EASING
-                                )
-                            )
-                        }
-                    }
-                }
-            }
-        }
+        wirTriggerState =
+            com.runwear.app.weariverun.WearIveRunExpansionTrigger
+                .collapse(wirTriggerState, wirAtFooter)
     }
+    // Back dismisses the expanded state (never the page).
+    androidx.activity.compose.BackHandler(
+        enabled = wirExpanded && wirExit == null
+    ) {
+        wirGlideFromFooter()
+    }
+
     // One tap, NO confirmation (the settled delete rule). The
     // exit choreography runs FIRST off a frozen snapshot (spec
     // section 4.7); the data removal — holder TRASH + the store
@@ -1130,7 +1298,10 @@ fun HeroMainScreen(
     val wirTrash: () -> Unit = {
         if (wirExit == null) {
             wirLastSnapshot?.let { snap ->
-                wirExit = snap.copy(fromTrash = true)
+                wirExit = snap.copy(
+                    fromTrash = true,
+                    fromExpanded = wirExpanded
+                )
             }
         }
     }
@@ -1145,37 +1316,130 @@ fun HeroMainScreen(
         }
     }
 
-    // The shared footer render: live record while present, the
-    // frozen snapshot while an exit runs (spec section 4.7).
-    val wirFooterRender: @Composable (Int) -> Unit = { gap ->
+    // RW-169 §7A/§7E.3: the ONE overlay surface — the shared-layout
+    // geometry morph (WearIveRunMorphSurface), rendering ONLY the
+    // presented snapshot while present, the frozen exit snapshot
+    // while an exit runs (spec section 4.7). The two-layout
+    // AnimatedContent crossfade + SizeTransform that arbitrated
+    // WearIveRunDock vs WearIveRunFooterSection here is retired;
+    // those composables remain for their in-flow/test seats.
+    val wirFooterRender: @Composable () -> Unit = {
         val exit = wirExit
-        val line = exit?.line ?: wirShownLine
-        val dayEntry = exit?.dayEntry ?: wirDayEntry
-        val barEntry = exit?.barEntry ?:
-            (wearPresentState as? WearIveRunBarState.Present)?.entry
-        if (line != null && dayEntry != null && barEntry != null) {
-            WearIveRunFooterSection(
+        val presented = wirPresented
+        val line = exit?.line ?: presented?.narration
+        val dayEntry = exit?.dayEntry ?: presented?.entry
+        val barEntry = exit?.barEntry ?: presented?.barEntry
+        val entryLine = exit?.entryLine ?: presented?.entryLine
+        if (line != null && dayEntry != null && barEntry != null &&
+            entryLine != null
+        ) {
+            // RW-173: the pill cap as a panel height (dp) —
+            // the surface's seated bottom minus the pill
+            // seat's measured bottom, in their shared window
+            // frame; null when either seat is unmeasured or
+            // the seats do not share a column.
+            val pillDensityHere = LocalDensity.current
+            val pillCapDp: Float? = run {
+                val anchor = wirPillAnchorBounds
+                val surface = wirSurfaceBounds
+                if (anchor == null || surface == null) {
+                    null
+                } else if (anchor.right <= surface.left ||
+                    anchor.left >= surface.right
+                ) {
+                    null
+                } else {
+                    with(pillDensityHere) {
+                        (surface.bottom - anchor.bottom).toDp().value
+                    }
+                }
+            }
+            com.runwear.app.weariverun.WearIveRunMorphSurface(
                 narration = line,
                 entry = barEntry,
-                entryLine = exit?.entryLine ?: WearIveRunDockNarration.entryLine(
-                    dayEntry,
-                    uiState.locationNow.toLocalDate(),
-                    uiState.temperatureUnit
-                ),
+                entryLine = entryLine,
+                expanded = wirExpanded,
+                onExpand = wirGlideToFooter,
                 onCollapse = wirGlideFromFooter,
                 onDelete = wirTrash,
                 onOpenCollection = { showWearIveRunCollection = true },
-                sheetGapDp = gap,
-                growInKey = if (exit == null) wirFooterGrowKey else 0,
+                // RW-166: the thumbnail resolves through the
+                // recovering HELD resolver (RW-169 §7E.4).
+                heroResign = { path ->
+                    makeItMeViewModel?.signedHeroUrlForPath(path)
+                },
+                heroRecovery = com.runwear.app.weariverun.HeroRecoverySeam(
+                    genderSegment = uiState.genderPreference.name,
+                    bankPaths = { makeItMeViewModel?.bankHeroPaths() }
+                ),
+                onHeroRecovered = { entry, path ->
+                    screenScope.launch {
+                        wearIveRunStore.healHeroReference(entry, path)
+                    }
+                },
+                // RW-158 (user ruling, Nov 10, 2026): a PAST
+                // entry's row opens its share studio; today's
+                // entry keeps the collection doorway.
+                onEntryTap = if (
+                    dayEntry.date < uiState.locationNow.toLocalDate()
+                ) {
+                    { wirFooterShareEntry = dayEntry }
+                } else {
+                    null
+                },
                 cueKey = wirCreationKey,
-                cueArmed = exit == null && wirCreationKey > 0 &&
-                    wirFooterFade >= 1f,
-                bounceKey = wirFooterBounceKey,
+                cueArmed = exit == null && wirCreationKey > 0,
+                // One surface, one bounce channel: the host keys
+                // dock/footer bounce separately by visibility;
+                // the morph consumes their sum.
+                bounceKey = wirDockBounceKey + wirFooterBounceKey,
+                entranceKey = wirCreationKey,
                 exiting = exit != null,
+                // RW-174: the exit's starting form, frozen in
+                // the snapshot — the morph's internal exit
+                // runs only for an expanded (or RM) exit.
+                exitFromExpanded = exit?.fromExpanded ?: false,
                 reduceMotion = wirReduceMotion,
                 onExitFinished = {
                     wirExit?.let { wirFinishExit(it) }
-                }
+                },
+                // RW-173: the expansion cap in force — the
+                // top-chrome cap, bound further at the pill
+                // seat's bottom edge while the measured pill
+                // anchor shares the surface's column (the
+                // two-pane layout seats the panel in the
+                // scrolling pane only, clear of the hero
+                // pane's pill by construction — the horizontal
+                // check leaves that seat to the chrome cap).
+                // The pill anchor travels with the scroll, so
+                // the cap relaxes as the pill rides up.
+                maxExpandedHeightDp = WirOverlayPanelPolicy
+                    .maxPanelHeightDp(
+                        viewportDp = LocalConfiguration.current
+                            .screenHeightDp.toFloat(),
+                        pillCapDp = pillCapDp,
+                        presentedMiniHeightDp =
+                            wirPresentedMiniHeightDp
+                    ),
+                // RW-170 Move 2: the presented mini height —
+                // the band below prices from it.
+                onMiniHeightChanged = { presentedDp ->
+                    wirPresentedMiniHeightDp = presentedDp
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        horizontal =
+                            WearIveRunDockPolicy.DOCK_INSET_DP.dp
+                    )
+                    .navigationBarsPadding()
+                    .padding(
+                        bottom =
+                            WearIveRunDockPolicy.DOCK_BOTTOM_DP.dp
+                    )
+                    .onGloballyPositioned { coords ->
+                        wirSurfaceBounds = coords.boundsInWindow()
+                    }
             )
         }
     }
@@ -1187,44 +1451,6 @@ fun HeroMainScreen(
     // content keeps the 16dp inset internally). The grid hosts'
     // content padding insets their items, so the grid lambda
     // breaks the footer out of that padding by the pane's
-    // pagePadding (see wirFooterContentGrid).
-    val wirFooterContent: @Composable () -> Unit = {
-        wirFooterRender(WearIveRunDockPolicy.FOOTER_SHEET_GAP_DP)
-    }
-    val wirFooterContentGrid: @Composable () -> Unit = {
-        // The grid's 10dp vertical spacing sits between the
-        // preceding item and the footer item, so the section's
-        // own sheet gap is 34 - 10 = 24dp (spec section 2.2).
-        // Full-bleed (spec section 2.2): the grid hosts inset
-        // their items by the pane's pagePadding via content
-        // padding, so the footer breaks out of it — measured
-        // wider by twice the padding and placed at its negative.
-        Box(
-            modifier = Modifier.layout { measurable, constraints ->
-                val padPx = (spec.pagePadding.value * 2 * wirDensity.density)
-                    .roundToInt()
-                val placeable = measurable.measure(
-                    constraints.copy(
-                        minWidth = (constraints.minWidth + padPx)
-                            .coerceAtLeast(0),
-                        maxWidth = if (constraints.maxWidth ==
-                            Constraints.Infinity
-                        ) {
-                            Constraints.Infinity
-                        } else {
-                            constraints.maxWidth + padPx
-                        }
-                    )
-                )
-                layout(placeable.width, placeable.height) {
-                    placeable.place(-padPx / 2, 0)
-                }
-            }
-        ) {
-            wirFooterRender(24)
-        }
-    }
-
 
         when {
             // Content wins over the loading flag: once anything is on screen
@@ -1252,7 +1478,54 @@ fun HeroMainScreen(
                 // area fills it and the MINI dock overlays its bottom
                 // (the ruled floating form); the expanded form is the
                 // footer section inside the scroll content itself.
+                // The scaffold's bottom inset, consumed ONCE here
+                // for the dock-clearance system (RW-147 boundary +
+                // RW-152 band-edge fade); the three scroll
+                // containers consume their own (HomeCompositionPin).
+                val wirScaffoldBottomInsetDp =
+                    scaffoldContentPadding.calculateBottomPadding().value
                 Box(modifier = Modifier.fillMaxSize()) {
+                // RW-156 REOPENED (Nov 11, 2026): the dock
+                // residence's ground. RW-147's layout boundary
+                // truncates the Surface-painted scroll area at
+                // the dock band's top edge; below it the root
+                // BoxWithConstraints' Background (#F5F1E8) showed
+                // through as a full-width, straight-edged cream
+                // strip behind the translucent dock — the
+                // rectangular block Sol reported on 1.2.30 and
+                // again on 1.2.32 (the 1.2.31 by-construction
+                // removal had only removed the in-flow footer;
+                // this strip is a different surface). The
+                // residence now paints the SHEET's ground
+                // (Surface) for exactly the band the boundary
+                // reserves, so the sheet reads continuous to the
+                // screen's bottom edge and the dock floats over
+                // one uniform ground; the boundary itself (no
+                // readable content ever rests under the dock) is
+                // unchanged. In the EXPANDED layout the residence
+                // belongs to the scrolling pane only, mirroring
+                // the dock overlay's own inset.
+                if (wirSurfacesPresent) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .then(
+                                if (layout == AdaptiveLayout.EXPANDED) {
+                                    Modifier.padding(
+                                        start = spec.heroPaneWidth ?: 400.dp
+                                    )
+                                } else {
+                                    Modifier
+                                }
+                            )
+                            .height(
+                                (DockClearancePolicy.dockBandDp(wirPresentedMiniHeightDp) +
+                                    wirScaffoldBottomInsetDp).dp
+                            )
+                            .background(RunWearColors.Surface)
+                    )
+                }
                 PullToRefreshBox(
                     isRefreshing = uiState.isLoading,
                     onRefresh = onRefresh,
@@ -1274,9 +1547,8 @@ fun HeroMainScreen(
                             if (wirSurfacesPresent) {
                                 Modifier.padding(
                                     bottom = (
-                                        DockClearancePolicy.dockBandDp() +
-                                            scaffoldContentPadding
-                                                .calculateBottomPadding().value
+                                        DockClearancePolicy.dockBandDp(wirPresentedMiniHeightDp) +
+                                            wirScaffoldBottomInsetDp
                                         ).dp
                                 )
                             } else {
@@ -1308,7 +1580,7 @@ fun HeroMainScreen(
                                     // layout boundary (see the
                                     // PullToRefreshBox below), not
                                     // by trailing padding.
-                                    bottom = if (wirSurfacesPresent) 0.dp
+                                    bottom = if (wirSurfacesPresent) 16.dp
                                         else 60.dp + scaffoldContentPadding.calculateBottomPadding()
                                 )
                             ) {
@@ -1327,12 +1599,17 @@ fun HeroMainScreen(
                                             onNowClick = onResetToNow,
                                             onLocationClick = { showLocationPicker = true },
                                             onSettingsClick = { showSettings = true },
+                                            shareActions = heroShareActions,
                                             onWeatherPillClick = { type -> weatherDetailType = type },
                                             onFlagClick = onAnyFlagClick,
                                             heroFlagEnabled = flaggedHeroUrl != uiState.heroImageUrl,
                                             onCycleHero = onCycleHero,
                                             heroPill = heroPill,
                                             onHeroPillAction = { showMakeItMePaywall = true },
+                                            onPillBounds = { rect ->
+                                                wirPillAnchorBounds = rect
+                                            },
+                                            pillOverlayActive = pillOverlapsPanel,
                                             onHeroPhotoClick = {
                                                 if (uiState.effectiveHeroUrl != null) {
                                                     showHeroViewer = true
@@ -1400,7 +1677,6 @@ fun HeroMainScreen(
                                 homeTrailingListItems(
                                     uiState = uiState,
                                     onFeedbackClick = { onOpenFeedback(com.runwear.app.feedback.FeedbackCategory.RECOMMENDATION_OFF) },
-                                    wirFooterPresent = wirSurfacesPresent,
                                     // RW-140: the LIST host takes the
                                     // plain footer content — this
                                     // LazyColumn has NO horizontal
@@ -1413,7 +1689,6 @@ fun HeroMainScreen(
                                     // element at the left edge on
                                     // Sol's phone — his Nov 8, 2026
                                     // recording.)
-                                    wirFooterContent = wirFooterContent
                                 )
                             }
                         }
@@ -1434,7 +1709,7 @@ fun HeroMainScreen(
                                     // RW-135 spec section 2.2: as
                                     // the list host — no sheet below
                                     // the footer when it is present.
-                                    bottom = if (wirSurfacesPresent) 0.dp
+                                    bottom = if (wirSurfacesPresent) 16.dp
                                         else 60.dp + scaffoldContentPadding.calculateBottomPadding()
                                 ),
                                 horizontalArrangement = Arrangement.spacedBy(spec.gridGap),
@@ -1455,12 +1730,17 @@ fun HeroMainScreen(
                                             onNowClick = onResetToNow,
                                             onLocationClick = { showLocationPicker = true },
                                             onSettingsClick = { showSettings = true },
+                                            shareActions = heroShareActions,
                                             onWeatherPillClick = { type -> weatherDetailType = type },
                                             onFlagClick = onAnyFlagClick,
                                             heroFlagEnabled = flaggedHeroUrl != uiState.heroImageUrl,
                                             onCycleHero = onCycleHero,
                                             heroPill = heroPill,
                                             onHeroPillAction = { showMakeItMePaywall = true },
+                                            onPillBounds = { rect ->
+                                                wirPillAnchorBounds = rect
+                                            },
+                                            pillOverlayActive = pillOverlapsPanel,
                                             onHeroPhotoClick = {
                                                 if (uiState.effectiveHeroUrl != null) {
                                                     showHeroViewer = true
@@ -1520,8 +1800,6 @@ fun HeroMainScreen(
                                 homeTrailingGridItems(
                                     uiState = uiState,
                                     onFeedbackClick = { onOpenFeedback(com.runwear.app.feedback.FeedbackCategory.RECOMMENDATION_OFF) },
-                                    wirFooterPresent = wirSurfacesPresent,
-                                    wirFooterContent = wirFooterContentGrid
                                 )
                             }
                         }
@@ -1545,6 +1823,7 @@ fun HeroMainScreen(
                                         scrollOffset = 0f,
                                         onLocationClick = { showLocationPicker = true },
                                         onSettingsClick = { showSettings = true },
+                                            shareActions = heroShareActions,
                                         onFlagClick = onAnyFlagClick,
                                         heroFlagEnabled = flaggedHeroUrl != uiState.heroImageUrl,
                                         onCycleHero = onCycleHero,
@@ -1596,7 +1875,7 @@ fun HeroMainScreen(
                                         // RW-135 spec section 2.2:
                                         // no sheet below the footer
                                         // when it is present.
-                                        bottom = if (wirSurfacesPresent) 0.dp
+                                        bottom = if (wirSurfacesPresent) 16.dp
                                         else 60.dp + scaffoldContentPadding.calculateBottomPadding()
                                     ),
                                     horizontalArrangement = Arrangement.spacedBy(spec.gridGap),
@@ -1651,40 +1930,63 @@ fun HeroMainScreen(
                                     homeTrailingGridItems(
                                         uiState = uiState,
                                         onFeedbackClick = { onOpenFeedback(com.runwear.app.feedback.FeedbackCategory.RECOMMENDATION_OFF) },
-                                        wirFooterPresent = wirSurfacesPresent,
-                                        wirFooterContent = wirFooterContentGrid
                                     )
                                 }
                             }
                         }
                     }
                 }
+                // RW-152 remainder (Nov 10, 2026): the dock
+                // band's EDGE TREATMENT. RW-147's layout boundary
+                // already guarantees nothing readable rests UNDER
+                // the dock, but at initial rest a portrait outfit
+                // row can be cut mid-description exactly at the
+                // boundary, reading as a graze rather than a
+                // scroll edge. A short fade of the sheet ground
+                // over the bounded area's bottom edge makes the
+                // cut read as the list's designed edge. Purely
+                // decorative: it changes no layout, reserves no
+                // space, and touches neither the RW-147 clearance
+                // (the boundary is unchanged) nor the RW-149
+                // first-viewport contract (header + first item
+                // sit far above this strip).
+                if (wirSurfacesPresent) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .padding(
+                                bottom = (
+                                    DockClearancePolicy.dockBandDp(wirPresentedMiniHeightDp) +
+                                        wirScaffoldBottomInsetDp
+                                    ).dp
+                            )
+                            .height(24.dp)
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        RunWearColors.Surface
+                                    )
+                                )
+                            )
+                    )
+                }
                 // RW-135: the MINI dock overlay — inset 12,
                 // lifted 14 above the bottom safe edge (over the
                 // bottom navigation), radius 16, translucent card,
-                // soft shadow. Driven CONTINUOUSLY by the handoff
-                // fade (spec section 3): graphicsLayer alpha /
-                // translationY / scale are pure functions of the
-                // footer's scroll position, evaluated in the draw
-                // phase (RW-140) — no binary visibility,
-                // no AnimatedVisibility. Hit-testing is off at
-                // fade >= 0.5; at fade >= 1 the dock leaves the
-                // semantics tree. Reduce Motion (spec section 5):
-                // the handoff steps at the window's midpoint with
-                // a single 160ms crossfade, no sink/scale. During
-                // an exit (sections 4.7/4.8) the snapshot's line
-                // renders and the dock's own exit (fade + 26dp
-                // sink, 300ms exit) multiplies in.
+                // soft shadow. RW-135 REBUILD: the one surface
+                // morphs in place inside this residence; scroll
+                // position reaches it ONLY through the R-1
+                // trigger (footer presentation), never as a
+                // fade/sink/scale on this wrapper. During an exit
+                // (sections 4.7/4.8) the snapshot's line renders
+                // and the surface's own exit (fade + 26dp sink,
+                // 300ms exit) multiplies in.
                 if (wirSurfacesPresent) {
                     val exitSnap = wirExit
                     val line = exitSnap?.line ?: wirShownLine
                     if (line != null) {
-                        val fade = wirFooterFade
-                        val steppedOpacity = animateFloatAsState(
-                            targetValue = if (fade < 0.5f) 1f else 0f,
-                            animationSpec = tween(160),
-                            label = "wirDockHandoffStep"
-                        )
                         Box(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
@@ -1708,76 +2010,100 @@ fun HeroMainScreen(
                                         Modifier
                                     }
                                 )
-                                .then(
-                                    if (fade >= 1f && exitSnap == null) {
-                                        Modifier.clearAndSetSemantics {}
-                                    } else {
-                                        Modifier
-                                    }
-                                )
                                 .graphicsLayer {
-                                    // RW-140: the handoff transform
-                                    // is evaluated HERE, in the draw
-                                    // phase, reading the fade state
-                                    // directly — every scroll frame
-                                    // draws its own alpha / sink /
-                                    // scale in the same frame the
-                                    // list moves. (In vc41 these were
-                                    // composition locals captured by
-                                    // this block; a coalesced
-                                    // recomposition during a fling
-                                    // dropped the dissolve's
-                                    // intermediate values wholesale,
-                                    // and the dock and footer read as
-                                    // two distinct elements — Sol's
-                                    // Nov 8, 2026 device finding.)
-                                    val drawFade = wirFooterFadeState.value
+                                    // RW-135 REBUILD: the retired
+                                    // handoff transform is gone
+                                    // from this layer — the ONE
+                                    // surface morphs in place, so
+                                    // scroll position never fades,
+                                    // sinks or scales it. All that
+                                    // remains here is the exit
+                                    // choreography's own term,
+                                    // RW-174 form-aware per
+                                    // WearIveRunExitPolicy: fade +
+                                    // 26dp sink ONLY for a mini
+                                    // exit (and the RM fade);
+                                    // an expanded exit gets no
+                                    // sink and no container fade
+                                    // from this layer at all.
                                     val exitP = wirDockExit.value
-                                    val handoffAlpha = if (wirReduceMotion) {
-                                        steppedOpacity.value
-                                    } else {
-                                        WearIveRunDockPolicy
-                                            .dockOpacity(drawFade)
-                                    }
-                                    alpha = handoffAlpha * (1f - exitP)
+                                    val exitFromExpanded =
+                                        exitSnap?.fromExpanded
+                                            ?: false
+                                    alpha =
+                                        com.runwear.app.weariverun
+                                            .WearIveRunExitPolicy
+                                            .hostAlpha(
+                                                exitP,
+                                                exitFromExpanded,
+                                                wirReduceMotion
+                                            )
                                     translationY =
-                                        ((if (wirReduceMotion) 0f
-                                        else WearIveRunDockPolicy
-                                            .dockSinkDp(drawFade)) +
-                                            WearIveRunDockPolicy
-                                                .DELETE_DOCK_SINK_DP * exitP) *
-                                            wirDensity.density
-                                    val s = (if (wirReduceMotion) 1f
-                                    else WearIveRunDockPolicy
-                                        .dockScale(drawFade))
-                                    scaleX = s
-                                    scaleY = s
+                                        com.runwear.app.weariverun
+                                            .WearIveRunExitPolicy
+                                            .hostSinkDp(
+                                                exitP,
+                                                exitFromExpanded,
+                                                wirReduceMotion
+                                            ) * wirDensity.density
                                 }
                         ) {
-                            WearIveRunDock(
-                                narration = line,
-                                cueKey = wirCreationKey,
-                                cueArmed = exitSnap == null &&
-                                    wirCreationKey > 0 && fade < 1f,
-                                onExpand = wirGlideToFooter,
-                                onDelete = wirTrash,
-                                entranceKey = wirCreationKey,
-                                bounceKey = wirDockBounceKey,
-                                hitTestable = exitSnap == null &&
-                                    WearIveRunDockPolicy.dockHitTestable(fade),
-                                reduceMotion = wirReduceMotion,
+                            // RW-152 §1+§2 (Nov 10, 2026): ONE
+                            // surface, two states, in this overlay
+                            // residence. The mini dock and the
+                            // expanded panel morph in place —
+                            // height animation + content cross-fade
+                            // (the RW-135 §3 dissolve, the RW-154
+                            // acceptance) — never two elements
+                            // swapping, and the panel is
+                            // CONTENT-SIZED: its height is its
+                            // content's height, capped at the
+                            // viewport minus the top chrome zone
+                            // (WirOverlayPanelPolicy); when the cap
+                            // binds the panel scrolls internally
+                            // and the doorway stays reachable at
+                            // its foot. Dismissal: chevron, Back
+                            // (BackHandler above), or a glide-up
+                            // on the panel.
+                            // RW-169 §7A: the morph surface — ONE
+                            // layout interpolating between the mini
+                            // and expanded rest geometries in this
+                            // same overlay residence. A glide-up on
+                            // the expanded form dismisses it (the
+                            // seat's standing gesture).
+                            var glideUpPx by remember {
+                                mutableFloatStateOf(0f)
+                            }
+                            Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(
-                                        horizontal =
-                                            WearIveRunDockPolicy.DOCK_INSET_DP.dp
-                                    )
-                                    .navigationBarsPadding()
-                                    .padding(
-                                        bottom =
-                                            WearIveRunDockPolicy.DOCK_BOTTOM_DP.dp
-                                    )
-                            )
+                                    .onGloballyPositioned { coords ->
+                                        wirPanelBounds =
+                                            coords.boundsInWindow()
+                                    }
+                                    .pointerInput(Unit) {
+                                        detectVerticalDragGestures(
+                                            onDragStart = {
+                                                glideUpPx = 0f
+                                            },
+                                            onDragEnd = {
+                                                if (wirExpanded &&
+                                                    glideUpPx <
+                                                    -48f * wirDensity.density
+                                                ) {
+                                                    wirGlideFromFooter()
+                                                }
+                                            },
+                                            onVerticalDrag = { _, amount ->
+                                                if (amount < 0f) {
+                                                    glideUpPx += amount
+                                                }
+                                            }
+                                        )
+                                    }
+                            ) {
+                                wirFooterRender()
+                            }
                         }
                     }
                 }
@@ -1796,6 +2122,63 @@ fun HeroMainScreen(
             )
         }
 
+        // RW-169 §7D, as corrected by the conformance loop-back
+        // (D8 — the victim had swapped): the pill's residence of
+        // record is the hero/sheet boundary IN THE HOME
+        // COMPOSITION (diagnosis §2.6: "straddles the hero/sheet
+        // boundary centred, whole, floating above the sheet's
+        // top edge — bisecting nothing and bisected by
+        // nothing"). The expanded panel's anatomy of record
+        // (§2.4) is header wordmark, narration, entry row,
+        // doorway — the pill is not in it, and the panel is a
+        // user-summoned replacement state of the dock residence
+        // after which "the page is exactly as it was." So:
+        //  - MINI states: when the dock's measured bounds would
+        //    cross the pill's seat during scroll, this
+        //    overlay-host copy carries the pill ABOVE the dock
+        //    at its measured seat (§7D's z-above prescription),
+        //    and the in-list copy yields — the pill is whole.
+        //  - EXPANDED state: RB-09 (RW-135 rebuild, Nov 12,
+        //    2026) supersedes the loop-back's absent-by-design
+        //    reading — conformance map §7's invariant governs:
+        //    the pill is whole and unbisected in EVERY Home
+        //    state and is never removed while expanded. So
+        //    the overlay copy renders in the expanded state
+        //    too, under the same measured-overlap rule: the
+        //    pill renders exactly once, whole, above the
+        //    surface. (Previously this branch rendered NO
+        //    copy while the in-list copy was alpha-0 under
+        //    the same overlap — the pill vanished outright
+        //    whenever the expanded panel reached its seat.)
+        // Both copies render the SAME single heroPill value —
+        // one agreed per-cell presentation state (§7D).
+        if (pillOverlapsPanel && heroPill != null &&
+            wirPillAnchorBounds != null
+        ) {
+            val anchorRect = wirPillAnchorBounds!!
+            val pillDensity = LocalDensity.current
+            val pillWidthDp = with(pillDensity) { anchorRect.width.toDp() }
+            val pillHeightDp = with(pillDensity) { anchorRect.height.toDp() }
+            Box(
+                modifier = Modifier
+                    .testTag("rw169PillOverlayCopy")
+                    .offset {
+                        androidx.compose.ui.unit.IntOffset(
+                            anchorRect.left.roundToInt(),
+                            anchorRect.top.roundToInt()
+                        )
+                    }
+                    .size(pillWidthDp, pillHeightDp)
+                    .zIndex(10f),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                com.runwear.app.ui.components.HeroPill(
+                    content = heroPill,
+                    onAction = { showMakeItMePaywall = true }
+                )
+            }
+        }
+
         // Hero-flag confirmation ("Thanks — we'll review this photo").
         // GEN-5 (RW-29 cream map): snackbars render in the app's
         // own tokens — the default takes the inverseSurface role
@@ -1808,7 +2191,7 @@ fun HeroMainScreen(
                 // rests above the dock's band, not beneath it.
                 .padding(
                     bottom = if (wirSurfacesPresent) {
-                        (DockClearancePolicy.dockBandDp() + 8f).dp
+                        (DockClearancePolicy.dockBandDp(wirPresentedMiniHeightDp) + 8f).dp
                     } else {
                         24.dp
                     }
@@ -1843,7 +2226,57 @@ fun HeroMainScreen(
                     screenScope.launch { wearIveRunStore.removePlace(place) }
                 },
                 // RW-133: an entry's stored photograph, full-screen.
-                onViewPhoto = { entry -> heroViewerEntry = entry }
+                onViewPhoto = { entry -> heroViewerEntry = entry },
+                // RW-152 §3: re-sign personal hero Storage paths
+                // at render (the resolver's seam).
+                heroResign = { path ->
+                    makeItMeViewModel?.signedHeroUrlForPath(path)
+                },
+                // RW-166: the bank re-link recovery — an entry
+                // that settled with no hero reference recovers
+                // its own banked hero and heals onto it.
+                heroRecovery = com.runwear.app.weariverun.HeroRecoverySeam(
+                    genderSegment = uiState.genderPreference.name,
+                    bankPaths = { makeItMeViewModel?.bankHeroPaths() }
+                ),
+                onHeroRecovered = { entry, path ->
+                    screenScope.launch {
+                        wearIveRunStore.healHeroReference(entry, path)
+                    }
+                },
+                shareInitialKind = shareKind,
+                shareInitialFormat = shareFormat,
+                onShareKindSelected = { shareKind = it },
+                onShareFormatSelected = { shareFormat = it }
+            )
+        }
+
+        // RW-158: the share studio opened straight from the
+        // footer's past-entry row — the same sheet the collection
+        // opens, with the same resolver seam and photo door.
+        wirFooterShareEntry?.let { entry ->
+            ShareStudioSheet(
+                entry = entry,
+                gender = uiState.genderPreference,
+                temperatureUnit = uiState.temperatureUnit,
+                onDismiss = { wirFooterShareEntry = null },
+                heroResign = { path ->
+                    makeItMeViewModel?.signedHeroUrlForPath(path)
+                },
+                heroRecovery = com.runwear.app.weariverun.HeroRecoverySeam(
+                    genderSegment = uiState.genderPreference.name,
+                    bankPaths = { makeItMeViewModel?.bankHeroPaths() }
+                ),
+                onHeroRecovered = { path ->
+                    screenScope.launch {
+                        wearIveRunStore.healHeroReference(entry, path)
+                    }
+                },
+                onViewPhoto = { heroViewerEntry = it },
+                initialKind = shareKind,
+                initialFormat = shareFormat,
+                onKindSelected = { shareKind = it },
+                onFormatSelected = { shareFormat = it }
             )
         }
     }
@@ -1863,7 +2296,24 @@ fun HeroMainScreen(
     }
     // RW-133: a collection entry's stored photograph.
     heroViewerEntry?.let { entry ->
-        val ref = entry.heroRef
+        // RW-152 §3: the viewer loads through the resolver — a
+        // stored signed URL is re-signed by path, never loaded
+        // dead after its hour.
+        val ref = com.runwear.app.weariverun.rememberResolvedHeroUrl(
+            entry,
+            resign = { path ->
+                makeItMeViewModel?.signedHeroUrlForPath(path)
+            },
+            recovery = com.runwear.app.weariverun.HeroRecoverySeam(
+                genderSegment = uiState.genderPreference.name,
+                bankPaths = { makeItMeViewModel?.bankHeroPaths() }
+            ),
+            onHeroRecovered = { path ->
+                screenScope.launch {
+                    wearIveRunStore.healHeroReference(entry, path)
+                }
+            }
+        )
         if (ref != null) {
             com.runwear.app.ui.components.HeroViewer(
                 imageRef = ref,
@@ -2365,6 +2815,8 @@ private fun HeroSectionContent(
     scrollOffset: Float,
     onLocationClick: () -> Unit,
     onSettingsClick: () -> Unit,
+    /** RW-168: the hero share button + menu doors. */
+    shareActions: com.runwear.app.ui.components.HeroShareActions? = null,
     onFlagClick: () -> Unit,
     heroFlagEnabled: Boolean,
     onCycleHero: () -> Unit = {},
@@ -2443,6 +2895,7 @@ private fun HeroSectionContent(
                 scrollOffset = scrollOffset,
                 onLocationClick = onLocationClick,
                 onSettingsClick = onSettingsClick,
+                shareActions = shareActions,
                 // RW-144: chip + feels-like frames.
                 selectedDateTime = uiState.selectedDateTime,
                 isNowSelected = uiState.isNowSelected,
@@ -2519,6 +2972,8 @@ private fun HeroStackedUnit(
     onNowClick: () -> Unit,
     onLocationClick: () -> Unit,
     onSettingsClick: () -> Unit,
+    /** RW-168: the hero share button + menu doors. */
+    shareActions: com.runwear.app.ui.components.HeroShareActions? = null,
     onWeatherPillClick: (String) -> Unit,
     onFlagClick: () -> Unit,
     heroFlagEnabled: Boolean,
@@ -2527,6 +2982,11 @@ private fun HeroStackedUnit(
     onHeroPillAction: () -> Unit = {},
     /** RW-133: tapping the photo opens the full-screen viewer. */
     onHeroPhotoClick: () -> Unit = {},
+    /** RW-169 §7D: report the pill's measured window bounds to
+     * the overlay host; while [pillOverlayActive] the in-list copy
+     * yields (alpha 0) to the overlay-host copy above the panel. */
+    onPillBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
+    pillOverlayActive: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val configuration = LocalConfiguration.current
@@ -2550,6 +3010,7 @@ private fun HeroStackedUnit(
                 scrollOffset = scrollOffset,
                 onLocationClick = onLocationClick,
                 onSettingsClick = onSettingsClick,
+                shareActions = shareActions,
                 onFlagClick = onFlagClick,
                 heroFlagEnabled = heroFlagEnabled,
                 onCycleHero = onCycleHero,
@@ -2592,6 +3053,14 @@ private fun HeroStackedUnit(
                     .align(Alignment.TopCenter)
                     .padding(top = heroHeight - pillHalf)
                     .onSizeChanged { pillHeightPx = it.height }
+                    .onGloballyPositioned { coords ->
+                        onPillBounds(
+                            coords.boundsInWindow()
+                        )
+                    }
+                    .graphicsLayer {
+                        alpha = if (pillOverlayActive) 0f else 1f
+                    }
             )
         }
     }
@@ -2705,8 +3174,6 @@ private fun LazyListScope.outfitListItems(
 private fun LazyListScope.homeTrailingListItems(
     uiState: MainUiState,
     onFeedbackClick: () -> Unit,
-    wirFooterPresent: Boolean = false,
-    wirFooterContent: @Composable () -> Unit = {}
 ) {
     val outfit = uiState.outfit ?: return
 
@@ -2740,12 +3207,9 @@ private fun LazyListScope.homeTrailingListItems(
         )
     }
 
-    // RW-135 (Direction A / A-prime): the expanded Wear I've Run
-    // form is the page's FOOTER — the final item, in the flow.
-    // INTERIM form pending the owner's package approval.
-    if (wirFooterPresent) {
-        item(key = "wir-footer") { wirFooterContent() }
-    }
+    // RW-152 §1 (Nov 10, 2026): no in-flow footer item — the
+    // expanded Wear I've Run form is a state of the dock
+    // overlay (see the host).
 }
 
 /**
@@ -2803,8 +3267,6 @@ private fun LazyGridScope.outfitGridItems(
 private fun LazyGridScope.homeTrailingGridItems(
     uiState: MainUiState,
     onFeedbackClick: () -> Unit,
-    wirFooterPresent: Boolean = false,
-    wirFooterContent: @Composable () -> Unit = {}
 ) {
     val outfit = uiState.outfit ?: return
 
@@ -2835,12 +3297,8 @@ private fun LazyGridScope.homeTrailingGridItems(
         )
     }
 
-    // RW-135: the footer section, full span — see the list helper.
-    if (wirFooterPresent) {
-        item(span = { GridItemSpan(maxLineSpan) }, key = "wir-footer") {
-            wirFooterContent()
-        }
-    }
+    // RW-152 §1 (Nov 10, 2026): no in-flow footer item — see
+    // the list helper's note.
 }
 
 // ============================================================================

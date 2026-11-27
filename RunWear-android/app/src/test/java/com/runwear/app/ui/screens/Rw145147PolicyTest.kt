@@ -178,21 +178,40 @@ class Rw145147PolicyTest {
 
     @Test
     fun `rw147 reserve - sized from the dock's own maximum band plus clearance`() {
-        assertEquals(14f + 88f, DockClearancePolicy.dockBandDp(), 0.01f)
-        assertEquals(118f, DockClearancePolicy.scrollEndReserveDp(0f), 0.01f)
-        assertEquals(142f, DockClearancePolicy.scrollEndReserveDp(24f), 0.01f)
+        // RW-170 Move 2: the band prices the PRESENTED (mini)
+        // form, not the tallest state. Default (pre-measure,
+        // one-line) = 14 lift + 49 presented = 63dp; the old
+        // 14 + 88 = 102dp constant is the defect this replaces.
+        assertEquals(14f + 49f, DockClearancePolicy.dockBandDp(), 0.01f)
+        assertEquals(79f, DockClearancePolicy.scrollEndReserveDp(0f), 0.01f)
+        assertEquals(103f, DockClearancePolicy.scrollEndReserveDp(24f), 0.01f)
+        // A wrapped two-line narration grows the presented
+        // height and the band follows by the same amount.
+        assertEquals(
+            14f + 65f,
+            DockClearancePolicy.dockBandDp(presentedMiniHeightDp = 65f),
+            0.01f
+        )
+        assertEquals(
+            79f + 16f,
+            DockClearancePolicy.scrollEndReserveDp(
+                0f, presentedMiniHeightDp = 65f
+            ),
+            0.01f
+        )
     }
 
     @Test
     fun `rw147 at-rest rule - an element is clear iff it ends above the dock band`() {
-        // Folded viewport 740dp, no nav inset: the band's top is
-        // at 740 − 102 = 638. The device frame's 3rd outfit row
-        // (bottom ≈ 700) was NOT clear; the 2nd row (≈ 620) was.
+        // Folded viewport 740dp, no nav inset: the band's top
+        // is at 740 − 63 = 677 (RW-170: the presented band).
+        // An element ending at 620 is clear; one ending at
+        // 700 is under the band.
         assertTrue(DockClearancePolicy.isClearAtRest(620f, 740f, 0f))
         assertTrue(!DockClearancePolicy.isClearAtRest(700f, 740f, 0f))
         // With the reserve carried, scroll end lifts the last
         // element by the reserve: a last element whose natural
-        // bottom is the viewport's foot rests at 740 − 118 = 622.
-        assertTrue(DockClearancePolicy.isClearAtRest(740f - 118f, 740f, 0f))
+        // bottom is the viewport's foot rests at 740 − 79 = 661.
+        assertTrue(DockClearancePolicy.isClearAtRest(740f - 79f, 740f, 0f))
     }
 }

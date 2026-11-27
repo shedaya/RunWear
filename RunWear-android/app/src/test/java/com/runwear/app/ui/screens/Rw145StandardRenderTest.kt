@@ -36,7 +36,14 @@ class Rw145StandardRenderTest : Rw145RenderTestBase() {
         assertTrue("chip must clear the block (text gap $textGap dp)", textGap >= 16f)
         val dockMark = boxes.firstOrNull { it.text.contains("Wear I've Run") }
         assertTrue("dock must be present at rest", dockMark != null)
-        val dockTop = (dockMark!!.top / density) - 14f
+        // RW-170: the band top IS the painted card top (band =
+        // lift + presented mini height; the card paints exactly
+        // the presented height above the lift), so the dock's
+        // top is the surface node's own top. The pre-RW-170
+        // "-14dp lift" fudge was calibrated to the old 102dp
+        // band's air gap; with the band priced to the presented
+        // form the list legitimately ends flush at the card top.
+        val dockTop = dockMark!!.top / density
         val dockTexts = boxes.filter { it.top >= dockMark.top - 1f }
         val offenders = boxes.filter { box ->
             box !in dockTexts && box.bottom / density > dockTop + 2f

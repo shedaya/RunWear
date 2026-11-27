@@ -36,6 +36,15 @@ import org.robolectric.annotation.GraphicsMode
  * the canvas at its natural size (requiredWidth/Height) and
  * scales the layer into the slot.
  *
+ * RE-PINNED (RW-152 §3, Nov 10, 2026 — supersedes the RW-99
+ * expectations below): DayCards no longer compose the poster at
+ * all; the card's media is the direct-load thumbnail slot
+ * (CollectionThumbnail) resolved through HeroRefResolver. The
+ * RW-99-era assertions (poster script lockup + hashtag composed
+ * in the card) are replaced by the thumbnail-slot semantics
+ * assertion at the foot of the test. The historical RW-99
+ * account follows.
+ *
  * THE PROOF (layout level): Robolectric's manual draw() does
  * not apply graphicsLayer scale/clip (verified by probe: a
  * replica of the cover wrapper paints the poster at natural
@@ -163,20 +172,20 @@ class RwFixWaveCollectionRenderTest {
         }
         collect(composeView)
         val root = rootNode ?: error("no semantics root")
-        var hashtagFound = false
-        var scriptFound = false
+        var thumbnailSlotFound = false
         fun walk(node: androidx.compose.ui.semantics.SemanticsNode) {
-            if (node.config.contains(androidx.compose.ui.semantics.SemanticsProperties.Text)) {
-                node.config[androidx.compose.ui.semantics.SemanticsProperties.Text].forEach {
-                    if (it.text == "#RunAnyWear") hashtagFound = true
-                    if (it.text == "RunWear") scriptFound = true
+            if (node.config.contains(androidx.compose.ui.semantics.SemanticsProperties.ContentDescription)) {
+                node.config[androidx.compose.ui.semantics.SemanticsProperties.ContentDescription].forEach {
+                    if (it == "Entry photo") thumbnailSlotFound = true
                 }
             }
             node.children.forEach { walk(it) }
         }
         walk(root)
-        assertTrue("poster script lockup composed in the card", scriptFound)
-        assertTrue("poster hashtag composed in the card", hashtagFound)
+        assertTrue(
+            "the card's thumbnail slot composes with its photo (RW-152 §3)",
+            thumbnailSlotFound
+        )
         controller.pause().stop().destroy()
     }
 }

@@ -202,6 +202,35 @@ class MakeItMeViewModel @Inject constructor(
         }
     }
 
+    /**
+     * RW-152 §3 (Nov 10, 2026): re-sign one personal-heroes Storage
+     * path for display — the HeroRefResolver's render-time seam for
+     * the collection surfaces hosted beside this view model.
+     */
+    suspend fun signedHeroUrlForPath(path: String): String? =
+        service.signedUrlFor(path)
+
+    /**
+     * RW-166 (Nov 10, 2026): the bank lookup table for the Wear
+     * I've Run re-link recovery (HeroRecovery) — combination_id →
+     * storage_path, cached five minutes per process (the iOS
+     * runtime's cache window). A failed read is NOT cached: the
+     * next surface retries instead of pinning an empty bank.
+     */
+    private var bankPathsCache: Pair<Map<String, String>, Long>? = null
+
+    suspend fun bankHeroPaths(): Map<String, String>? {
+        val cached = bankPathsCache
+        if (cached != null &&
+            System.currentTimeMillis() - cached.second < 5 * 60_000L
+        ) {
+            return cached.first
+        }
+        val fetched = service.fetchBankHeroPaths() ?: return null
+        bankPathsCache = fetched to System.currentTimeMillis()
+        return fetched
+    }
+
     fun loadReferenceUrls(onResult: (List<String>) -> Unit) {
         viewModelScope.launch {
             val paths = service.fetchReferencePaths()

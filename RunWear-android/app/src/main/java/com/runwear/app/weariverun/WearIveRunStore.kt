@@ -78,6 +78,53 @@ class WearIveRunStore(private val context: Context) {
         }
     }
 
+    /**
+     * RW-166 (Nov 10, 2026): persist a hero reference the bank
+     * re-link recovery found for an entry — the heal that makes
+     * the recovery happen ONCE (after it, the entry resolves
+     * like any signed-ref entry and chapter covers recompute
+     * onto it). The write is refused for an entry that already
+     * carries a reference (its own identity wins — recovery
+     * never re-links a loadable entry), and carries NO
+     * narration/cue side effects: it replaces only the entry's
+     * hero fields, through the same edit discipline as every
+     * other store write.
+     */
+    suspend fun healHeroReference(
+        entry: WearIveRunDayEntry,
+        durableReference: String
+    ) {
+        if (durableReference.isBlank()) return
+        if (HeroRefResolver.hasLoadableReference(entry)) return
+        val healed = entry.copy(
+            heroRef = durableReference,
+            heroDurableRef = durableReference
+        )
+        withContext(NonCancellable) {
+            context.wearIveRunDataStore.edit { prefs ->
+                val current = decode(prefs[Keys.ENTRIES_JSON])
+                if (current.none {
+                    WearIveRunCollectionLogic.sameIdentity(it, entry)
+                }
+                ) {
+                    // The entry left the collection while its
+                    // recovery was in flight (deleted): nothing
+                    // to heal, and nothing is resurrected.
+                    return@edit
+                }
+                prefs[Keys.ENTRIES_JSON] = encode(
+                    current.map {
+                        if (WearIveRunCollectionLogic.sameIdentity(it, entry)) {
+                            healed
+                        } else {
+                            it
+                        }
+                    }
+                )
+            }
+        }
+    }
+
     /** RW-122: remove every entry collated under [place]. */
     suspend fun removePlace(place: String) {
         context.wearIveRunDataStore.edit { prefs ->
@@ -103,6 +150,10 @@ class WearIveRunStore(private val context: Context) {
                     put("raining", e.isRaining)
                     put("items", JSONArray(e.items))
                     e.heroRef?.let { put("heroRef", it) }
+                    // RW-152 §3: the durable hero identity,
+                    // written only when present (legacy shape
+                    // unchanged otherwise).
+                    e.heroDurableRef?.let { put("heroDurableRef", it) }
                     // GEN-6 Wave B (RW-31): the share fields —
                     // written only when present, so a legacy
                     // entry's stored shape is unchanged.
@@ -160,6 +211,11 @@ class WearIveRunStore(private val context: Context) {
                         isRaining = o.optBoolean("raining"),
                         items = (0 until items.length()).map { items.optString(it) },
                         heroRef = o.optString("heroRef").takeIf { it.isNotBlank() },
+                        // RW-152 §3: durable identity; absent on
+                        // legacy records (the resolver recovers it
+                        // from heroRef where it can).
+                        heroDurableRef = o.optString("heroDurableRef")
+                            .takeIf { it.isNotBlank() },
                         // GEN-6 Wave B (RW-31): the share fields
                         // decode null-safely — a legacy record
                         // (keys absent) decodes with nulls /

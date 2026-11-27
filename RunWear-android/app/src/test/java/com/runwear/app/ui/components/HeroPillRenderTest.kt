@@ -41,8 +41,11 @@ import org.robolectric.annotation.GraphicsMode
  * build/render-out-gen6-pill/ and are copied to the wave evidence
  * directory. The approved table (owner, Nov 5):
  *
- *  - Generating: script + spinner + "Making this you…" + the green
- *    "Get it instantly next time" on FREE only.
+ *  - Generating: script + spinner + "Making this you…" — ONE line
+ *    on every tier. (RW-171 / RW-174 SUPERSESSION, Nov 14, 2026:
+ *    the green "Get it instantly next time" second line the FREE
+ *    generating pill used to carry is removed from the pill
+ *    entirely.)
  *  - Free exact: script + "— N of 10 looks · Get unlimited".
  *  - Exhausted: script + used-up count + "Get unlimited" as the
  *    main message, whole pill tappable.
@@ -141,13 +144,19 @@ class HeroPillRenderTest {
     )
 
     @Test
-    fun `render - generating on free carries the script, the making line and the green C-4 line`() {
+    fun `render - generating on free carries the script and the making line only - RW-171 one line`() {
+        // RW-171 / RW-174 SUPERSESSION (Nov 14, 2026): this test
+        // previously REQUIRED the green C-4 line ("Get it
+        // instantly next time") in the free generating pill's
+        // rendered texts. That line is removed from the pill
+        // entirely — the free generating pill now renders
+        // exactly the script + the one making line.
         val pill = resolve(lookStatus = PersonalLookStatus.Making, heroIsPersonal = false)
         assertEquals(HeroPillKind.MAKING, pill?.kind)
         val texts = renderPill("pill-making-free", pill!!)
         assertTrue(texts.any { it.contains(MakeItMeStrings.HERO_PILL_SCRIPT_MARK) })
         assertTrue(texts.any { it.contains(MakeItMeStrings.HERO_PILL_MAKING) })
-        assertTrue(texts.any { it.contains(MakeItMeStrings.HERO_PILL_MAKING_UPSELL) })
+        assertTrue(texts.none { it.contains("Get it instantly") })
     }
 
     @Test

@@ -87,9 +87,20 @@ class ShareCropPolicyTest {
         // headroom — the headless-poster fix, strengthened). The
         // pin follows the mechanism to its new homes.
         val screen = sourceFile("WearIveRunCollectionScreen.kt")
+        // RE-PINNED (RW-152 §3, Nov 10, 2026 — supersedes the
+        // poster-composition crop for COLLECTION surfaces):
+        // covers and stay cards no longer compose the poster, so
+        // they no longer crop through the face anchor — they load
+        // the photo directly with the settled top-centre crop.
+        // The face-anchor crop remains the SHARE/EXPORT rule
+        // (asserted below, unchanged).
         assertTrue(
-            "collection covers crop through the face anchor",
-            screen.contains("ShareAnchorCrop.cropBitmap")
+            "collection covers no longer crop through the face anchor (RW-152 §3)",
+            !screen.contains("ShareAnchorCrop.cropBitmap")
+        )
+        assertTrue(
+            "collection thumbnails use the settled top-centre crop",
+            screen.contains("Alignment.TopCenter")
         )
         val renderer = sourceFile("ShareExportRenderer.kt")
         assertTrue(

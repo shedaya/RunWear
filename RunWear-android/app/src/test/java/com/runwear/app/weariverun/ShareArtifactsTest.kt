@@ -156,7 +156,18 @@ class ShareArtifactsTest {
         assertFalse(main.contains("Get your personalized running outfit"))
         val section = heroSection()
         assertFalse(section.contains("onShareClick"))
-        assertFalse(section.contains("Icons.Outlined.Share"))
+        // RW-168 (Sol, Nov 11, 2026) supersedes the blanket
+        // no-share-icon pin below this line: the hero chrome
+        // gains a share button again — but as a door to the
+        // EXISTING share surfaces only (the RW-158 sheet, the
+        // collection, a direct photo-roll save), never the
+        // removed text/emoji share this test guards. The new
+        // form is pinned positively, and the text-share payload
+        // stays absent from the section too.
+        assertTrue(section.contains("HeroShareButton"))
+        assertTrue(section.contains("HeroShareMenuCard"))
+        assertFalse(section.contains("text/plain"))
+        assertFalse(section.contains("🏃"))
     }
 
     @Test

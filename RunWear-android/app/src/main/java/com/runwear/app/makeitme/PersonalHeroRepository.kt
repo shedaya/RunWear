@@ -95,11 +95,21 @@ class PersonalHeroRepository @Inject constructor(
      *     the caller's state against RevenueCat and flips the
      *     `entitled` flag (kicking the matrix fill on a grant) without
      *     trusting anything the client claims;
-     *  3. if the reconcile names a RevenueCat-proven prior identity,
-     *     request its adoption (RW-137/RW-179c) so a restored
-     *     subscription's bank follows the account to this uid;
-     *  4. if the reconcile call completed, re-read the profile so the
-     *     local mirror reflects any transition.
+     *  3. RW-137 (DESIGN §4.4 trigger 2) + RW-179c: if the reconcile
+     *     response reports `adoption_available` — RevenueCat proof
+     *     links this restored, entitled identity to a prior uid —
+     *     request its adoption (request-identity-adoption
+     *     re-verifies the proof server-side; the reported uid is a
+     *     lookup hint only, and a stale/wrong hint degrades to a
+     *     silent no-op) so a restored subscription's bank follows
+     *     the account to this uid. Adoption is AUTOMATIC: a
+     *     standing Premium property of the restored subscription,
+     *     no opt-in, no new user-facing flow — the refreshed
+     *     profile + bank below ARE the restored state, rendered by
+     *     the existing surfaces;
+     *  4. if the reconcile call completed, re-read the profile so
+     *     the local mirror reflects any transition (and any
+     *     adoption).
      * Silent and idempotent: no session, a failed link, or a failed
      * reconcile leaves local state exactly as it was.
      */
@@ -108,30 +118,32 @@ class PersonalHeroRepository @Inject constructor(
         val uid = service.currentUserId() ?: return
         runCatching { billing.logIn(uid) }
         val outcome = service.reconcileEntitlement()
-        if (outcome.completed) {
-            // RW-137 (DESIGN §4.4) + RW-179c (2026-11-25): the same
-            // reconcile carries the adoption check — when it names
-            // a RevenueCat-proven prior identity, request the
-            // adoption so the restored subscription's bank re-keys
-            // onto THIS uid before the profile read renders it.
-            // This is the step whose absence stranded Sol's bank on
-            // his previous install uid after the Nov 25 reset: the
-            // entitlement reconciled, the looks did not follow.
-            // Adoption is automatic (a standing Premium property —
-            // no opt-in), the endpoint re-verifies the proof
-            // server-side, and an unprovable hint is a silent
-            // no-op; the iOS store's reconcileWithAdoption is the
-            // mirror. Sync points: bootstrap, entitlement change,
-            // purchase, Restore Purchases — all of them run through
-            // this method.
-            val source = IdentityAdoptionPolicy.sourceToAdopt(
-                outcome.adoptionSourceUserId, uid
-            )
-            if (source != null) {
-                runCatching { service.requestIdentityAdoption(source) }
-            }
-            refreshFromServer()
+        if (!outcome.completed) return
+        // RW-137 (DESIGN §4.4) + RW-179c (2026-11-25): the same
+        // reconcile carries the adoption check — when it names a
+        // RevenueCat-proven prior identity, request the adoption
+        // so the restored subscription's bank re-keys onto THIS
+        // uid before the profile read renders it. This is the
+        // step whose absence stranded Sol's bank on his previous
+        // install uid after the Nov 25 reset: the entitlement
+        // reconciled, the looks did not follow. Adoption is
+        // automatic (a standing Premium property — no opt-in),
+        // the endpoint re-verifies the proof server-side, and an
+        // unprovable hint is a silent no-op; the iOS store's
+        // reconcileWithAdoption is the mirror. Sync points:
+        // bootstrap, entitlement change, purchase, Restore
+        // Purchases — all of them run through this method.
+        val source = IdentityAdoptionPolicy.sourceToAdopt(
+            outcome.adoptionAvailable, uid
+        )
+        if (source != null) {
+            // The result is deliberately not surfaced: a confirmed
+            // adoption and a server-side no-op both end at the same
+            // refresh, which renders whatever identity state the
+            // server now holds for this uid.
+            runCatching { service.requestIdentityAdoption(source) }
         }
+        refreshFromServer()
     }
 
     /** Re-read the profile + reference count from the server. */
@@ -165,9 +177,34 @@ class PersonalHeroRepository @Inject constructor(
         // GEN-3 (convergence band): the coverage read rides the same
         // refresh; a failed read leaves the previous value in place.
         val coverage = if (profile.personalizationOn) {
-            service.fetchBankCoverage(fillTargetCells) ?: _state.value.bankCoverage
+            service.fetchBankCoverage(fillTargetCells, fillableCells)
+                ?: _state.value.bankCoverage
         } else {
             _state.value.bankCoverage
+        }
+        // RW-151 client (Nov 10, 2026; DESIGN.md §5 reconcile rule):
+        // after this coverage read, if fillable work is outstanding
+        // and NOTHING is in flight — no non-terminal job, no fill
+        // request outstanding — re-issue the fill ONCE for the
+        // fillable remainder. The once-guard is the wire cell set
+        // itself: a set already reconciled is not re-issued until a
+        // new forecast derivation names a different set, so no loop
+        // can form within a derivation. A re-issued fill that still
+        // leaves outstanding work with no jobs is closed by RW-126
+        // (terminally failed cells count as settled), never by an
+        // indefinite "making".
+        if (profile.entitled && profile.personalizationOn &&
+            coverage != null && fillWireCells.isNotEmpty() &&
+            fillWireCells != lastReconciledWireCells &&
+            FillReconcilePolicy.shouldReissue(
+                outstanding = coverage.outstanding,
+                hasNonTerminalJob = coverage.hasNonTerminalJob,
+                fillOutstanding = false
+            )
+        ) {
+            if (service.startPersonalFill(fillWireCells)) {
+                lastReconciledWireCells = fillWireCells
+            }
         }
         _state.value = _state.value.copy(
             personalizationOn = profile.personalizationOn,
@@ -477,8 +514,41 @@ class PersonalHeroRepository @Inject constructor(
     var fillTargetCells: Set<String> = emptySet()
         private set
 
+    /**
+     * RW-151 client: the FILLABLE subset of the target (DESIGN.md
+     * §5) — accompanied forecast cells plus canonical core cells.
+     * The coverage denominator is |Target ∩ Fillable|.
+     */
+    @Volatile
+    var fillableCells: Set<String> = emptySet()
+        private set
+
+    /** RW-151 client: the composed WIRE entries (accompanied
+     * forecast cells, bare core cells) — what a reconcile re-issue
+     * re-sends, and its once-per-derivation guard. */
+    @Volatile
+    var fillWireCells: List<String> = emptyList()
+        private set
+
+    private var lastReconciledWireCells: List<String> = emptyList()
+
     fun noteFillTarget(cells: List<String>) {
         fillTargetCells = cells.toSet()
+    }
+
+    /**
+     * RW-151 client: note one derivation's full fill picture — the
+     * wire entries actually sent, the target ids they name, and
+     * the fillable subset of that target.
+     */
+    fun noteFillDerivation(
+        wireCells: List<String>,
+        targetIds: Set<String>,
+        fillableIds: Set<String>
+    ) {
+        fillWireCells = wireCells
+        fillTargetCells = targetIds
+        fillableCells = fillableIds
     }
 
     /** Subscriber forecast fill (server refuses non-entitled users). */
@@ -551,6 +621,24 @@ class PersonalHeroRepository @Inject constructor(
         // unreachable (personalization is off) and they hold only
         // expired signed URLs. The requested-set sweep above covers the
         // generated ones.
+        // RW-137 S4c (DESIGN §4.8 closure item 3): the deleted
+        // identity must not silently re-authenticate OR quietly
+        // re-derive its state on this phone. The session keys go
+        // (access / refresh / user id — clearSession), so the next
+        // bootstrap mints a genuinely fresh anonymous session; and
+        // the identity-scoped fill state goes with it — the
+        // persisted coverage target would otherwise be restored by
+        // the next refresh and re-applied to the NEW uid, and the
+        // in-memory fill picture (target / fillable / wire /
+        // reconciled sets, reference paths, engagement set, selfie
+        // epoch inputs) all described the deleted identity.
+        preferencesRepository.remove(KEY_FILL_TARGET_CELLS)
+        fillTargetCells = emptySet()
+        fillableCells = emptySet()
+        fillWireCells = emptyList()
+        lastReconciledWireCells = emptyList()
+        lastReferencePaths = null
+        engagementEnsured.clear()
         service.clearSession()
         _state.value = PersonalState(forkDecided = _state.value.forkDecided, synced = true)
     }

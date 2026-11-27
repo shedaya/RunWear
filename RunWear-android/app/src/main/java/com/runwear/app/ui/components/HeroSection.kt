@@ -26,6 +26,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.PhotoLibrary
+import androidx.compose.material.icons.outlined.SaveAlt
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Icon
@@ -311,6 +313,10 @@ fun HeroSection(
     scrollOffset: Float = 0f,
     onLocationClick: () -> Unit,
     onSettingsClick: () -> Unit,
+    /** RW-168 (Nov 11, 2026): the share button beside the gear +
+     * its menu of existing entries. Null = no share chrome (render
+     * proofs that do not wire it). */
+    shareActions: HeroShareActions? = null,
     /** RW-133: tapping the photo opens the full-screen viewer. */
     onHeroPhotoClick: () -> Unit = {},
     /** Hero-flag affordance: shown only when a hero photo is displayed. */
@@ -530,6 +536,12 @@ fun HeroSection(
     val chromeAlpha = HeroScrollHandoff.chromeAlpha(handoff)
     val chromeInteractive = HeroScrollHandoff.chromeInteractive(handoff)
 
+    // RW-168: the share menu's open state — the menu renders
+    // in-hierarchy as this Box's last child (scrim + floating
+    // card under the chrome row), so it is part of the hero's
+    // own composition.
+    var shareMenuOpen by remember { mutableStateOf(false) }
+
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -704,33 +716,85 @@ fun HeroSection(
         // its label is the SimplePlace form (WS-4), normalized at
         // this render boundary so a raw geocode string can never
         // reach it.
-        Row(
+        // RW-169 §7C (Nov 11, 2026 — diagnosis D11): top chrome as
+        // ONE negotiating layout. The pre-fix construction was a
+        // Row(Arrangement.SpaceBetween) whose middle child (the
+        // share button) was anchored to nothing — its position was
+        // the residual of the row's distribution, a function of
+        // the place pill's weighted slot and the viewport width —
+        // so in the folded-portrait class it landed ON the
+        // wordmark. Now, in ONE layout pass (BoxWithConstraints):
+        // the place pill claims its natural width on the left, the
+        // share+gear pair is ONE end-group composable at the row's
+        // end with a CONSTANT offset, and the centred wordmark
+        // zone is RESERVED — when pill + zone + pair cannot fit
+        // one row, the pill drops to its own row beneath the
+        // chrome row (the layout changes, never the text: the
+        // place name is fixed-claim, §7B).
+        val placeDisplay = com.runwear.shared.domain.model.SimplePlace
+            .fromRawDisplayString(locationName).display
+        val chromeTextMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
+        val chromeDensity = LocalDensity.current
+        val placeTextWidthDp = with(chromeDensity) {
+            chromeTextMeasurer.measure(
+                text = placeDisplay,
+                style = androidx.compose.ui.text.TextStyle(
+                    fontSize = 13.5.sp,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                )
+            ).size.width.toDp().value
+        }
+        val pillNaturalWidthDp = HeroChromePolicy.placePillWidthDp(placeTextWidthDp)
+        androidx.compose.foundation.layout.BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
                 .padding(16.dp)
-                .graphicsLayer { alpha = chromeAlpha },
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .graphicsLayer { alpha = chromeAlpha }
         ) {
-            // RW-144 place pill: warm-black chrome fill (24,20,16)
-            // at alpha 84, cream outline at alpha 30, pin + place
-            // name in cream — the v8 chrome language.
-            HeroPlacePill(
-                text = com.runwear.shared.domain.model.SimplePlace
-                    .fromRawDisplayString(locationName).display,
-                onClick = onLocationClick,
-                enabled = chromeInteractive,
-                modifier = Modifier.weight(1f, fill = false)
+            val rowWidthDp = maxWidth.value
+            val stacked = HeroChromePolicy.useStackedLayout(
+                rowWidthDp = rowWidthDp,
+                pillWidthDp = pillNaturalWidthDp,
+                hasShare = shareActions != null
             )
-
-            Spacer(Modifier.width(8.dp))
-
-            // RW-144: settings gear in a circle of the same chrome.
-            HeroGearButton(
-                onClick = onSettingsClick,
-                enabled = chromeInteractive
-            )
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (!stacked) {
+                        // RW-144 place pill: warm-black chrome fill
+                        // (24,20,16) at alpha 84, cream outline at
+                        // alpha 30, pin + place name in cream — the
+                        // v8 chrome language. Fixed-claim: natural
+                        // width, no weight, no truncation.
+                        HeroPlacePill(
+                            text = placeDisplay,
+                            onClick = onLocationClick,
+                            enabled = chromeInteractive
+                        )
+                    }
+                    Spacer(Modifier.weight(1f))
+                    // The pair, end-grouped as ONE composable at
+                    // the row's end (the iOS [Spacer][share][gear]
+                    // structural binding is the model).
+                    HeroChromeEndGroup(
+                        shareActions = shareActions,
+                        onShare = { shareMenuOpen = true },
+                        onSettingsClick = onSettingsClick,
+                        enabled = chromeInteractive
+                    )
+                }
+                if (stacked) {
+                    Spacer(Modifier.height(8.dp))
+                    HeroPlacePill(
+                        text = placeDisplay,
+                        onClick = onLocationClick,
+                        enabled = chromeInteractive
+                    )
+                }
+            }
         }
 
         // 4b. RW-144: the date/time CHIP — one translucent pill,
@@ -896,6 +960,33 @@ fun HeroSection(
                 }
             }
         }
+
+        // RW-168: the share menu overlay — a tap-catching scrim
+        // over the hero (any tap outside the card dismisses) and
+        // the floating card itself, seated under the chrome row
+        // at the top end: status inset + the row's 16dp padding
+        // + the 38dp button + an 8dp gap.
+        if (shareMenuOpen && shareActions != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(
+                        interactionSource = remember {
+                            androidx.compose.foundation.interaction
+                                .MutableInteractionSource()
+                        },
+                        indication = null
+                    ) { shareMenuOpen = false }
+            )
+            HeroShareMenuCard(
+                actions = shareActions,
+                onDismiss = { shareMenuOpen = false },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .statusBarsPadding()
+                    .padding(top = 62.dp, end = 16.dp)
+            )
+        }
     }
 }
 
@@ -971,6 +1062,239 @@ fun HeroGearButton(
             modifier = Modifier
                 .padding(9.dp)
                 .size(20.dp)
+        )
+    }
+}
+
+/**
+ * RW-168 (Sol, Nov 11, 2026): the home share menu's doors — all
+ * three are EXISTING surfaces/actions, no new feature: the RW-158
+ * "Share this day" sheet for the current day, the Wear I've Run
+ * collection, and a direct save of today's card to the photo roll.
+ * [outfitEnabled] is false when no current-day entry exists yet —
+ * the two entry-bound doors rest disabled; the collection door is
+ * always live.
+ */
+/**
+ * RW-169 \u00a77C: the top chrome's negotiating-layout policy \u2014 pure,
+ * so the folded-portrait fixture is unit-testable without a
+ * composition. The wordmark's centred zone is a RESERVED width in
+ * the same pass that seats the pill and the pair; the pair's
+ * internal offset is a constant, never a distribution residual.
+ */
+object HeroChromePolicy {
+
+    /** The centred wordmark zone ("RunWear" at 40sp Great Vibes
+     * plus air) reserved in every chrome layout pass. */
+    const val WORDMARK_ZONE_DP: Float = 140f
+
+    /** Each chrome circle (share, gear). */
+    const val BUTTON_DP: Float = 38f
+
+    /** The pair's internal gap \u2014 the share button's offset from
+     * the gear is THIS constant at every viewport class. */
+    const val PAIR_GAP_DP: Float = 8f
+
+    /** Minimum air between the pill / the pair and the reserved
+     * wordmark zone. */
+    const val ZONE_GAP_DP: Float = 8f
+
+    /** The end-group's width: gear alone, or share + gap + gear. */
+    fun endGroupWidthDp(hasShare: Boolean): Float =
+        if (hasShare) BUTTON_DP + PAIR_GAP_DP + BUTTON_DP else BUTTON_DP
+
+    /** A place pill's natural width from its measured text width:
+     * horizontal padding (13dp x2) + pin (15dp) + pin gap (6dp). */
+    fun placePillWidthDp(textWidthDp: Float): Float =
+        textWidthDp + 13f + 13f + 15f + 6f
+
+    /** The centre zone's [start, end] within a row of [rowWidthDp]. */
+    fun wordmarkZone(rowWidthDp: Float): Pair<Float, Float> {
+        val start = (rowWidthDp - WORDMARK_ZONE_DP) / 2f
+        return start to start + WORDMARK_ZONE_DP
+    }
+
+    /**
+     * Whether pill + reserved zone + pair fit ONE row: the pill's
+     * right edge must clear the zone's start (minus air) and the
+     * pair's left edge must clear the zone's end (plus air). When
+     * they cannot fit, the layout changes (stacked) \u2014 the text
+     * never truncates (\u00a77B: the place name is fixed-claim).
+     */
+    fun useStackedLayout(
+        rowWidthDp: Float,
+        pillWidthDp: Float,
+        hasShare: Boolean
+    ): Boolean {
+        val (zoneStart, zoneEnd) = wordmarkZone(rowWidthDp)
+        val pillClears = pillWidthDp <= zoneStart - ZONE_GAP_DP
+        val pairLeft = rowWidthDp - endGroupWidthDp(hasShare)
+        val pairClears = pairLeft >= zoneEnd + ZONE_GAP_DP
+        return !(pillClears && pairClears)
+    }
+
+    /** The share button's offset from the gear (dp): constant. */
+    fun shareOffsetFromGearDp(hasShare: Boolean): Float =
+        if (hasShare) PAIR_GAP_DP + BUTTON_DP else 0f
+}
+
+/**
+ * RW-169 \u00a77C: the share+gear pair as ONE composable, seated at
+ * the chrome row's end. The share button's position is defined
+ * ONLY relative to the gear (a fixed [HeroChromePolicy.PAIR_GAP_DP]
+ * gap) \u2014 it is anchored to the pair, never to the row's
+ * distribution (diagnosis D11).
+ */
+@Composable
+fun HeroChromeEndGroup(
+    shareActions: HeroShareActions?,
+    onShare: () -> Unit,
+    onSettingsClick: () -> Unit,
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (shareActions != null) {
+            HeroShareButton(
+                onClick = onShare,
+                enabled = enabled
+            )
+            Spacer(Modifier.width(HeroChromePolicy.PAIR_GAP_DP.dp))
+        }
+        HeroGearButton(
+            onClick = onSettingsClick,
+            enabled = enabled
+        )
+    }
+}
+
+data class HeroShareActions(
+    val onShareOutfit: () -> Unit,
+    val onShareFromCollection: () -> Unit,
+    val onSaveToPhotos: () -> Unit,
+    val outfitEnabled: Boolean = true
+)
+
+/**
+ * RW-168: the share button in the hero's top-right chrome — the
+ * gear's own chrome circle (38dp, warm-black fill, cream outline,
+ * cream glyph) carrying a share glyph.
+ */
+@Composable
+fun HeroShareButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
+) {
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier.size(38.dp),
+        shape = CircleShape,
+        color = com.runwear.app.ui.theme.HeroChromeInk.copy(alpha = 84f / 255f),
+        border = BorderStroke(
+            1.dp, com.runwear.app.ui.theme.PhotoInk.copy(alpha = 30f / 255f)
+        )
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Share,
+            contentDescription = "Share",
+            tint = com.runwear.app.ui.theme.PhotoInk,
+            modifier = Modifier
+                .padding(9.dp)
+                .size(20.dp)
+        )
+    }
+}
+
+/**
+ * RW-168: the share menu card — a floating card on the app
+ * ground system (Surface, 16dp radius, 1dp ink hairline, 16dp
+ * soft shadow — the RW-152 boundary/depth standard, never a
+ * rectangular block), carrying the three existing doors.
+ */
+@Composable
+fun HeroShareMenuCard(
+    actions: HeroShareActions,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = com.runwear.app.ui.theme.RunWearColors.Surface,
+        border = BorderStroke(
+            1.dp,
+            com.runwear.app.ui.theme.RunWearColors.TextPrimary
+                .copy(alpha = 0.09f)
+        ),
+        shadowElevation = 16.dp,
+        modifier = modifier.width(236.dp)
+    ) {
+        Column(Modifier.padding(vertical = 8.dp)) {
+            HeroShareMenuRow(
+                icon = Icons.Outlined.Share,
+                label = "Share this outfit",
+                enabled = actions.outfitEnabled,
+                onClick = {
+                    onDismiss()
+                    actions.onShareOutfit()
+                }
+            )
+            HeroShareMenuRow(
+                icon = Icons.Outlined.PhotoLibrary,
+                label = "Share from collection",
+                enabled = true,
+                onClick = {
+                    onDismiss()
+                    actions.onShareFromCollection()
+                }
+            )
+            HeroShareMenuRow(
+                icon = Icons.Outlined.SaveAlt,
+                label = "Save to photos",
+                enabled = actions.outfitEnabled,
+                onClick = {
+                    onDismiss()
+                    actions.onSaveToPhotos()
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun HeroShareMenuRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    val ink = if (enabled) {
+        com.runwear.app.ui.theme.RunWearColors.TextPrimary
+    } else {
+        com.runwear.app.ui.theme.RunWearColors.TextSecondary
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = enabled) { onClick() }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = ink,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(Modifier.width(12.dp))
+        Text(
+            text = label,
+            style = androidx.compose.material3.MaterialTheme.typography.bodyLarge,
+            color = ink
         )
     }
 }

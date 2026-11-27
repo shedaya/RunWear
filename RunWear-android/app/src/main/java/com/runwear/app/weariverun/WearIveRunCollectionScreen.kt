@@ -28,6 +28,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DirectionsRun
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -35,6 +36,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -95,11 +100,53 @@ fun WearIveRunCollectionScreen(
     /** RW-122: delete every entry under one place. */
     onDeletePlace: (String) -> Unit = {},
     /** RW-133: open an entry's stored photograph full-screen. */
-    onViewPhoto: (WearIveRunDayEntry) -> Unit = {}
+    onViewPhoto: (WearIveRunDayEntry) -> Unit = {},
+    /**
+     * RW-152 §3 (Nov 10, 2026): the HeroRefResolver's re-sign seam
+     * — a suspend call that turns a personal-heroes Storage path
+     * into a fresh signed display URL at render time. Null in
+     * render proofs (their refs are stable file URLs, which pass
+     * through the resolver untouched).
+     */
+    heroResign: (suspend (String) -> String?)? = null,
+    /**
+     * RW-166 (Nov 10, 2026): the bank re-link recovery seam —
+     * resolves an entry that settled with NO hero reference to
+     * its own banked hero (HeroRecovery). The gender segment
+     * defaults from [gender] (the same key the cells were banked
+     * under), so hosts that already pass both seams share the
+     * recovery automatically; render proofs may override or
+     * leave it.
+     */
+    heroRecovery: HeroRecoverySeam? = null,
+    /** RW-166: a recovery hit is persisted on the entry through
+     * here (the host's store heal), so it happens once. */
+    onHeroRecovered: (WearIveRunDayEntry, String) -> Unit = { _, _ -> },
+    /** RW-168: the host's tracked share-card selection, seeded
+     * into this screen's sheet (see ShareStudioSheet). */
+    shareInitialKind: ShareArtifactKind = ShareArtifactKind.MORNING_POSTER,
+    shareInitialFormat: ShareExportFormat = ShareExportFormat.FEED,
+    onShareKindSelected: (ShareArtifactKind) -> Unit = {},
+    onShareFormatSelected: (ShareExportFormat) -> Unit = {}
 ) {
+
     var filter by remember { mutableStateOf(WearWeatherFilter.ALL) }
     var openChapter by remember { mutableStateOf<String?>(null) }
     var shareEntry by remember { mutableStateOf<WearIveRunDayEntry?>(null) }
+    // RW-152 §4 / J1 (owner ruling, Nov 9, 2026): deleting a PAST
+    // entry requires a confirmation NAMING the place and the date;
+    // today's entry stays one-tap (it re-settles; a past entry
+    // never does, and deletion is device-local and unrecoverable).
+    var pendingPastDelete by remember {
+        mutableStateOf<WearIveRunDayEntry?>(null)
+    }
+    val requestDelete: (WearIveRunDayEntry) -> Unit = { entry ->
+        if (entry.date == today) {
+            onDeleteEntry(entry)
+        } else {
+            pendingPastDelete = entry
+        }
+    }
 
     // GEN-3 (X-5): the pinned TODAY card IS today's latest settled
     // entry — the same shared resolution the mini bar's holder
@@ -182,12 +229,15 @@ fun WearIveRunCollectionScreen(
                         onShare = { shareEntry = it },
                         temperatureUnit = temperatureUnit,
                         modifier = Modifier.weight(1f),
-                        onDeleteEntry = onDeleteEntry,
+                        onDeleteEntry = requestDelete,
                         onDeletePlace = { place ->
                             onDeletePlace(place)
                             openChapter = null
                         },
-                        onViewPhoto = onViewPhoto
+                        onViewPhoto = onViewPhoto,
+                        heroResign = heroResign,
+                        heroRecovery = heroRecovery,
+                        onHeroRecovered = onHeroRecovered
                     )
                 } else if (entries.isEmpty()) {
                     HonestEmptyState(modifier = Modifier.weight(1f))
@@ -228,7 +278,11 @@ fun WearIveRunCollectionScreen(
                                                 System.currentTimeMillis()
                                             ),
                                         temperatureUnit = temperatureUnit,
-                                        onDelete = { onDeleteEntry(pinnedTodayEntry) },
+                                        pinned = true,
+                                        heroResign = heroResign,
+                                        heroRecovery = heroRecovery,
+                                        onHeroRecovered = onHeroRecovered,
+                                        onDelete = { requestDelete(pinnedTodayEntry) },
                                         onPhotoClick = { onViewPhoto(pinnedTodayEntry) },
                                         onView = if (
                                             listChapters.any {
@@ -249,7 +303,17 @@ fun WearIveRunCollectionScreen(
                                     chapter = ch,
                                     onClick = { openChapter = ch.place },
                                     onShare = { shareEntry = it },
-                                    temperatureUnit = temperatureUnit
+                                    temperatureUnit = temperatureUnit,
+                                    heroResign = heroResign,
+                                    // RW-152 §4 / J2: the cover's
+                                    // trash deletes the cover
+                                    // (representative) entry ONLY —
+                                    // never the whole place group.
+                                    onDelete = ch.cover?.let { coverEntry ->
+                                        { requestDelete(coverEntry) }
+                                    },
+                                    heroRecovery = heroRecovery,
+                                    onHeroRecovered = onHeroRecovered
                                 )
                             }
                         }
@@ -265,7 +329,50 @@ fun WearIveRunCollectionScreen(
             entry = entry,
             gender = gender,
             temperatureUnit = temperatureUnit,
-            onDismiss = { shareEntry = null }
+            onDismiss = { shareEntry = null },
+            heroResign = heroResign,
+            heroRecovery = heroRecovery,
+            onHeroRecovered = { path -> onHeroRecovered(entry, path) },
+            // RW-158: the sheet's poster preview is the eye's new
+            // home — tapping it opens the entry's full photo
+            // (RW-133) through the same host door as before.
+            onViewPhoto = onViewPhoto,
+            initialKind = shareInitialKind,
+            initialFormat = shareInitialFormat,
+            onKindSelected = onShareKindSelected,
+            onFormatSelected = onShareFormatSelected
+        )
+    }
+
+    // RW-152 §4 / J1: the past-entry delete confirmation — it
+    // NAMES the place and the date, and says plainly that the
+    // entry is stored only on this device and deleting cannot
+    // be undone.
+    pendingPastDelete?.let { entry ->
+        AlertDialog(
+            onDismissRequest = { pendingPastDelete = null },
+            title = { Text("Delete this entry?") },
+            text = {
+                Text(
+                    "Delete the ${entry.place} entry from " +
+                        entry.date.format(
+                            DateTimeFormatter.ofPattern("EEE, MMM d, yyyy", Locale.US)
+                        ) +
+                        "? This entry is stored only on this device, " +
+                        "and deleting it cannot be undone."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingPastDelete = null
+                    onDeleteEntry(entry)
+                }) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingPastDelete = null }) {
+                    Text("Keep")
+                }
+            }
         )
     }
 }
@@ -318,65 +425,74 @@ private fun HonestEmptyState(modifier: Modifier = Modifier) {
 }
 
 /**
- * GEN-6 Wave B: a collection cover — the NEW Morning Poster in
- * FEED format, composed at its canvas size and scaled into the
- * cover slot. Covers are DISPLAY, not export: the hero loads via
- * [rememberHeroBitmap], the anchor is the entry's stored anchor
- * or the default composition point, and no face detection runs.
+ * RW-152 §3 (Nov 10, 2026): the ONE collection thumbnail loader.
+ * Chapter covers and stay cards load the entry's photo DIRECTLY
+ * (Coil AsyncImage, top/centre crop per the settled poster
+ * framing, decoded at display size x2) through [HeroRefResolver]
+ * — the 360x450 MorningPoster composition is no longer rendered
+ * into a thumbnail slot; it remains only where a poster is the
+ * product (share/export). An entry with no loadable reference
+ * keeps the honest empty slot (tinted ground + run glyph).
  */
 @Composable
-private fun PosterCover(
+internal fun CollectionThumbnail(
     entry: WearIveRunDayEntry,
-    temperatureUnit: TemperatureUnit,
+    heroResign: (suspend (String) -> String?)? = null,
+    /** RW-166: the bank re-link recovery seam (HeroRecovery). */
+    heroRecovery: HeroRecoverySeam? = null,
+    /** RW-166: a recovery hit is persisted through here. */
+    onHeroRecovered: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val hero = rememberHeroBitmap(entry.heroRef)
-    val today = remember { LocalDate.now() }
-    val input = remember(entry, temperatureUnit) {
-        ShareCaptionInput.forEntry(entry, temperatureUnit, today, LocalDateTime.now())
+    var recovered by remember(entry) { mutableStateOf(false) }
+    // RW-169 §7E.4: held resolution — a re-settle rewriting this
+    // entry's reference never returns the slot to empty while the
+    // successor resolves.
+    val url = rememberHeldResolvedHeroUrl(
+        entry, heroResign, heroRecovery
+    ) { path ->
+        recovered = true
+        onHeroRecovered(path)
     }
-    val forms = remember(entry, today) {
-        ShareMomentResolver.forms(
-            reading = ShareMomentResolver.readingFor(entry),
-            dayStart = entry.date,
-            lastSavedAt = LocalDateTime.ofInstant(
-                Instant.ofEpochMilli(entry.settledAtMillis), ZoneId.systemDefault()
-            ),
-            now = LocalDateTime.now(),
-            today = today
-        )
-    }
-    val anchor = entry.faceAnchor ?: ShareFaceAnchor.DEFAULT_UPPER_MIDDLE
-    val cropped = remember(hero, anchor) {
-        hero?.let { ShareAnchorCrop.cropBitmap(it, anchor, ShareExportFormat.FEED.aspect) }
-    }
-    BoxWithConstraints(modifier = modifier.clipToBounds()) {
-        val scale = maxWidth.value / 360f
-        Box(
-            // RW-99 (Nov 6, 2026): the canvas MUST compose at its
-            // full 360x450 design size and be scaled down by the
-            // graphics layer. width()/height() are coercible — the
-            // cover slot's constraints (46x58 / 58x72) shrank the
-            // canvas itself to slot size, so the poster's
-            // fixed-canvas content clipped to a top-left fragment
-            // (the walkthrough's tiny broken remnant on every
-            // collection card). requiredWidth/requiredHeight hold
-            // the design size against the slot; the slot-sized,
-            // clipped wrapper bounds the scaled render.
-            modifier = Modifier.requiredWidth(360.dp).requiredHeight(450.dp)
-                .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                    transformOrigin = TransformOrigin(0f, 0f)
-                }
-        ) {
-            MorningPoster(
-                entry = entry,
-                input = input,
-                posterMoment = forms.poster,
-                format = ShareExportFormat.FEED,
-                heroBitmap = cropped,
-                faceAnchor = anchor
+    BoxWithConstraints(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(RunWearColors.Surface)
+            .semantics {
+                contentDescription =
+                    if (HeroRefResolver.hasLoadableReference(entry) ||
+                        recovered || url != null
+                    ) {
+                        "Entry photo"
+                    } else {
+                        "No photo for this entry"
+                    }
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        if (url != null) {
+            val context = LocalContext.current
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            val widthPx = with(density) { maxWidth.toPx() }.toInt().coerceAtLeast(1)
+            val heightPx = with(density) { maxHeight.toPx() }.toInt().coerceAtLeast(1)
+            AsyncImage(
+                model = ImageRequest.Builder(context)
+                    .data(url)
+                    // Display size x2 — never a full-resolution
+                    // decode for a thumbnail slot.
+                    .size(widthPx * 2, heightPx * 2)
+                    .build(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                alignment = Alignment.TopCenter,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            Icon(
+                Icons.Outlined.DirectionsRun,
+                contentDescription = null,
+                tint = RunWearColors.TextSecondary,
+                modifier = Modifier.size(26.dp)
             )
         }
     }
@@ -387,7 +503,16 @@ internal fun ChapterCover(
     chapter: WearIveRunCollectionLogic.Chapter,
     onClick: () -> Unit,
     onShare: (WearIveRunDayEntry) -> Unit = {},
-    temperatureUnit: TemperatureUnit = TemperatureUnit.FAHRENHEIT
+    temperatureUnit: TemperatureUnit = TemperatureUnit.FAHRENHEIT,
+    /** RW-152 §3: the resolver's re-sign seam. */
+    heroResign: (suspend (String) -> String?)? = null,
+    /** RW-152 §4 / J2: trash for the cover (representative) entry
+     * only. Null = no delete affordance. */
+    onDelete: (() -> Unit)? = null,
+    /** RW-166: the bank re-link recovery seam (HeroRecovery). */
+    heroRecovery: HeroRecoverySeam? = null,
+    /** RW-166: a recovery hit is persisted through here. */
+    onHeroRecovered: (WearIveRunDayEntry, String) -> Unit = { _, _ -> }
 ) {
     Surface(
         shape = RoundedCornerShape(16.dp),
@@ -395,28 +520,29 @@ internal fun ChapterCover(
         modifier = Modifier.fillMaxWidth().clickable { onClick() }
     ) {
         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                // GEN-5 (RW-29 FA-41): the settled chapter cover
-                // geometry — the design's chapter row carries a
-                // 58x72 PORTRAIT thumbnail (mockups .chap img).
-                // GEN-6 Wave B: the slot now renders the NEW
-                // Morning Poster (Feed) as the chapter's cover.
-                modifier = Modifier.width(58.dp).height(72.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(RunWearColors.Surface),
-                contentAlignment = Alignment.Center
-            ) {
-                val cover = chapter.cover
-                if (cover != null) {
-                    PosterCover(
-                        entry = cover,
-                        temperatureUnit = temperatureUnit,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    // GEN-5 (Miami crash addendum): a cover-less
-                    // chapter's designed treatment — the tinted slot
-                    // carries the run glyph, never a bare blank.
+            // GEN-5 (RW-29 FA-41): the settled chapter cover
+            // geometry — a 58x72 PORTRAIT thumbnail. RW-152 §3:
+            // the slot is a direct photo load through the
+            // resolver (CollectionThumbnail), not a composed
+            // poster; a cover-less chapter keeps the glyph slot.
+            val cover = chapter.cover
+            if (cover != null) {
+                CollectionThumbnail(
+                    entry = cover,
+                    heroResign = heroResign,
+                    heroRecovery = heroRecovery,
+                    onHeroRecovered = { path ->
+                        onHeroRecovered(cover, path)
+                    },
+                    modifier = Modifier.width(58.dp).height(72.dp)
+                )
+            } else {
+                Box(
+                    modifier = Modifier.width(58.dp).height(72.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(RunWearColors.Surface),
+                    contentAlignment = Alignment.Center
+                ) {
                     Icon(
                         Icons.Outlined.DirectionsRun,
                         contentDescription = null,
@@ -489,6 +615,18 @@ internal fun ChapterCover(
                     color = RunWearColors.TextSecondary
                 )
             }
+            // RW-152 §4: every chapter cover carries the same
+            // trash affordance the TODAY card has, bound to
+            // removeByIdentity for the cover entry ONLY (J2).
+            if (onDelete != null && chapter.cover != null) {
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        Icons.Outlined.Delete,
+                        contentDescription = "Delete the ${chapter.place} cover entry",
+                        tint = RunWearColors.TextSecondary
+                    )
+                }
+            }
         }
     }
 }
@@ -505,7 +643,13 @@ internal fun ChapterDetail(
     /** RW-122: delete the whole location group (this chapter). */
     onDeletePlace: ((String) -> Unit)? = null,
     /** RW-133: open an entry's stored photograph full-screen. */
-    onViewPhoto: ((WearIveRunDayEntry) -> Unit)? = null
+    onViewPhoto: ((WearIveRunDayEntry) -> Unit)? = null,
+    /** RW-152 §3: the resolver's re-sign seam. */
+    heroResign: (suspend (String) -> String?)? = null,
+    /** RW-166: the bank re-link recovery seam (HeroRecovery). */
+    heroRecovery: HeroRecoverySeam? = null,
+    /** RW-166: a recovery hit is persisted through here. */
+    onHeroRecovered: (WearIveRunDayEntry, String) -> Unit = { _, _ -> }
 ) {
     LazyColumn(
         modifier = modifier.padding(horizontal = 16.dp),
@@ -572,6 +716,16 @@ internal fun ChapterDetail(
                                     onShare = { onShare(day) },
                                     onDelete = onDeleteEntry?.let {
                                         { it(day) }
+                                    },
+                                    // RW-158 (user ruling,
+                                    // Nov 10, 2026): a PAST day's
+                                    // row tap opens its share
+                                    // studio; today's row is
+                                    // unchanged.
+                                    onRowTap = if (day.date != today) {
+                                        { onShare(day) }
+                                    } else {
+                                        null
                                     }
                                 )
                             }
@@ -609,7 +763,19 @@ internal fun ChapterDetail(
                         onShare = { onShare(day) },
                         onDelete = onDeleteEntry?.let { { it(day) } },
                         onPhotoClick = onViewPhoto?.let { { it(day) } },
-                        temperatureUnit = temperatureUnit
+                        // RW-158 (user ruling, Nov 10, 2026): a
+                        // PAST day's card tap opens the share
+                        // studio for that day; today's card keeps
+                        // the RW-133 full-photo tap.
+                        onCardTap = if (day.date != today) {
+                            { onShare(day) }
+                        } else {
+                            null
+                        },
+                        temperatureUnit = temperatureUnit,
+                        heroResign = heroResign,
+                        heroRecovery = heroRecovery,
+                        onHeroRecovered = onHeroRecovered
                     )
                 }
             }
@@ -627,10 +793,23 @@ private fun DayRow(
     // RW-122: per-entry delete (the collection previously offered
     // no delete at all). One tap, no confirmation — the same
     // behaviour as the home section's trash.
-    onDelete: (() -> Unit)? = null
+    onDelete: (() -> Unit)? = null,
+    // RW-158 (user ruling, Nov 10, 2026): a PAST day's row tap
+    // opens the share studio for that day. Wired only by the
+    // chapter detail's hometown rows; the DayCard's own DayRow
+    // leaves it null (the card carries the tap there).
+    onRowTap: (() -> Unit)? = null
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        modifier = Modifier.fillMaxWidth()
+            .then(
+                if (onRowTap != null) {
+                    Modifier.clickable { onRowTap() }
+                } else {
+                    Modifier
+                }
+            )
+            .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
@@ -692,47 +871,60 @@ internal fun DayCard(
     /** RW-133: open the entry's stored photograph full-screen.
      * Wired only when the entry carries a photo reference. */
     onPhotoClick: (() -> Unit)? = null,
-    temperatureUnit: TemperatureUnit = TemperatureUnit.FAHRENHEIT
+    /** RW-158 (user ruling, Nov 10, 2026): pressing a PAST entry
+     * opens the share studio for that entry directly — the card
+     * tap routes here when set, ahead of the photo. Today's card
+     * is never given this (its tap keeps the RW-133 photo). */
+    onCardTap: (() -> Unit)? = null,
+    temperatureUnit: TemperatureUnit = TemperatureUnit.FAHRENHEIT,
+    /** RW-152 §3: the pinned TODAY variant is a FLAG on the one
+     * DayCard, not a different call — place == null no longer
+     * means "no image slot"; every stay card carries the slot. */
+    pinned: Boolean = false,
+    /** RW-152 §3: the resolver's re-sign seam. */
+    heroResign: (suspend (String) -> String?)? = null,
+    /** RW-166: the bank re-link recovery seam (HeroRecovery). */
+    heroRecovery: HeroRecoverySeam? = null,
+    /** RW-166: a recovery hit is persisted through here. */
+    onHeroRecovered: (WearIveRunDayEntry, String) -> Unit = { _, _ -> }
 ) {
     Surface(
         shape = RoundedCornerShape(14.dp),
         color = RunWearColors.BgCard,
-        modifier = if (onPhotoClick != null && entry.heroRef != null) {
-            Modifier.clickable { onPhotoClick() }
-        } else {
-            Modifier
+        modifier = when {
+            // RW-158: a past entry's card tap opens its share
+            // studio (the caller wires this only for past days).
+            onCardTap != null -> Modifier.clickable { onCardTap() }
+            onPhotoClick != null && entry.heroRef != null ->
+                Modifier.clickable { onPhotoClick() }
+            else -> Modifier
         }
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            if (place != null) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                ) {
-                    Box(
-                        // GEN-5 (RW-29 FA-41/L-5): the day-row
-                        // thumbnail takes the design's 46x58
-                        // portrait geometry (.dayrow img).
-                        // GEN-6 Wave B: the slot renders the NEW
-                        // Morning Poster (Feed) as the cover.
-                        modifier = Modifier.width(46.dp).height(58.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(RunWearColors.Surface),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        PosterCover(
-                            entry = entry,
-                            temperatureUnit = temperatureUnit,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    Text(
-                        text = place,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = RunWearColors.TextPrimary
-                    )
-                }
+            // RW-152 §3: ONE DayCard — the place + thumbnail row
+            // renders for every entry (the pinned TODAY card is
+            // the same card with pinned = true); the place falls
+            // back to the entry's own place, and the slot is the
+            // direct resolver load (46x58 geometry, GEN-5 FA-41).
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(bottom = 8.dp)
+            ) {
+                CollectionThumbnail(
+                    entry = entry,
+                    heroResign = heroResign,
+                    heroRecovery = heroRecovery,
+                    onHeroRecovered = { path ->
+                        onHeroRecovered(entry, path)
+                    },
+                    modifier = Modifier.width(46.dp).height(58.dp)
+                )
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    text = place ?: entry.place,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = RunWearColors.TextPrimary
+                )
             }
             DayRow(
                 entry = entry, today = today, onShare = onShare,

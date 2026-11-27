@@ -2002,7 +2002,16 @@ fun UnifiedWeatherDetail(
     locationName: String,
     momentLabel: String,
     runningTip: String?,
-    comfortPreference: com.runwear.shared.domain.model.ComfortPreference
+    comfortPreference: com.runwear.shared.domain.model.ComfortPreference,
+    /** RW-167 (Nov 11, 2026): the home scroll renders this
+     * detail INLINED, and the same scroll's Pro Tip card
+     * (TipsSection) renders outfit.tips.first — the tip row is
+     * suppressed in the inlined home call only. The weather
+     * SHEET keeps its tip (default true). Suppression is a flag,
+     * never a null tip: null falls back to
+     * [WeatherSheetCopy.fallbackTip] and would render a
+     * different generic tip in the row's place. */
+    showRunningTip: Boolean = true
 ) {
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -2036,20 +2045,22 @@ fun UnifiedWeatherDetail(
         DetailRow(com.runwear.app.i18n.AppStrings.weatherLabelHumidity(), "${weather.humidity}%")
         DetailRow(com.runwear.app.i18n.AppStrings.weatherLabelUv(), "${weather.uvIndex.toInt()}")
         DetailRow(com.runwear.app.i18n.AppStrings.weatherLabelPrecip(), com.runwear.app.i18n.AppStrings.weatherPrecipValue(weather.precipitationProbability))
-        Spacer(Modifier.height(16.dp))
-        Text(
-            text = com.runwear.app.i18n.AppStrings.weatherRunningTip(),
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = RunWearColors.PineAccent
-        )
-        Text(
-            text = runningTip ?: WeatherSheetCopy.fallbackTip(weather),
-            fontSize = 14.sp,
-            color = RunWearColors.TextSecondary,
-            lineHeight = 20.sp,
-            modifier = Modifier.padding(top = 4.dp)
-        )
+        if (showRunningTip) {
+            Spacer(Modifier.height(16.dp))
+            Text(
+                text = com.runwear.app.i18n.AppStrings.weatherRunningTip(),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = RunWearColors.PineAccent
+            )
+            Text(
+                text = runningTip ?: WeatherSheetCopy.fallbackTip(weather),
+                fontSize = 14.sp,
+                color = RunWearColors.TextSecondary,
+                lineHeight = 20.sp,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+        }
     }
 }
 

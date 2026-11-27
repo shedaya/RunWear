@@ -317,14 +317,14 @@ Every run, remembered — run, weather or not. #RunAnyWear · @runwear.ai</strin
     <string name="share_disclosure">As an Amazon Associate, RunWear earns from qualifying purchases.</string>
     <string name="share_this_day">Share this day</string>
     <string name="share_choose_card">Choose the card for %1$s — %2$s.</string>
-    <string name="share_card_morning_poster">Morning Poster</string>
+    <string name="share_card_morning_poster">Postcard</string>
     <string name="share_kit_card">Kit Card</string>
     <string name="share_rendering">Rendering previews…</string>
     <string name="share_couldnt_share">Couldn\'t share this card — try again.</string>
     <string name="share_render_timeout">Couldn\'t render this card — it took too long.</string>
     <string name="share_render_photo_fail">Couldn\'t render this card — its photo couldn\'t be loaded.</string>
     <string name="share_render_retry">Couldn\'t render this card — try again.</string>
-    <string name="share_photo_blocked">This day\'s photo couldn\'t load — the Morning Poster can\'t be shared until it does.</string>
+    <string name="share_photo_blocked">This day\'s photo couldn\'t load — the Postcard can\'t be shared until it does.</string>
     <string name="share_caption_label">Caption</string>
     <string name="share_render_dirty">This card didn\'t render cleanly — try again</string>
     <string name="share_look_failed">Your %1$s couldn\'t be made.</string>

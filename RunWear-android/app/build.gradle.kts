@@ -53,8 +53,8 @@ android {
         // line takes vc20 for its half of the 1.2.5 train.
         // GEN-5 Android release 2026-11-05 (RW-28): 1.2.21 / vc36.
         // GEN-6: 1.2.22 / vc37. FOLLOWING BUILD 2026-11-06: 1.2.23 / vc38.
-        versionCode = 45
-        versionName = "1.2.30"
+        versionCode = 53
+        versionName = "1.2.38"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -197,4 +197,10 @@ dependencies {
     testImplementation("androidx.test:core-ktx:1.6.1")
     testImplementation("androidx.test.ext:junit-ktx:1.2.1")
     testImplementation("androidx.work:work-testing:2.9.1")
+    // RW-169 §7F: the instrumented save-to-photos test (real
+    // MediaStore, app/src/androidTest) — runs on a device or
+    // emulator via connectedDebugAndroidTest; CI has no
+    // instrumented path (see the lane report).
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
 }

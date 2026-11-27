@@ -37,9 +37,15 @@ import javax.inject.Singleton
  * the verified JWT and accepts no user id from the caller.
  *
  * Identity: RunWear has no account system (spec J6 — per-user identity
- * is keyed to the install), so the client obtains an anonymous Supabase
- * Auth session and persists it in the app's DataStore. The anonymous
- * user is a real auth.users row: RLS owner policies apply unchanged.
+ * is keyed to the install for free users; keyed to the subscription
+ * for Premium, RW-137 DESIGN §6), so the client obtains an anonymous
+ * Supabase Auth session and persists it in the app's DataStore. The
+ * anonymous user is a real auth.users row: RLS owner policies apply
+ * unchanged. A Premium restore can re-key a prior identity's data
+ * into the restored session's uid — server-side, on RevenueCat proof
+ * only (see [reconcileEntitlement] / [requestIdentityAdoption]); the
+ * client never claims an identity, it only passes the server's own
+ * reported source back as a lookup hint.
  *
  * Anonymous sign-ins are ENABLED on the project (verified 2026-10-31:
  * Sol's device runs a live anonymous session on this path). If a
@@ -54,7 +60,7 @@ import javax.inject.Singleton
  * app's critical path — untouched.
  */
 @Singleton
-class PersonalHeroService @Inject constructor(
+open class PersonalHeroService @Inject constructor(
     private val preferencesRepository: PreferencesRepository
 ) {
     private val json = Json { ignoreUnknownKeys = true }
@@ -102,14 +108,14 @@ class PersonalHeroService @Inject constructor(
         preferencesRepository.setString(KEY_USER_ID, session.userId)
     }
 
-    suspend fun clearSession() {
+    open suspend fun clearSession() {
         preferencesRepository.remove(KEY_ACCESS_TOKEN)
         preferencesRepository.remove(KEY_REFRESH_TOKEN)
         preferencesRepository.remove(KEY_USER_ID)
     }
 
     /** The current session's user id, if a session exists (no network). */
-    suspend fun currentUserId(): String? = storedSession()?.userId
+    open suspend fun currentUserId(): String? = storedSession()?.userId
 
     /**
      * Ensure a usable session: reuse a non-expired token, refresh an
@@ -118,7 +124,7 @@ class PersonalHeroService @Inject constructor(
      * sign-ins disabled server-side) — callers treat false as "personal
      * layer unavailable".
      */
-    suspend fun ensureSession(): Boolean = session() != null
+    open suspend fun ensureSession(): Boolean = session() != null
 
     private suspend fun session(): Session? = sessionMutex.withLock {
         val existing = storedSession()
@@ -395,23 +401,27 @@ class PersonalHeroService @Inject constructor(
      * change.
      */
     /**
-     * RW-137 (DESIGN §4.4.2) + RW-179c: the reconcile's outcome —
-     * whether the call completed, and the prior identity the
-     * response names as adoptable (`adoption_available`), when
+     * RW-137 (DESIGN §4.4 trigger 2) + RW-179c: the reconcile's
+     * outcome — whether the call completed, and the prior identity
+     * the response names as adoptable (`adoption_available`), when
      * RevenueCat proof links this entitled identity to a previous
-     * uid. Additive and optional by contract: an absent field is
-     * the pre-RW-137 response and means "no adoption", never an
-     * error. (Before RW-179c this method returned only a Boolean
-     * and discarded the body — the adoption the response offered
-     * was never requested, and a restored subscription's bank
-     * stayed keyed to the previous install's uid.)
+     * uid. [completed] is the pre-RW-137 Boolean contract (the call
+     * completed and the caller should re-read the profile).
+     * [adoptionAvailable] is that server-reported source uid —
+     * null when the response carries no adoption hint (including
+     * every pre-RW-137 server payload: the field is additive and
+     * absent means "no adoption", never an error). (Before RW-179c
+     * the Android reconcile returned only a Boolean and discarded
+     * the body — the adoption the response offered was never
+     * requested, and a restored subscription's bank stayed keyed
+     * to the previous install's uid.)
      */
     data class ReconcileOutcome(
         val completed: Boolean,
-        val adoptionSourceUserId: String?
+        val adoptionAvailable: String? = null
     )
 
-    suspend fun reconcileEntitlement(): ReconcileOutcome {
+    open suspend fun reconcileEntitlement(): ReconcileOutcome {
         // GEN-5 (RW-28 Addendum 8, Item 4a): name this client's
         // platform so the function's RevenueCat lookup queries the
         // matching storefront view instead of a hard-coded one.
@@ -419,29 +429,37 @@ class PersonalHeroService @Inject constructor(
             "reconcile-personal-entitlement", "{\"platform\":\"android\"}"
         )
         val body = (result as? FunctionResult.Ok)?.body
-            ?: return ReconcileOutcome(completed = false, adoptionSourceUserId = null)
+            ?: return ReconcileOutcome(completed = false)
         return ReconcileOutcome(
             completed = true,
-            adoptionSourceUserId = body["adoption_available"]?.jsonPrimitive?.contentOrNull
+            adoptionAvailable = parseAdoptionAvailable(body)
         )
     }
 
     /**
-     * RW-137 (DESIGN §4.4.2/§4.4.3): ask the server to re-key the
-     * hinted source identity's personal layer into the caller's.
-     * The endpoint re-verifies the RevenueCat proof server-side —
-     * the client's hint is never trusted — so every failure here
-     * is swallowed by the caller: a wrong or stale hint is a
-     * silent no-op by design, and the next reconcile asks again.
-     * The source uid travels as `source_user_id` — the deployed
-     * function's field name (the wire contract; see the iOS
+     * RW-137 (DESIGN §4.4 trigger 2) + RW-179c: ask the server
+     * to execute the adoption the reconcile response reported —
+     * re-keying the hinted source identity's personal layer into
+     * the caller's. [sourceUserId] is a LOOKUP HINT only —
+     * request-identity-adoption re-verifies the RevenueCat proof
+     * server-side before re-keying anything (the client's hint is
+     * never trusted), so a stale or wrong hint degrades to a
+     * silent no-op server-side. Every failure here is likewise a
+     * silent no-op for the caller: adoption is a standing Premium
+     * property, never a user-facing flow, and there is no error
+     * state to render. True only when the endpoint confirmed the
+     * adoption executed. The source uid travels as
+     * `source_user_id` — the deployed function's field name (the
+     * wire contract; see the iOS
      * PersonalHeroRequests.identityAdoptionBody mirror).
      */
-    suspend fun requestIdentityAdoption(sourceUserId: String): Boolean =
-        callFunction(
-            "request-identity-adoption",
-            "{\"source_user_id\":\"$sourceUserId\"}"
-        ) is FunctionResult.Ok
+    open suspend fun requestIdentityAdoption(sourceUserId: String): Boolean {
+        // GEN-5 Item 4a discipline, same as reconcile: name this
+        // client's platform — the endpoint's RevenueCat lookup
+        // defaults to the iOS storefront view when it is absent.
+        val body = """{"source_user_id":"$sourceUserId","platform":"android"}"""
+        return callFunction("request-identity-adoption", body) is FunctionResult.Ok
+    }
 
     data class DeleteOutcome(val storageRemoved: Int, val totalRowsRemoved: Int)
 
@@ -471,7 +489,7 @@ class PersonalHeroService @Inject constructor(
      * the data is gone but the account is not, and the user's retry
      * completes it.
      */
-    suspend fun deleteMyData(): DataDeleteOutcome? {
+    open suspend fun deleteMyData(): DataDeleteOutcome? {
         val result = callFunction("delete-my-data", "{}")
         val body = (result as? FunctionResult.Ok)?.body ?: return null
         if (body["account_deleted"]?.jsonPrimitive?.booleanOrNull != true) return null
@@ -493,7 +511,7 @@ class PersonalHeroService @Inject constructor(
         val gender: String
     )
 
-    suspend fun fetchProfile(): ProfileSnapshot? {
+    open suspend fun fetchProfile(): ProfileSnapshot? {
         val session = session() ?: return null
         return runCatching {
             val response = http.get(
@@ -542,13 +560,25 @@ class PersonalHeroService @Inject constructor(
          * finished, and the band must retire instead of announcing
          * generation that no longer exists.
          */
-        val failed: Int = 0
+        val failed: Int = 0,
+        /**
+         * RW-151 client (Nov 10, 2026): whether the account holds
+         * any NON-TERMINAL generation job (QUEUED / PROCESSING) as
+         * of this read — the reconcile rule's in-flight input. A
+         * band that shows outstanding work while this is false and
+         * no fill is outstanding must re-issue the fill once
+         * instead of presenting "making" with nothing in flight.
+         */
+        val hasNonTerminalJob: Boolean = false
     ) {
         /** Target cells neither delivered nor terminally failed. */
         val outstanding: Int get() = (total - ready - failed).coerceAtLeast(0)
     }
 
-    suspend fun fetchBankCoverage(targetCells: Set<String>): BankCoverage? {
+    suspend fun fetchBankCoverage(
+        targetCells: Set<String>,
+        fillableCells: Set<String> = emptySet()
+    ): BankCoverage? {
         val session = session() ?: return null
         suspend fun cells(table: String): Set<String>? = runCatching {
             val response = http.get(
@@ -589,7 +619,16 @@ class PersonalHeroService @Inject constructor(
             .filter { it.second == "FAILED" }
             .map { it.first }
             .toSet() - heroCells
-        return deriveBankCoverage(heroCells, jobCells, targetCells, failedCells)
+        // RW-151 client: QUEUED / PROCESSING are the non-terminal
+        // states (COMPLETED / FAILED are terminal) — the reconcile
+        // rule reads in-flight truth from this same jobs read.
+        val hasNonTerminalJob = jobStatuses.any {
+            it.second == "QUEUED" || it.second == "PROCESSING"
+        }
+        return deriveBankCoverage(
+            heroCells, jobCells, targetCells, failedCells,
+            fillableCells, hasNonTerminalJob
+        )
     }
 
     /**
@@ -626,8 +665,48 @@ class PersonalHeroService @Inject constructor(
         return heroCells to jobStatuses
     }
 
+    /**
+     * RW-166 (Nov 10, 2026): the bank as combination_id →
+     * storage_path, WITHOUT signing — the Wear I've Run re-link
+     * recovery's lookup table (HeroRecovery). The same
+     * owner-read personal_heroes table [fetchBankCells] reads;
+     * ordered by combination_id so the first row per cell wins
+     * deterministically, as on iOS. Null when the read fails —
+     * recovery then simply does not happen and the entry stays
+     * honestly empty.
+     */
+    suspend fun fetchBankHeroPaths(): Map<String, String>? {
+        val session = session() ?: return null
+        return runCatching {
+            val response = http.get(
+                "$BASE_URL/rest/v1/personal_heroes" +
+                    "?select=combination_id,storage_path" +
+                    "&order=combination_id.asc"
+            ) {
+                header("apikey", ANON_KEY)
+                header("Authorization", "Bearer ${session.accessToken}")
+            }
+            if (!response.status.isSuccess()) return@runCatching null
+            val paths = LinkedHashMap<String, String>()
+            json.parseToJsonElement(response.bodyAsText()).jsonArray
+                .forEach { row ->
+                    val id = row.jsonObject["combination_id"]
+                        ?.jsonPrimitive?.contentOrNull
+                    val path = row.jsonObject["storage_path"]
+                        ?.jsonPrimitive?.contentOrNull
+                    if (id != null && !path.isNullOrBlank() &&
+                        !paths.containsKey(id)
+                    ) {
+                        paths[id] = path
+                    }
+                }
+            paths
+        }.onFailure { Log.w(TAG, "bank hero paths read failed", it) }
+            .getOrNull()
+    }
+
     /** The caller's registered reference-photo storage paths, in order. */
-    suspend fun fetchReferencePaths(): List<String> {
+    open suspend fun fetchReferencePaths(): List<String> {
         val session = session() ?: return emptyList()
         return runCatching {
             val response = http.get(
@@ -712,15 +791,31 @@ internal fun deriveBankCoverage(
     heroCells: Set<String>,
     jobCells: Set<String>,
     targetCells: Set<String> = emptySet(),
-    failedCells: Set<String> = emptySet()
+    failedCells: Set<String> = emptySet(),
+    /**
+     * RW-151 client (Nov 10, 2026; DESIGN.md §5): the FILLABLE set.
+     * Empty (the default, for callers that predate the amendment)
+     * means every target cell is treated as fillable — the
+     * pre-amendment denominator. When supplied, the denominator is
+     * |Target ∩ Fillable| only: a cell the fill contract cannot
+     * enqueue can never again hold the band open.
+     */
+    fillableCells: Set<String> = emptySet(),
+    hasNonTerminalJob: Boolean = false
 ): PersonalHeroService.BankCoverage =
     if (targetCells.isNotEmpty()) {
+        val denominator = if (fillableCells.isEmpty()) {
+            targetCells
+        } else {
+            targetCells intersect fillableCells
+        }
         PersonalHeroService.BankCoverage(
             ready = heroCells.count { it in targetCells },
-            total = targetCells.size,
+            total = denominator.size,
             // RW-126: terminally failed target cells (recorded,
             // no hero) are settled — they never hold the band open.
-            failed = failedCells.count { it in targetCells }
+            failed = failedCells.count { it in targetCells },
+            hasNonTerminalJob = hasNonTerminalJob
         )
     } else {
         // RW-FIXWAVE (architecture review §2 row 19): NO engaged-
@@ -736,6 +831,25 @@ internal fun deriveBankCoverage(
         // PersonalHeroRepository) so the window is one read long.
         PersonalHeroService.BankCoverage(ready = 0, total = 0, failed = 0)
     }
+
+/**
+ * RW-137 (DESIGN §4.4 trigger 2): the reconcile response's
+ * adoption hint — `adoption_available` as a nullable string field
+ * (additive: absent, null, non-string, or blank all mean "no
+ * adoption reported"). Pure, so the client half of the reconcile
+ * contract is unit-pinned without a network. Whether the hint is
+ * acted on is [IdentityAdoptionPolicy]'s decision; whether it is
+ * TRUE is the server's — request-identity-adoption re-verifies
+ * against RevenueCat before re-keying anything.
+ */
+internal fun parseAdoptionAvailable(body: JsonObject): String? {
+    // Only a STRING primitive is a uid hint — a numeric/boolean
+    // value must not coerce into one (contentOrNull would happily
+    // stringify it).
+    val primitive = body["adoption_available"]?.jsonPrimitive
+    if (primitive == null || !primitive.isString) return null
+    return primitive.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
+}
 
 /**
  * GEN-5 (RW-28 Addendum 8, Defect 1): the start-personal-fill
