@@ -404,7 +404,10 @@ private struct PickedPhoto: Identifiable {
 /// (§30) and was swapped the same day (§31, Sol: "Why not a
 /// runner instead of topless person"): a licensed stock photo
 /// of a marathon runner (Pexels 1643096, RUN 4 FFWPU) that
-/// passes the RW-180 intake checks itself. The caption is
+/// passes the RW-180 intake checks itself. Recropped tighter
+/// Nov 26 (§32, Sol: "crop it closer in, make it portrait"):
+/// a 2:3 head-and-shoulders crop anchored on the face — face
+/// area 0.300 of frame (was 0.162). The caption is
 /// the settled example line (Sol's framing: better light,
 /// close up).
 private struct MakeItMeExampleCard: View {

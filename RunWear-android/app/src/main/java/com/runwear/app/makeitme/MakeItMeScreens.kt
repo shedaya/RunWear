@@ -1038,7 +1038,9 @@ internal fun MakeItMeUploadFlow(
  * swapped the same day (§31, Sol: "Why not a runner instead of
  * topless person"): a licensed stock photo of a marathon runner
  * (Pexels 1643096, RUN 4 FFWPU) that passes the RW-180 intake
- * checks itself.
+ * checks itself. Recropped tighter Nov 26 (§32, Sol: "crop it
+ * closer in, make it portrait"): a 2:3 head-and-shoulders crop
+ * anchored on the face — face area 0.303 of frame (was 0.160).
  * The caption is the settled C2K line (Sol's framing: better
  * light, close up).
  */
