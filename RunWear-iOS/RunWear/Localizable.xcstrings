@@ -83888,6 +83888,39 @@
           }
         }
       }
+    },
+    "mim_example_caption": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A good one looks like this: face close up, in good light, straight at the camera."
+          }
+        }
+      }
+    },
+    "mim_example_placeholder": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Example photo"
+          }
+        }
+      }
+    },
+    "mim_reject_low_resolution": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "That photo is too small for us to read your face from. Retake it with the camera, or pick the original full-size photo."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

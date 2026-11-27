@@ -65,8 +65,36 @@ object PhotoQualityChecker {
         val largestFaceWidthFraction: Float,
         val meanLuminance: Double,
         val maxAbsHeadTurnDegrees: Float,
-        val subjectHeadRollDegrees: Float = 0f
+        val subjectHeadRollDegrees: Float = 0f,
+        /**
+         * RW-180 (Nov 26, 2026): the subject face region's own
+         * mean luminance — the backlit reading. Defaults to the
+         * frame mean (ratio 1.0, no backlit signal) for callers
+         * that cannot measure a region (the live path fills it
+         * from the Y plane; a still fills it from the bitmap).
+         */
+        val faceMeanLuminance: Double = meanLuminance,
+        /**
+         * RW-180: the ORIGINAL image's short edge / pixel count,
+         * read from the source bounds before any downscale — the
+         * resolution floor's inputs. MAX = unmeasured (passes).
+         */
+        val imageShortEdgePx: Int = Int.MAX_VALUE,
+        val imagePixelCount: Long = Long.MAX_VALUE
     )
+
+    /** The source image's original pixel dimensions, bounds-only. */
+    private fun sourceSize(context: Context, uri: Uri): Pair<Int, Int>? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        context.contentResolver.openInputStream(uri)?.use {
+            BitmapFactory.decodeStream(it, null, bounds)
+        }
+        return if (bounds.outWidth > 0 && bounds.outHeight > 0) {
+            bounds.outWidth to bounds.outHeight
+        } else {
+            null
+        }
+    }
 
     /** Measure one photo (same decode + ML Kit path as [check]). */
     suspend fun measure(context: Context, uri: Uri): Measurements? =
@@ -75,12 +103,23 @@ object PhotoQualityChecker {
             try {
                 val faces = detectFacesDetailed(bitmap)
                 val subject = faces.maxByOrNull { it.widthFraction }
+                val frameLuminance = meanLuminance(bitmap)
+                val source = sourceSize(context, uri)
                 Measurements(
                     faceCount = faces.size,
                     largestFaceWidthFraction = subject?.widthFraction ?: 0f,
-                    meanLuminance = meanLuminance(bitmap),
+                    meanLuminance = frameLuminance,
                     maxAbsHeadTurnDegrees = faces.maxOfOrNull { kotlin.math.abs(it.headEulerY) } ?: 0f,
-                    subjectHeadRollDegrees = subject?.headEulerZ ?: 0f
+                    subjectHeadRollDegrees = subject?.headEulerZ ?: 0f,
+                    faceMeanLuminance = subject?.let {
+                        meanLuminance(bitmap, it.boundingBox)
+                    } ?: frameLuminance,
+                    imageShortEdgePx = source?.let {
+                        minOf(it.first, it.second)
+                    } ?: Int.MAX_VALUE,
+                    imagePixelCount = source?.let {
+                        it.first.toLong() * it.second.toLong()
+                    } ?: Long.MAX_VALUE
                 )
             } finally {
                 bitmap.recycle()
@@ -90,7 +129,8 @@ object PhotoQualityChecker {
     private data class FaceMeasure(
         val widthFraction: Float,
         val headEulerY: Float,
-        val headEulerZ: Float
+        val headEulerZ: Float,
+        val boundingBox: android.graphics.Rect
     )
 
     private suspend fun detectFacesDetailed(bitmap: Bitmap): List<FaceMeasure> {
@@ -109,7 +149,8 @@ object PhotoQualityChecker {
                                     widthFraction = face.boundingBox.width().toFloat() /
                                         bitmap.width.toFloat().coerceAtLeast(1f),
                                     headEulerY = face.headEulerAngleY,
-                                    headEulerZ = face.headEulerAngleZ
+                                    headEulerZ = face.headEulerAngleZ,
+                                    boundingBox = android.graphics.Rect(face.boundingBox)
                                 )
                             }
                         )
@@ -145,16 +186,31 @@ object PhotoQualityChecker {
                     }
                 }
                 val subject = faces.maxByOrNull { it.widthFraction }
+                val frameLuminance = meanLuminance(bitmap)
+                // RW-180: the resolution floor reads the SOURCE
+                // bounds (this bitmap is already downscaled).
+                val source = sourceSize(context, uri)
                 val rejection = PhotoQualityPolicy.decide(
                     faceCount = faces.size,
                     largestFaceWidthFraction = subject?.widthFraction ?: 0f,
-                    meanLuminance = meanLuminance(bitmap),
+                    meanLuminance = frameLuminance,
                     subjectHeadRollDegrees = subject?.headEulerZ ?: 0f,
                     // GEN-6 (RW-50): head-turn is judged on upload
                     // too (§10.4) — the subject face's yaw against
                     // the guided capture's straight-on gate.
                     maxAbsHeadTurnDegrees = subject?.headEulerY
-                        ?.let { kotlin.math.abs(it) } ?: 0f
+                        ?.let { kotlin.math.abs(it) } ?: 0f,
+                    // RW-180: the face's own light (backlit class)
+                    // and the source resolution floor.
+                    faceMeanLuminance = subject?.let {
+                        meanLuminance(bitmap, it.boundingBox)
+                    } ?: frameLuminance,
+                    imageShortEdgePx = source?.let {
+                        minOf(it.first, it.second)
+                    } ?: Int.MAX_VALUE,
+                    imagePixelCount = source?.let {
+                        it.first.toLong() * it.second.toLong()
+                    } ?: Long.MAX_VALUE
                 )
                 if (rejection != null) {
                     CheckResult(rejection, null)
@@ -236,13 +292,26 @@ object PhotoQualityChecker {
     }
 
     /** Mean relative luminance (0.0–1.0) over a coarse pixel sample. */
-    private fun meanLuminance(bitmap: Bitmap): Double {
+    private fun meanLuminance(bitmap: Bitmap): Double =
+        meanLuminance(bitmap, null)
+
+    /**
+     * RW-180: mean luminance over one region of the bitmap (the
+     * subject face's box) — the face's own light reading, against
+     * which the backlit rule is judged. A null or empty region
+     * reads the whole frame.
+     */
+    private fun meanLuminance(bitmap: Bitmap, region: android.graphics.Rect?): Double {
+        val left = (region?.left ?: 0).coerceIn(0, bitmap.width - 1)
+        val top = (region?.top ?: 0).coerceIn(0, bitmap.height - 1)
+        val right = (region?.right ?: bitmap.width).coerceIn(left + 1, bitmap.width)
+        val bottom = (region?.bottom ?: bitmap.height).coerceIn(top + 1, bitmap.height)
         var sum = 0.0
         var count = 0
-        var y = 0
-        while (y < bitmap.height) {
-            var x = 0
-            while (x < bitmap.width) {
+        var y = top
+        while (y < bottom) {
+            var x = left
+            while (x < right) {
                 val pixel = bitmap.getPixel(x, y)
                 val r = (pixel shr 16) and 0xFF
                 val g = (pixel shr 8) and 0xFF

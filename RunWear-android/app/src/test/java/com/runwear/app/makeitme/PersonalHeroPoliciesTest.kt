@@ -346,8 +346,10 @@ class PersonalHeroPoliciesTest {
     fun `face too small is its own rejection class with the settled copy (RW-50)`() {
         // GEN-6 (RW-50): the gen-5 enum had NO face-too-small
         // class, so §10.4's settled copy could never render. A face
-        // below the guided checks' own minimum fraction (0.18) now
-        // rejects as FACE_TOO_SMALL.
+        // below the guided checks' own minimum fraction now
+        // rejects as FACE_TOO_SMALL. (The fraction itself was
+        // raised 0.18 → 0.30 by RW-180; this test pins the class
+        // and the boundary via the constant, not the number.)
         assertEquals(
             PhotoRejection.FACE_TOO_SMALL,
             PhotoQualityPolicy.decide(
@@ -365,6 +367,87 @@ class PersonalHeroPoliciesTest {
         assertEquals(
             "Your face is small in that photo — A closer selfie works best — a mirror selfie is great too. Or let the camera guide you…",
             PhotoQualityPolicy.stringFor(PhotoRejection.FACE_TOO_SMALL)
+        )
+    }
+
+    // ── RW-180 (Nov 26, 2026): the input-quality lines, grounded
+    // in the calibration's four measured references. ─────────────
+
+    @Test
+    fun `the calibration's far-away reference now rejects as face too small (RW-180)`() {
+        // The reference that produced the bad Make It Me batch:
+        // 960x1280, face-width fraction 0.272, frame luminance
+        // 0.405, face luminance 0.440 — it PASSED every old line
+        // (0.18 face floor included). At the raised 0.30 floor it
+        // rejects FACE_TOO_SMALL — and NOT too-low-resolution: its
+        // 960 px short edge and 1.23 MP clear the resolution floor,
+        // so the framing verdict is the one it earns.
+        assertEquals(
+            PhotoRejection.FACE_TOO_SMALL,
+            PhotoQualityPolicy.decide(
+                faceCount = 1, largestFaceWidthFraction = 0.272f,
+                meanLuminance = 0.405, faceMeanLuminance = 0.440,
+                imageShortEdgePx = 960, imagePixelCount = 960L * 1280L
+            )
+        )
+    }
+
+    @Test
+    fun `the calibration's accepted references pass every RW-180 line`() {
+        // Clara is the tightest accepted reference: fraction
+        // 0.324, frame 0.446, face 0.351 (ratio 0.79), 1536x2048.
+        assertNull(
+            PhotoQualityPolicy.decide(
+                faceCount = 1, largestFaceWidthFraction = 0.324f,
+                meanLuminance = 0.446, faceMeanLuminance = 0.351,
+                imageShortEdgePx = 1536, imagePixelCount = 1536L * 2048L
+            )
+        )
+    }
+
+    @Test
+    fun `a backlit face rejects as too dark even in a bright frame (RW-180)`() {
+        // Face mean 0.20 against a 0.50 frame (ratio 0.40): the
+        // frame mean alone would have passed this photo.
+        assertEquals(
+            PhotoRejection.TOO_DARK,
+            PhotoQualityPolicy.decide(
+                faceCount = 1, largestFaceWidthFraction = 0.35f,
+                meanLuminance = 0.5, faceMeanLuminance = 0.20
+            )
+        )
+        // An underexposed face in a dim-but-passing frame.
+        assertEquals(
+            PhotoRejection.TOO_DARK,
+            PhotoQualityPolicy.decide(
+                faceCount = 1, largestFaceWidthFraction = 0.35f,
+                meanLuminance = 0.17, faceMeanLuminance = 0.10
+            )
+        )
+    }
+
+    @Test
+    fun `a well-framed but tiny source rejects as too low resolution (RW-180)`() {
+        assertEquals(
+            PhotoRejection.TOO_LOW_RESOLUTION,
+            PhotoQualityPolicy.decide(
+                faceCount = 1, largestFaceWidthFraction = 0.35f,
+                meanLuminance = 0.5,
+                imageShortEdgePx = 640, imagePixelCount = 640L * 480L
+            )
+        )
+        // At the floor exactly: acceptable.
+        assertNull(
+            PhotoQualityPolicy.decide(
+                faceCount = 1, largestFaceWidthFraction = 0.35f,
+                meanLuminance = 0.5,
+                imageShortEdgePx = PhotoQualityPolicy.MIN_IMAGE_SHORT_EDGE_PX,
+                imagePixelCount = PhotoQualityPolicy.MIN_IMAGE_PIXELS
+            )
+        )
+        assertEquals(
+            MakeItMeStrings.C3J_REJECT_LOW_RESOLUTION,
+            PhotoQualityPolicy.stringFor(PhotoRejection.TOO_LOW_RESOLUTION)
         )
     }
 

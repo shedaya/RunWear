@@ -342,12 +342,23 @@ extension GuidedSelfieCameraModel: AVCaptureVideoDataOutputSampleBufferDelegate 
             .max() ?? 0
         let yaw = faces.first.map { Double(truncating: $0.yaw ?? 0) * 180 / .pi } ?? 90
         let luminance = SelfieGuidanceLuminance.mean(of: pixelBuffer)
+        // RW-180: the subject (largest) face region's own mean —
+        // the Light chip's backlit reading, the same measurement
+        // PhotoQualityChecker makes on stills.
+        let subject = faces.max {
+            ($0.boundingBox.width * $0.boundingBox.height)
+                < ($1.boundingBox.width * $1.boundingBox.height)
+        }
+        let faceLuminance = subject.map {
+            SelfieGuidanceLuminance.mean(of: pixelBuffer, in: $0.boundingBox)
+        }
 
         let evaluation = SelfieGuidance.evaluate(
             faceCount: faces.count,
             largestFaceAreaRatio: largest,
             yawDegrees: yaw,
-            meanLuminance: luminance
+            meanLuminance: luminance,
+            faceMeanLuminance: faceLuminance
         )
         DispatchQueue.main.async { [weak self] in
             self?.evaluation = evaluation
@@ -381,7 +392,27 @@ enum SelfieGuidanceLuminance {
     private static let context = CIContext()
 
     static func mean(of pixelBuffer: CVPixelBuffer) -> Double {
+        average(of: CIImage(cvPixelBuffer: pixelBuffer))
+    }
+
+    /// RW-180: mean luminance over one normalized region of the
+    /// buffer (the subject face's Vision box — the backlit
+    /// reading). Vision's normalized box and CIImage's extent
+    /// share the bottom-left origin, so the crop is the box
+    /// scaled by the extent, as in PhotoQualityChecker.
+    static func mean(of pixelBuffer: CVPixelBuffer, in normalizedRect: CGRect) -> Double {
         let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+        let extent = ciImage.extent
+        let rect = CGRect(
+            x: extent.minX + normalizedRect.minX * extent.width,
+            y: extent.minY + normalizedRect.minY * extent.height,
+            width: normalizedRect.width * extent.width,
+            height: normalizedRect.height * extent.height
+        )
+        return average(of: ciImage.cropped(to: rect))
+    }
+
+    private static func average(of ciImage: CIImage) -> Double {
         guard let filter = CIFilter(name: "CIAreaAverage") else { return 1 }
         filter.setValue(ciImage, forKey: kCIInputImageKey)
         filter.setValue(CIVector(cgRect: ciImage.extent), forKey: kCIInputExtentKey)

@@ -47,6 +47,15 @@ enum PhotoQualityChecker {
         /// The subject (largest) face's in-plane roll, degrees —
         /// the F-1 gate's reading; 0 when no face was found.
         let faceRollDegrees: Double
+        /// RW-180 (Nov 26, 2026): the subject face region's own
+        /// mean luminance — the backlit reading; nil when no face
+        /// was found (the verdict then judges frame light only).
+        let faceMeanLuminance: Double?
+        /// RW-180: the image's pixel dimensions — the resolution
+        /// floor's inputs, read from the baked image (baking
+        /// preserves dimensions).
+        let pixelWidth: Int
+        let pixelHeight: Int
     }
 
     /// The unified intake result (mirror of Android's CheckResult):
@@ -117,13 +126,17 @@ enum PhotoQualityChecker {
             faceCount: measurement.faceCount,
             largestFaceAreaRatio: measurement.largestFaceAreaRatio,
             meanLuminance: measurement.meanLuminance,
-            faceRollDegrees: measurement.faceRollDegrees
+            faceRollDegrees: measurement.faceRollDegrees,
+            faceMeanLuminance: measurement.faceMeanLuminance,
+            pixelShortEdge: min(measurement.pixelWidth, measurement.pixelHeight),
+            pixelCount: measurement.pixelWidth * measurement.pixelHeight
         )
         let report = PhotoCheckReport.report(
             faceCount: measurement.faceCount,
             largestFaceAreaRatio: measurement.largestFaceAreaRatio,
             meanLuminance: measurement.meanLuminance,
-            faceRollDegrees: measurement.faceRollDegrees
+            faceRollDegrees: measurement.faceRollDegrees,
+            faceMeanLuminance: measurement.faceMeanLuminance
         )
         if let rejection {
             return CheckResult(rejection: rejection, uploadData: nil, report: report)
@@ -169,13 +182,39 @@ enum PhotoQualityChecker {
             faceCount: faces.count,
             largestFaceAreaRatio: largestFaceRatio,
             meanLuminance: meanLuminance(of: cgImage),
-            faceRollDegrees: rollDegrees
+            faceRollDegrees: rollDegrees,
+            // RW-180: the face region's own luminance. Vision's
+            // normalized box and CIImage's extent share the
+            // bottom-left origin, so the crop rect is the box
+            // scaled by the extent — no axis flip.
+            faceMeanLuminance: subject.map { face in
+                meanLuminance(of: cgImage, in: face.boundingBox)
+            },
+            pixelWidth: cgImage.width,
+            pixelHeight: cgImage.height
         )
     }
 
     /// Average luminance via CIAreaAverage over the whole frame.
     private static func meanLuminance(of cgImage: CGImage) -> Double {
+        averageLuminance(of: CIImage(cgImage: cgImage))
+    }
+
+    /// RW-180: average luminance over one normalized region of
+    /// the frame (the subject face's Vision box).
+    private static func meanLuminance(of cgImage: CGImage, in normalizedRect: CGRect) -> Double {
         let ciImage = CIImage(cgImage: cgImage)
+        let extent = ciImage.extent
+        let rect = CGRect(
+            x: extent.minX + normalizedRect.minX * extent.width,
+            y: extent.minY + normalizedRect.minY * extent.height,
+            width: normalizedRect.width * extent.width,
+            height: normalizedRect.height * extent.height
+        )
+        return averageLuminance(of: ciImage.cropped(to: rect))
+    }
+
+    private static func averageLuminance(of ciImage: CIImage) -> Double {
         guard let filter = CIFilter(name: "CIAreaAverage") else { return 1 }
         filter.setValue(ciImage, forKey: kCIInputImageKey)
         filter.setValue(CIVector(cgRect: ciImage.extent), forKey: kCIInputExtentKey)

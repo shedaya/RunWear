@@ -105,6 +105,18 @@ object MakeItMeStrings {
     // upright, never uploaded rotated (the server's `rotated` key is
     // the same verdict one layer up).
     const val C3G_REJECT_ROTATED = "This photo came out sideways. Retake it holding your phone upright, or pick a photo that's already upright."
+    // C3J added Nov 26, 2026 (RW-180): the resolution floor's line —
+    // the source image is too small for the generator to read the
+    // face from, however well it is framed. Authored to the C3
+    // pattern (failure-specific, camera offered first); iOS carries
+    // the identical sentence (mim_reject_low_resolution).
+    const val C3J_REJECT_LOW_RESOLUTION = "That photo is too small for us to read your face from. Retake it with the camera, or pick the original full-size photo."
+    // RW-180 (Nov 26, 2026): the example card's caption on the
+    // capture step — Sol's framing, verbatim in substance: better
+    // light, close up. The card shows what a good reference looks
+    // like BEFORE the user picks, not after a rejection.
+    const val C2K_EXAMPLE_CAPTION = "A good one looks like this: face close up, in good light, straight at the camera."
+    const val C2L_EXAMPLE_PLACEHOLDER = "Example photo"
 
     // G — First generation (spec §2.4). G3 (PROPOSAL P1) intentionally absent.
     // G4 was silence by spec — SUPERSEDED Nov 1, 2026 (RW-16.16, spec

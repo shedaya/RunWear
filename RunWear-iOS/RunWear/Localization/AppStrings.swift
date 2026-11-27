@@ -216,7 +216,10 @@ enum AppStrings {
         case "mim_pill_premium": return "Premium"
         case "mim_progress_subline": return "This usually takes a few minutes — the standard photo stays up until yours is done."
         case "mim_progress_title": return "Making this outfit yours…"
+        case "mim_example_caption": return "A good one looks like this: face close up, in good light, straight at the camera."
+        case "mim_example_placeholder": return "Example photo"
         case "mim_reject_face_too_small": return "Your face is small in that photo — A closer selfie works best — a mirror selfie is great too. Or let the camera guide you…"
+        case "mim_reject_low_resolution": return "That photo is too small for us to read your face from. Retake it with the camera, or pick the original full-size photo."
         case "mim_reject_face_unclear": return "We can't see your face clearly in this one. Try a photo without sunglasses or a hat shadow."
         case "mim_reject_multiple_people": return "This photo has more than one person in it. Pick one that's just you."
         case "mim_reject_rotated": return "This photo came out sideways. Retake it holding your phone upright, or pick a photo that's already upright."
@@ -918,7 +921,10 @@ enum AppStrings {
     static var mimPillPremium: String { raw("mim_pill_premium") }
     static var mimProgressSubline: String { raw("mim_progress_subline") }
     static var mimProgressTitle: String { raw("mim_progress_title") }
+    static var mimExampleCaption: String { raw("mim_example_caption") }
+    static var mimExamplePlaceholder: String { raw("mim_example_placeholder") }
     static var mimRejectFaceTooSmall: String { raw("mim_reject_face_too_small") }
+    static var mimRejectLowResolution: String { raw("mim_reject_low_resolution") }
     static var mimRejectFaceUnclear: String { raw("mim_reject_face_unclear") }
     static var mimRejectMultiplePeople: String { raw("mim_reject_multiple_people") }
     static var mimRejectRotated: String { raw("mim_reject_rotated") }

@@ -266,6 +266,76 @@ final class PersonalHeroTests: XCTestCase {
         )
     }
 
+    // MARK: - RW-180 (Nov 26, 2026): the input-quality lines,
+    // grounded in the calibration's four measured references.
+
+    func testPhotoVerdictCalibrationFarReferenceRejectsFaceTooSmall() {
+        // The reference that produced the bad Make It Me batch:
+        // 960x1280, face area share 0.087, frame luminance 0.405,
+        // face luminance 0.440 — it PASSED every old line (upload
+        // floor 0.02, guided target 0.08). At the raised 0.10
+        // floor it rejects .faceTooSmall — and NOT
+        // .tooLowResolution: 960 px / 1.23 MP clears that floor,
+        // so the framing verdict is the one it earns.
+        XCTAssertEqual(
+            PhotoQualityVerdict.rejection(
+                faceCount: 1, largestFaceAreaRatio: 0.087, meanLuminance: 0.405,
+                faceMeanLuminance: 0.440, pixelShortEdge: 960, pixelCount: 960 * 1280),
+            .faceTooSmall
+        )
+    }
+
+    func testPhotoVerdictCalibrationAcceptedReferencesPass() {
+        // Clara is the tightest accepted reference: area 0.116,
+        // frame 0.446, face 0.351 (ratio 0.79), 1536x2048.
+        XCTAssertNil(PhotoQualityVerdict.rejection(
+            faceCount: 1, largestFaceAreaRatio: 0.116, meanLuminance: 0.446,
+            faceMeanLuminance: 0.351, pixelShortEdge: 1536, pixelCount: 1536 * 2048))
+        // Sol: area 0.173, frame 0.447, face 0.428, 1530x2048.
+        XCTAssertNil(PhotoQualityVerdict.rejection(
+            faceCount: 1, largestFaceAreaRatio: 0.173, meanLuminance: 0.447,
+            faceMeanLuminance: 0.428, pixelShortEdge: 1530, pixelCount: 1530 * 2048))
+    }
+
+    func testPhotoVerdictBacklitFaceRejectsTooDark() {
+        // Face mean 0.20 against a 0.50 frame (ratio 0.40): the
+        // frame mean alone would have passed this photo.
+        XCTAssertEqual(
+            PhotoQualityVerdict.rejection(
+                faceCount: 1, largestFaceAreaRatio: 0.2, meanLuminance: 0.5,
+                faceMeanLuminance: 0.20),
+            .tooDark
+        )
+        // An underexposed face in a dim-but-passing frame.
+        XCTAssertEqual(
+            PhotoQualityVerdict.rejection(
+                faceCount: 1, largestFaceAreaRatio: 0.2, meanLuminance: 0.19,
+                faceMeanLuminance: 0.10),
+            .tooDark
+        )
+        // Unmeasured face light keeps the pre-RW-180 verdict.
+        XCTAssertNil(PhotoQualityVerdict.rejection(
+            faceCount: 1, largestFaceAreaRatio: 0.2, meanLuminance: 0.5))
+    }
+
+    func testPhotoVerdictLowResolutionFloor() {
+        XCTAssertEqual(
+            PhotoQualityVerdict.rejection(
+                faceCount: 1, largestFaceAreaRatio: 0.2, meanLuminance: 0.5,
+                pixelShortEdge: 640, pixelCount: 640 * 480),
+            .tooLowResolution
+        )
+        // At the floor exactly: acceptable.
+        XCTAssertNil(PhotoQualityVerdict.rejection(
+            faceCount: 1, largestFaceAreaRatio: 0.2, meanLuminance: 0.5,
+            pixelShortEdge: PhotoQualityVerdict.minimumShortEdgePixels,
+            pixelCount: PhotoQualityVerdict.minimumPixelCount))
+        XCTAssertEqual(
+            PhotoRejection.tooLowResolution.specString,
+            "That photo is too small for us to read your face from. Retake it with the camera, or pick the original full-size photo."
+        )
+    }
+
     func testPhotoRejectionStringsAreTheSpecDeck() {
         // Spec §7 C3a–d, verbatim — pinned so a copy edit in code
         // without a spec change fails loudly.

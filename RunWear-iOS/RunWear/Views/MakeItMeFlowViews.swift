@@ -394,6 +394,60 @@ private struct PickedPhoto: Identifiable {
     }
 }
 
+/// RW-180 (Nov 26, 2026): the reference-photo EXAMPLE card on
+/// the capture step. The slot renders the bundled asset
+/// "MakeItMeExampleGood" (a well-lit, close-up, front-on
+/// example); if that asset is ever missing, the slot falls back
+/// to a clearly-labelled placeholder treatment — the coaching
+/// oval over a neutral ground with the placeholder label —
+/// never a fake person's photo. The asset landed Nov 26, 2026
+/// (§30) and was swapped the same day (§31, Sol: "Why not a
+/// runner instead of topless person"): a licensed stock photo
+/// of a marathon runner (Pexels 1643096, RUN 4 FFWPU) that
+/// passes the RW-180 intake checks itself. Recropped tighter
+/// Nov 26 (§32, Sol: "crop it closer in, make it portrait"):
+/// a 2:3 head-and-shoulders crop anchored on the face — face
+/// area 0.300 of frame (was 0.162). The caption is
+/// the settled example line (Sol's framing: better light,
+/// close up).
+private struct MakeItMeExampleCard: View {
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(AppTheme.cardOnSheet)
+                    .frame(width: 84, height: 112)
+                if let example = UIImage(named: "MakeItMeExampleGood") {
+                    Image(uiImage: example)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 84, height: 112)
+                        .clipped()
+                        .cornerRadius(12)
+                } else {
+                    Ellipse()
+                        .stroke(AppTheme.inkSecondary, lineWidth: 2)
+                        .frame(width: 56, height: 76)
+                    VStack {
+                        Spacer()
+                        Text(AppStrings.mimExamplePlaceholder)
+                            .font(.system(size: 10))
+                            .foregroundColor(AppTheme.inkSecondary)
+                            .padding(.bottom, 6)
+                    }
+                    .frame(width: 84, height: 112)
+                }
+            }
+            Text(AppStrings.mimExampleCaption)
+                .font(.system(size: 14))
+                .foregroundColor(AppTheme.inkPrimary)
+            Spacer()
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 16).fill(AppTheme.cardFill))
+    }
+}
+
 struct MakeItMeCaptureView: View {
     let isReplace: Bool
     @Binding var attested: Bool
@@ -456,6 +510,13 @@ struct MakeItMeCaptureView: View {
                 Text(AppStrings.flowPhotoGuidance)
                     .font(.system(size: 15))
                     .foregroundColor(AppTheme.inkSecondary)
+
+                // RW-180 (Nov 26, 2026): the example card — what a
+                // good reference looks like, shown BEFORE the user
+                // picks (Sol: "better light and close up images —
+                // maybe put an example"). Android carries the
+                // identical card in the identical seat.
+                MakeItMeExampleCard()
 
                 // GEN-5 (RW-28 item 18): the full-body guidance
                 // line no longer renders in intake — the settled

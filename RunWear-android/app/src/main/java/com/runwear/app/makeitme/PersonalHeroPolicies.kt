@@ -307,7 +307,13 @@ enum class PhotoRejection {
     /** GEN-6 WAVE A (RW-50): the head is turned away beyond the
      *  guided capture's straight-on gate — §10.4 judges head-turn
      *  on upload as well as in the guided checks. */
-    TURNED_AWAY
+    TURNED_AWAY,
+
+    /** RW-180 (Nov 26, 2026): the source image itself is too
+     *  small — below the resolution floor — so no crop of it can
+     *  carry the face detail the generator reads. Judged on the
+     *  ORIGINAL pixel dimensions, before any downscale. */
+    TOO_LOW_RESOLUTION
 }
 
 /**
@@ -339,12 +345,46 @@ object PhotoQualityPolicy {
     /** A face wider than this fraction of the frame is "cropped too close". */
     const val MAX_FACE_WIDTH_FRACTION: Float = 0.80f
 
+    /**
+     * RW-180 (Nov 26, 2026): the FACE's own mean luminance floor.
+     * The whole-frame mean can pass on a bright background while
+     * the face itself sits in shadow (backlit) — the dawn/dusk
+     * failure class the calibration kept hitting. Judged two ways:
+     * the face's absolute mean, and the face against its own frame
+     * (a face far darker than its surroundings is backlit however
+     * bright the frame reads). Grounding (Nov 26 calibration refs,
+     * measured): the three accepted references read face means
+     * 0.35–0.43 and face/frame ratios 0.79–1.02 — both lines sit
+     * well clear of them.
+     */
+    const val MIN_FACE_MEAN_LUMINANCE: Double = 0.14
+
+    /** Face mean below this fraction of the frame mean = backlit. */
+    const val MIN_FACE_TO_FRAME_LUMINANCE_RATIO: Double = 0.60
+
+    /**
+     * RW-180: the resolution floor, judged on the ORIGINAL image
+     * (the checker downscales for measurement; the floor reads the
+     * source bounds). Below ~1 MP / an 800 px short edge the face
+     * crop the generator reads is too coarse to hold identity.
+     * Grounding: the weakest real reference on record (960×1280,
+     * 1.23 MP) passes this floor and is rejected by the face-size
+     * line instead — resolution is the floor for a different class
+     * (thumbnails, messaging-compressed images), not a second
+     * verdict on the same photo.
+     */
+    const val MIN_IMAGE_SHORT_EDGE_PX: Int = 800
+    const val MIN_IMAGE_PIXELS: Long = 1_000_000L
+
     fun decide(
         faceCount: Int,
         largestFaceWidthFraction: Float,
         meanLuminance: Double,
         subjectHeadRollDegrees: Float = 0f,
-        maxAbsHeadTurnDegrees: Float = 0f
+        maxAbsHeadTurnDegrees: Float = 0f,
+        faceMeanLuminance: Double = meanLuminance,
+        imageShortEdgePx: Int = Int.MAX_VALUE,
+        imagePixelCount: Long = Long.MAX_VALUE
     ): PhotoRejection? {
         if (faceCount == 0) return PhotoRejection.FACE_UNCLEAR
         if (faceCount > 1) return PhotoRejection.MULTIPLE_PEOPLE
@@ -363,10 +403,26 @@ object PhotoQualityPolicy {
             return PhotoRejection.TURNED_AWAY
         }
         if (meanLuminance < MIN_MEAN_LUMINANCE) return PhotoRejection.TOO_DARK
+        // RW-180: the face's own light — underexposed face, or a
+        // face dark against a bright frame (backlit). Same TOO_DARK
+        // class and copy: the remedy is identical (face the light).
+        if (faceMeanLuminance < MIN_FACE_MEAN_LUMINANCE ||
+            faceMeanLuminance < meanLuminance * MIN_FACE_TO_FRAME_LUMINANCE_RATIO
+        ) {
+            return PhotoRejection.TOO_DARK
+        }
         // GEN-6 (RW-50): face-too-small — the §10.4 class the gen-5
         // enum lacked; the threshold is the guided checks' own.
         if (largestFaceWidthFraction < GuidedSelfieChecks.MIN_FACE_WIDTH_FRACTION) {
             return PhotoRejection.FACE_TOO_SMALL
+        }
+        // RW-180: resolution floor — after face size, so a photo
+        // that fails both reports the framing problem first (the
+        // calibration's far-away reference reads FACE_TOO_SMALL).
+        if (imageShortEdgePx < MIN_IMAGE_SHORT_EDGE_PX ||
+            imagePixelCount < MIN_IMAGE_PIXELS
+        ) {
+            return PhotoRejection.TOO_LOW_RESOLUTION
         }
         if (largestFaceWidthFraction > MAX_FACE_WIDTH_FRACTION) return PhotoRejection.TOO_CLOSE
         return null
@@ -381,6 +437,7 @@ object PhotoQualityPolicy {
         PhotoRejection.ROTATED -> MakeItMeStrings.C3G_REJECT_ROTATED
         PhotoRejection.FACE_TOO_SMALL -> MakeItMeStrings.C3H_REJECT_FACE_TOO_SMALL
         PhotoRejection.TURNED_AWAY -> MakeItMeStrings.C3I_REJECT_TURNED_AWAY
+        PhotoRejection.TOO_LOW_RESOLUTION -> MakeItMeStrings.C3J_REJECT_LOW_RESOLUTION
     }
 }
 
