@@ -401,8 +401,10 @@ private struct PickedPhoto: Identifiable {
 /// to a clearly-labelled placeholder treatment — the coaching
 /// oval over a neutral ground with the placeholder label —
 /// never a fake person's photo. The asset landed Nov 26, 2026
-/// (§30): a licensed stock portrait (Pexels, Chukwuka Prosper)
-/// that passes the RW-180 intake checks itself. The caption is
+/// (§30) and was swapped the same day (§31, Sol: "Why not a
+/// runner instead of topless person"): a licensed stock photo
+/// of a marathon runner (Pexels 1643096, RUN 4 FFWPU) that
+/// passes the RW-180 intake checks itself. The caption is
 /// the settled example line (Sol's framing: better light,
 /// close up).
 private struct MakeItMeExampleCard: View {

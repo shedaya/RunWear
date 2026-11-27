@@ -1034,9 +1034,11 @@ internal fun MakeItMeUploadFlow(
  * if that asset is ever missing, the slot falls back to a
  * clearly-labelled placeholder treatment — the framing oval over
  * a neutral ground with the placeholder label — never a fake
- * person's photo. The asset landed Nov 26, 2026 (§30): a licensed
- * stock portrait (Pexels, Chukwuka Prosper) that passes the
- * RW-180 intake checks itself.
+ * person's photo. The asset landed Nov 26, 2026 (§30) and was
+ * swapped the same day (§31, Sol: "Why not a runner instead of
+ * topless person"): a licensed stock photo of a marathon runner
+ * (Pexels 1643096, RUN 4 FFWPU) that passes the RW-180 intake
+ * checks itself.
  * The caption is the settled C2K line (Sol's framing: better
  * light, close up).
  */
