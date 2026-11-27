@@ -100,6 +100,8 @@ Bunlarla başka hiçbir şey yapılmaz.</string>
     <string name="mim_u2b_monthly">Aylık</string>
     <string name="mim_u2b_annual">Yıllık</string>
     <string name="mim_u2c_fine_print">Yerel hava durumuna uygun kombinlerin, abone olduğunda oluşturulur. Yepyeni bir kombinin veya yeni bir yerin ilk kez oluşturulması yaklaşık bir dakika sürer — sonrasında anında hazır olur. Google Play aboneliklerinden istediğin zaman iptal et.</string>
+    <string name="legal_privacy_policy">Gizlilik Politikası</string>
+    <string name="legal_terms_of_use">Kullanım Koşulları</string>
     <string name="mim_band_making_heading">Görünümlerin oluşturuluyor</string>
     <string name="mim_band_making_line">Kombinlerini tüm koşu koşullarında oluşturuyoruz, böylece ihtiyacın olduğunda hazır olur.</string>
     <string name="mim_first_look_band_readiness">Uygulamayı açtığın anda hazır — önceden oluşturulur, asla beklerken değil.</string>

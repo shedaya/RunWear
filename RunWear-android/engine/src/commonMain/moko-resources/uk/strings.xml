@@ -100,6 +100,8 @@
     <string name="mim_u2b_monthly">Щомісяця</string>
     <string name="mim_u2b_annual">Щороку</string>
     <string name="mim_u2c_fine_print">Ваші образи для місцевої погоди створюються, коли ви підписуєтеся. Цілком новий образ або нове місце вперше створюється близько хвилини — після цього він готовий миттєво. Скасувати можна будь-коли в підписках Google Play.</string>
+    <string name="legal_privacy_policy">Політика конфіденційності</string>
+    <string name="legal_terms_of_use">Умови використання</string>
     <string name="mim_band_making_heading">Створюємо ваші образи</string>
     <string name="mim_band_making_line">Ми створюємо ваші образи для всіх умов бігу, щоб вони були готові, коли знадобляться.</string>
     <string name="mim_first_look_band_readiness">Готово в момент, коли ви відкриваєте застосунок — створено заздалегідь, ніколи під час очікування.</string>

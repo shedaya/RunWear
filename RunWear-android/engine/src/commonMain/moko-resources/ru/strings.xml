@@ -92,6 +92,8 @@
     <string name="mim_u2b_monthly">Ежемесячно</string>
     <string name="mim_u2b_annual">Ежегодно</string>
     <string name="mim_u2c_fine_print">Комплекты для вашей местной погоды создаются при оформлении подписки. Совершенно новый комплект или новое место в первый раз создаются около минуты — после этого всё готово мгновенно. Отменить можно в любой момент в подписках Google Play.</string>
+    <string name="legal_privacy_policy">Политика конфиденциальности</string>
+    <string name="legal_terms_of_use">Условия использования</string>
     <string name="mim_band_making_heading">Создаём ваши образы</string>
     <string name="mim_band_making_line">Мы генерируем ваши комплекты для всех беговых условий, чтобы они были готовы, когда понадобятся.</string>
     <string name="mim_first_look_band_readiness">Готово в тот момент, когда вы открываете приложение — создано заранее, а не пока вы ждёте.</string>

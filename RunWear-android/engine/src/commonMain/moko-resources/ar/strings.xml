@@ -100,6 +100,8 @@
     <string name="mim_u2b_monthly">شهري</string>
     <string name="mim_u2b_annual">سنوي</string>
     <string name="mim_u2c_fine_print">تُصنع إطلالاتك لطقسك المحلي عند الاشتراك. تستغرق إطلالة جديدة تمامًا أو مكان جديد نحو دقيقة لصنعها أول مرة — وبعد ذلك تكون جاهزة فورًا. ألغِ في أي وقت من اشتراكات Google Play.</string>
+    <string name="legal_privacy_policy">سياسة الخصوصية</string>
+    <string name="legal_terms_of_use">شروط الاستخدام</string>
     <string name="mim_band_making_heading">جارٍ صنع إطلالاتك</string>
     <string name="mim_band_making_line">نولّد إطلالاتك عبر جميع ظروف الجري، لتكون جاهزة عند حاجتك إليها.</string>
     <string name="mim_first_look_band_readiness">جاهزة لحظة فتح التطبيق — مصنوعة مسبقًا، وليس أبدًا أثناء انتظارك.</string>

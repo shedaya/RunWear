@@ -100,6 +100,8 @@
     <string name="mim_u2b_monthly">每月</string>
     <string name="mim_u2b_annual">每年</string>
     <string name="mim_u2c_fine_print">你订阅时，会生成适合你当地天气的穿搭。全新的穿搭或新地点第一次生成大约需要一分钟——之后就能立即使用。你可以随时在 Google Play 订阅中取消。</string>
+    <string name="legal_privacy_policy">隐私政策</string>
+    <string name="legal_terms_of_use">使用条款</string>
     <string name="mim_band_making_heading">正在生成你的造型</string>
     <string name="mim_band_making_line">我们正在为所有跑步条件生成你的穿搭，这样你需要时它就已准备好。</string>
     <string name="mim_first_look_band_readiness">你打开应用的那一刻就已准备好——提前生成，绝不让你等待。</string>

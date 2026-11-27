@@ -100,6 +100,8 @@ Inget annat görs med dem.</string>
     <string name="mim_u2b_monthly">Månadsvis</string>
     <string name="mim_u2b_annual">Årsvis</string>
     <string name="mim_u2c_fine_print">Dina outfits för ditt lokala väder skapas när du prenumererar. En helt ny outfit eller en ny plats tar ungefär en minut att skapa första gången — därefter är den redo direkt. Avsluta när som helst i dina Google Play-prenumerationer.</string>
+    <string name="legal_privacy_policy">Integritetspolicy</string>
+    <string name="legal_terms_of_use">Användningsvillkor</string>
     <string name="mim_band_making_heading">Skapar dina looks</string>
     <string name="mim_band_making_line">Vi genererar dina outfits för alla löpförhållanden, så att de är redo när du behöver dem.</string>
     <string name="mim_first_look_band_readiness">Redo i samma ögonblick som du öppnar appen — skapade i förväg, aldrig medan du väntar.</string>

@@ -100,6 +100,8 @@ Rien d\'autre n\'en est fait.</string>
     <string name="mim_u2b_monthly">Mensuel</string>
     <string name="mim_u2b_annual">Annuel</string>
     <string name="mim_u2c_fine_print">Vos tenues pour votre météo locale sont créées lors de votre abonnement. Une tenue entièrement nouvelle ou un nouvel endroit prend environ une minute à créer la première fois — ensuite, elle est prête instantanément. Annulez à tout moment dans vos abonnements Google Play.</string>
+    <string name="legal_privacy_policy">Politique de confidentialité</string>
+    <string name="legal_terms_of_use">Conditions d\'utilisation</string>
     <string name="mim_band_making_heading">Création de vos looks</string>
     <string name="mim_band_making_line">Nous générons vos tenues pour toutes les conditions de course, afin qu\'elles soient prêtes quand vous en aurez besoin.</string>
     <string name="mim_first_look_band_readiness">Prêt dès que vous ouvrez l\'app — créé à l\'avance, jamais pendant que vous attendez.</string>

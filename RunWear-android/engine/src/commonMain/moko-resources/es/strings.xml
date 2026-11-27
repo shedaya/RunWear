@@ -100,6 +100,8 @@ No se hace nada más con ellas.</string>
     <string name="mim_u2b_monthly">Mensual</string>
     <string name="mim_u2b_annual">Anual</string>
     <string name="mim_u2c_fine_print">Tus conjuntos para tu clima local se crean cuando te suscribes. Un conjunto totalmente nuevo o un lugar nuevo tarda aproximadamente un minuto en crearse la primera vez; después, está listo al instante. Cancela en cualquier momento en tus suscripciones de Google Play.</string>
+    <string name="legal_privacy_policy">Política de privacidad</string>
+    <string name="legal_terms_of_use">Términos de uso</string>
     <string name="mim_band_making_heading">Creando tus looks</string>
     <string name="mim_band_making_line">Estamos generando tus conjuntos para todas las condiciones de running, para que estén listos cuando los necesites.</string>
     <string name="mim_first_look_band_readiness">Listo en el momento en que abres la app: creado con antelación, nunca mientras esperas.</string>

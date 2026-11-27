@@ -100,6 +100,8 @@
     <string name="mim_u2b_monthly">รายเดือน</string>
     <string name="mim_u2b_annual">รายปี</string>
     <string name="mim_u2c_fine_print">ชุดสำหรับสภาพอากาศในพื้นที่ของคุณจะสร้างเมื่อคุณสมัครสมาชิก ชุดใหม่เอี่ยมหรือสถานที่ใหม่ใช้เวลาประมาณหนึ่งนาทีในการสร้างครั้งแรก — หลังจากนั้นพร้อมทันที ยกเลิกได้ทุกเมื่อในการสมัครสมาชิก Google Play ของคุณ</string>
+    <string name="legal_privacy_policy">นโยบายความเป็นส่วนตัว</string>
+    <string name="legal_terms_of_use">เงื่อนไขการใช้งาน</string>
     <string name="mim_band_making_heading">กำลังสร้างลุคของคุณ</string>
     <string name="mim_band_making_line">เรากำลังสร้างชุดของคุณสำหรับทุกสภาพการวิ่ง เพื่อให้พร้อมเมื่อคุณต้องการ</string>
     <string name="mim_first_look_band_readiness">พร้อมทันทีที่คุณเปิดแอป — สร้างไว้ล่วงหน้า ไม่ต้องรอ</string>

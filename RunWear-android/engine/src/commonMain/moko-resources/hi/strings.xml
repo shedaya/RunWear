@@ -100,6 +100,8 @@
     <string name="mim_u2b_monthly">मासिक</string>
     <string name="mim_u2b_annual">वार्षिक</string>
     <string name="mim_u2c_fine_print">सदस्यता लेते ही आपके स्थानीय मौसम के लिए आपकी आउटफ़िट बन जाती हैं। बिल्कुल नई आउटफ़िट या नई जगह पहली बार बनने में लगभग एक मिनट लगता है — उसके बाद यह तुरंत तैयार मिलती है। अपनी Google Play सदस्यताओं में कभी भी रद्द करें।</string>
+    <string name="legal_privacy_policy">गोपनीयता नीति</string>
+    <string name="legal_terms_of_use">उपयोग की शर्तें</string>
     <string name="mim_band_making_heading">आपके लुक बनाए जा रहे हैं</string>
     <string name="mim_band_making_line">हम दौड़ की सभी स्थितियों के लिए आपकी आउटफ़िट बना रहे हैं, ताकि ज़रूरत पड़ने पर वे तैयार मिलें।</string>
     <string name="mim_first_look_band_readiness">ऐप खोलते ही तैयार — पहले से बनी हुई, कभी आपके इंतज़ार के दौरान नहीं।</string>

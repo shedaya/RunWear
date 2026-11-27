@@ -92,6 +92,8 @@
     <string name="mim_u2b_monthly">Mensile</string>
     <string name="mim_u2b_annual">Annuale</string>
     <string name="mim_u2c_fine_print">Gli outfit per il tuo meteo locale vengono creati quando ti abboni. Un outfit del tutto nuovo o un posto nuovo richiede circa un minuto la prima volta — dopo, è pronto all\'istante. Annulla in qualsiasi momento nei tuoi abbonamenti Google Play.</string>
+    <string name="legal_privacy_policy">Politica sulla privacy</string>
+    <string name="legal_terms_of_use">Termini di utilizzo</string>
     <string name="mim_band_making_heading">Creazione dei tuoi look</string>
     <string name="mim_band_making_line">Stiamo generando i tuoi outfit per tutte le condizioni di corsa, così saranno pronti quando ti serviranno.</string>
     <string name="mim_first_look_band_readiness">Pronti nel momento in cui apri l\'app — creati in anticipo, mai mentre aspetti.</string>

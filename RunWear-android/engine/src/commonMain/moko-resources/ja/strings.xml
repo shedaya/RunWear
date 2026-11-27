@@ -92,6 +92,8 @@
     <string name="mim_u2b_monthly">月額</string>
     <string name="mim_u2b_annual">年額</string>
     <string name="mim_u2c_fine_print">登録すると、お住まいの地域の天気に合わせたコーディネートが作成されます。まったく新しいコーディネートや新しい場所は、初回は作成に約1分かかります — その後はすぐに用意されます。Google Playのサブスクリプションからいつでも解約できます。</string>
+    <string name="legal_privacy_policy">プライバシーポリシー</string>
+    <string name="legal_terms_of_use">利用規約</string>
     <string name="mim_band_making_heading">ルックを作成中</string>
     <string name="mim_band_making_line">あらゆるランニング条件に合わせてコーディネートを生成しています。必要なときにすぐ使えます。</string>
     <string name="mim_first_look_band_readiness">アプリを開いた瞬間に準備完了 — 事前に作成され、待たされることはありません。</string>
